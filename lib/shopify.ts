@@ -76,6 +76,7 @@ export class ShopifyClient {
         urlObj.searchParams.set('status', 'active');
       }
 
+      console.log(`📡 Fetching products from: ${urlObj.toString()}`);
       const response = await fetch(urlObj.toString(), {
         headers: {
           'X-Shopify-Access-Token': this.config.accessToken,
@@ -83,7 +84,9 @@ export class ShopifyClient {
       });
 
       if (!response.ok) {
-        throw new Error(`Shopify API error: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`❌ Products API error: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Shopify API error (products): ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -146,6 +149,7 @@ export class ShopifyClient {
    * Fetch all locations
    */
   async fetchLocations(): Promise<Array<{ id: string; name: string; active: boolean }>> {
+    console.log(`📡 Fetching locations from: ${this.baseUrl}/locations.json`);
     const response = await fetch(`${this.baseUrl}/locations.json`, {
       headers: {
         'X-Shopify-Access-Token': this.config.accessToken,
@@ -153,11 +157,121 @@ export class ShopifyClient {
     });
 
     if (!response.ok) {
-      throw new Error(`Shopify API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`❌ Locations API error: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Shopify API error (locations): ${response.statusText}`);
     }
 
     const data = await response.json();
     return data.locations || [];
+  }
+
+  /**
+   * Fetch detailed inventory levels using GraphQL
+   * Returns on_hand, available, committed, incoming quantities
+   */
+  async fetchDetailedInventoryLevels(locationId: string): Promise<Array<{
+    inventoryItemId: string;
+    available: number;
+    onHand: number;
+    committed: number;
+    incoming: number;
+  }>> {
+    const graphqlUrl = `https://${this.config.shop}/admin/api/2024-10/graphql.json`;
+    const results: Array<{
+      inventoryItemId: string;
+      available: number;
+      onHand: number;
+      committed: number;
+      incoming: number;
+    }> = [];
+    
+    let cursor: string | null = null;
+    let hasNextPage = true;
+    
+    while (hasNextPage) {
+      const query = `
+        query($locationId: ID!, $cursor: String) {
+          location(id: $locationId) {
+            inventoryLevels(first: 250, after: $cursor) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              edges {
+                node {
+                  id
+                  item {
+                    id
+                  }
+                  quantities(names: ["available", "on_hand", "committed", "incoming"]) {
+                    name
+                    quantity
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      const response = await fetch(graphqlUrl, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': this.config.accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: {
+            locationId: `gid://shopify/Location/${locationId}`,
+            cursor,
+          },
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`GraphQL API error: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.errors) {
+        console.error('GraphQL errors:', data.errors);
+        throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+      }
+      
+      const inventoryLevels = data.data?.location?.inventoryLevels;
+      if (!inventoryLevels) break;
+      
+      for (const edge of inventoryLevels.edges) {
+        const node = edge.node;
+        const itemId = node.item.id.replace('gid://shopify/InventoryItem/', '');
+        
+        const quantities: Record<string, number> = {};
+        for (const q of node.quantities) {
+          quantities[q.name] = q.quantity;
+        }
+        
+        results.push({
+          inventoryItemId: itemId,
+          available: quantities.available || 0,
+          onHand: quantities.on_hand || 0,
+          committed: quantities.committed || 0,
+          incoming: quantities.incoming || 0,
+        });
+      }
+      
+      hasNextPage = inventoryLevels.pageInfo.hasNextPage;
+      cursor = inventoryLevels.pageInfo.endCursor;
+      
+      // Rate limiting
+      if (hasNextPage) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    return results;
   }
 
   /**

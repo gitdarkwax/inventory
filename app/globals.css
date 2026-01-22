@@ -1,100 +1,56 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --accent: #22d3ee;
-  --accent-secondary: #a78bfa;
-  --surface: #1e293b;
-  --surface-elevated: #334155;
-  --border: #475569;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --danger: #f87171;
+  --background: #f9fafb;
+  --foreground: #171717;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-accent: var(--accent);
-  --color-accent-secondary: var(--accent-secondary);
-  --color-surface: var(--surface);
-  --color-surface-elevated: var(--surface-elevated);
-  --color-border: var(--border);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  background: #f9fafb;
+  color: #171717;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Custom scrollbar */
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
 }
 
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+@media (max-width: 768px) {
+  .mobile-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e0 #f7fafc;
+  }
+  
+  .mobile-table-wrapper::-webkit-scrollbar {
+    height: 8px;
+  }
+  
+  .mobile-table-wrapper::-webkit-scrollbar-track {
+    background: #f7fafc;
+    border-radius: 4px;
+  }
+  
+  .mobile-table-wrapper::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+  }
+  
+  .mobile-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #a0aec0;
+  }
 }
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--foreground);
-}
-
-/* Subtle grid background pattern */
-.grid-pattern {
-  background-image: 
-    linear-gradient(rgba(71, 85, 105, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(71, 85, 105, 0.1) 1px, transparent 1px);
-  background-size: 24px 24px;
-}
-
-/* Glow effects */
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
-}
-
-.glow-purple {
-  box-shadow: 0 0 20px rgba(167, 139, 250, 0.3);
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-.animate-pulse-subtle {
-  animation: pulse-subtle 2s ease-in-out infinite;
-}
-
-/* Staggered animation delays */
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-400 { animation-delay: 400ms; }
-.delay-500 { animation-delay: 500ms; }

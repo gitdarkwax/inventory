@@ -17,13 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="antialiased min-h-screen grid-pattern">
+      <body className="antialiased">
         {children}
       </body>
     </html>
