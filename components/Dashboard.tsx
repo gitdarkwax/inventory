@@ -307,8 +307,8 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Check if SKU is a phone case (vs accessory like screen protector)
   const isPhoneCaseSku = (sku: string): boolean => {
-    // Phone case SKUs start with: EC, MBC, MBS, MBP, MBCX, EP
-    return /^(EC|MBC|MBS|MBP|MBCX|EP)\d/i.test(sku);
+    // Phone case SKUs start with: EC, ES, MBC, MBS, MBP, MBCX, EP
+    return /^(EC|ES|MBC|MBS|MBP|MBCX|EP)\d/i.test(sku);
   };
 
   // Extract product model from title and SKU for grouping
@@ -328,31 +328,55 @@ export default function Dashboard({ session }: DashboardProps) {
     // For phone models, only group if it's a case SKU
     const isCase = isPhoneCaseSku(sku);
     
-    // iPhone patterns: "iPhone 16 Pro Max", "iPhone 16 Plus", "iPhone 16", etc.
-    const iphoneMatch = productTitle.match(/iPhone\s*(\d+)(\s*(Pro\s*Max|Pro|Plus|mini))?/i);
+    // iPhone patterns - check for specific variants in order of specificity
+    const iphoneMatch = productTitle.match(/iPhone\s*(\d+)/i);
     if (iphoneMatch) {
       if (!isCase) return 'iPhone Accessories';
       const model = iphoneMatch[1];
-      const variant = iphoneMatch[3] ? ` ${iphoneMatch[3]}` : '';
-      return `iPhone ${model}${variant}`;
+      
+      // Check for variant in title (order matters - check most specific first)
+      if (/pro\s*max/i.test(productTitle)) return `iPhone ${model} Pro Max`;
+      if (/\bpro\b/i.test(productTitle)) return `iPhone ${model} Pro`;
+      if (/\bplus\b/i.test(productTitle)) return `iPhone ${model} Plus`;
+      if (/\bmini\b/i.test(productTitle)) return `iPhone ${model} mini`;
+      return `iPhone ${model}`;
     }
 
-    // Samsung Galaxy patterns: "Samsung Galaxy S25 Ultra", "Galaxy S24+", etc.
-    const samsungMatch = productTitle.match(/(Samsung\s+)?Galaxy\s*(S\d+|Z\s*Fold\s*\d+|Z\s*Flip\s*\d+|A\d+)(\s*(Ultra|\+|Plus|FE))?/i);
-    if (samsungMatch) {
+    // Samsung Galaxy patterns
+    const samsungSMatch = productTitle.match(/Galaxy\s*(S\d+)/i);
+    if (samsungSMatch) {
       if (!isCase) return 'Samsung Accessories';
-      const model = samsungMatch[2];
-      const variant = samsungMatch[4] ? ` ${samsungMatch[4]}` : '';
-      return `Samsung Galaxy ${model}${variant}`;
+      const model = samsungSMatch[1];
+      if (/ultra/i.test(productTitle)) return `Samsung Galaxy ${model} Ultra`;
+      if (/\+|plus/i.test(productTitle)) return `Samsung Galaxy ${model}+`;
+      if (/\bfe\b/i.test(productTitle)) return `Samsung Galaxy ${model} FE`;
+      return `Samsung Galaxy ${model}`;
+    }
+    
+    // Samsung Galaxy Z Fold
+    const zFoldMatch = productTitle.match(/Z\s*Fold\s*(\d+)/i);
+    if (zFoldMatch) {
+      if (!isCase) return 'Samsung Accessories';
+      return `Samsung Galaxy Z Fold ${zFoldMatch[1]}`;
+    }
+    
+    // Samsung Galaxy Z Flip
+    const zFlipMatch = productTitle.match(/Z\s*Flip\s*(\d+)/i);
+    if (zFlipMatch) {
+      if (!isCase) return 'Samsung Accessories';
+      return `Samsung Galaxy Z Flip ${zFlipMatch[1]}`;
     }
 
-    // Google Pixel patterns: "Google Pixel 9 Pro XL", "Pixel 8a", etc.
-    const pixelMatch = productTitle.match(/(Google\s+)?Pixel\s*(\d+)(\s*(Pro\s*XL|Pro|a|XL))?/i);
+    // Google Pixel patterns
+    const pixelMatch = productTitle.match(/Pixel\s*(\d+)/i);
     if (pixelMatch) {
       if (!isCase) return 'Pixel Accessories';
-      const model = pixelMatch[2];
-      const variant = pixelMatch[4] ? ` ${pixelMatch[4]}` : '';
-      return `Pixel ${model}${variant}`;
+      const model = pixelMatch[1];
+      if (/pro\s*xl/i.test(productTitle)) return `Pixel ${model} Pro XL`;
+      if (/\bpro\b/i.test(productTitle)) return `Pixel ${model} Pro`;
+      if (/\bxl\b/i.test(productTitle)) return `Pixel ${model} XL`;
+      if (/\ba\b/i.test(productTitle)) return `Pixel ${model}a`;
+      return `Pixel ${model}`;
     }
 
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
