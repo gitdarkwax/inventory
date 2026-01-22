@@ -95,7 +95,6 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [cacheAge, setCacheAge] = useState<string | null>(null);
 
   // Load cached inventory data
   const loadInventoryFromCache = async () => {
@@ -114,9 +113,6 @@ export default function Dashboard({ session }: DashboardProps) {
         return;
       }
       setInventoryData(data);
-      if (data.cache?.age) {
-        setCacheAge(data.cache.age);
-      }
     } catch (err) {
       setInventoryError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -385,7 +381,15 @@ export default function Dashboard({ session }: DashboardProps) {
               <p className="text-sm text-gray-500 mt-1">Real-time stock levels and forecasting</p>
               {inventoryData?.lastUpdated && (
                 <p className="text-xs text-gray-400 mt-1">
-                  Last refreshed: {new Date(inventoryData.lastUpdated).toLocaleString()}
+                  Last refreshed: {new Date(inventoryData.lastUpdated).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                  })}
                 </p>
               )}
             </div>
@@ -482,10 +486,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       </button>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center mt-2">
-                    <p className="text-xs text-gray-500">Showing {filteredInventory.length} of {inventoryData.totalSKUs} SKUs</p>
-                    {cacheAge && <p className="text-xs text-gray-400">Last updated: {cacheAge} ago</p>}
-                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Showing {filteredInventory.length} of {inventoryData.totalSKUs} SKUs</p>
                 </div>
 
                 <div className="bg-white shadow rounded-lg overflow-hidden">
