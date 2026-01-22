@@ -375,8 +375,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const extractProductModel = (productTitle: string, sku: string): string => {
     const skuUpper = sku.toUpperCase();
     
-    // Screen Protectors (SP prefix)
-    if (/^SP/i.test(skuUpper)) {
+    // Screen Protectors (SP, SC prefix)
+    if (/^(SP|SC)/i.test(skuUpper)) {
       return 'Screen Protectors';
     }
     
@@ -424,8 +424,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'Wallets';
     }
 
-    // Color Accessories (ACC, ACU, ACP, LF, ACS prefix)
-    if (/^(ACC|ACU|ACP|LF|ACS)/i.test(skuUpper)) {
+    // Color Accessories (ACC, ACU, ACP, LF, ACS, BTN prefix)
+    if (/^(ACC|ACU|ACP|LF|ACS|BTN)/i.test(skuUpper)) {
       return 'Color Accessories';
     }
 
@@ -439,9 +439,14 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'Tesla Charger';
     }
 
-    // Chargers (MBQI, TVL prefix)
-    if (/^(MBQI|TVL)/i.test(skuUpper)) {
+    // Chargers (MBQI, TVL, MBPD prefix)
+    if (/^(MBQI|TVL|MBPD)/i.test(skuUpper)) {
       return 'Chargers';
+    }
+
+    // MagSticks (MBST prefix)
+    if (/^MBST/i.test(skuUpper)) {
+      return 'MagSticks';
     }
 
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
@@ -496,6 +501,7 @@ export default function Dashboard({ session }: DashboardProps) {
     if (groupName === 'Wallets') return -10;
     if (groupName === 'Wrist Straps') return -20;
     if (groupName === 'KeyTag') return -30;
+    if (groupName === 'MagSticks') return -35;
     if (groupName === 'Tesla Charger') return -40;
     if (groupName === 'Chargers') return -50;
     if (groupName === 'Color Accessories') return -60;
