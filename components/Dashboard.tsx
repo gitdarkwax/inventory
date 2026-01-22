@@ -98,6 +98,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft' | 'runOut'>('velocity');
   const [forecastFilterCategory, setForecastFilterCategory] = useState<string>('all');
   const [forecastListMode, setForecastListMode] = useState<'list' | 'grouped'>('grouped');
+  const [forecastLayout, setForecastLayout] = useState<'byPeriod' | 'byMetric'>('byPeriod');
+  const [forecastSelectedPeriod, setForecastSelectedPeriod] = useState<'7d' | '21d' | '90d' | 'ly30d'>('21d');
   const [forecastLocations, setForecastLocations] = useState<string[]>(['all']);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const locationDropdownRef = useRef<HTMLDivElement>(null);
@@ -1051,33 +1053,89 @@ export default function Dashboard({ session }: DashboardProps) {
                           Grouped
                         </button>
                       </div>
-                      {/* Data Mode Toggle */}
-                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                      {/* Layout Toggle: By Period vs By Metric */}
+                      <div className="flex bg-blue-100 p-1 rounded-lg">
                         <button
-                          onClick={() => setForecastViewMode('velocity')}
+                          onClick={() => setForecastLayout('byPeriod')}
                           className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            forecastViewMode === 'velocity' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            forecastLayout === 'byPeriod' ? 'bg-white shadow-sm text-blue-700' : 'text-blue-600 hover:text-blue-800'
                           }`}
                         >
-                          Units/Day
+                          By Period
                         </button>
                         <button
-                          onClick={() => setForecastViewMode('daysLeft')}
+                          onClick={() => setForecastLayout('byMetric')}
                           className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            forecastViewMode === 'daysLeft' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            forecastLayout === 'byMetric' ? 'bg-white shadow-sm text-blue-700' : 'text-blue-600 hover:text-blue-800'
                           }`}
                         >
-                          Days Left
-                        </button>
-                        <button
-                          onClick={() => setForecastViewMode('runOut')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            forecastViewMode === 'runOut' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          Run Out
+                          By Metric
                         </button>
                       </div>
+                      {/* Conditional: Data Mode Toggle (for By Period) OR Period Selector (for By Metric) */}
+                      {forecastLayout === 'byPeriod' ? (
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                          <button
+                            onClick={() => setForecastViewMode('velocity')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastViewMode === 'velocity' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            Units/Day
+                          </button>
+                          <button
+                            onClick={() => setForecastViewMode('daysLeft')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastViewMode === 'daysLeft' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            Days Left
+                          </button>
+                          <button
+                            onClick={() => setForecastViewMode('runOut')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastViewMode === 'runOut' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            Run Out
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                          <button
+                            onClick={() => setForecastSelectedPeriod('7d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastSelectedPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            7 Day
+                          </button>
+                          <button
+                            onClick={() => setForecastSelectedPeriod('21d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastSelectedPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            3 Week
+                          </button>
+                          <button
+                            onClick={() => setForecastSelectedPeriod('90d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastSelectedPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            3 Month
+                          </button>
+                          <button
+                            onClick={() => setForecastSelectedPeriod('ly30d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              forecastSelectedPeriod === 'ly30d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            LY 30D
+                          </button>
+                        </div>
+                      )}
                       <button onClick={refreshAllData} disabled={isRefreshing}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
                         {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
@@ -1094,24 +1152,36 @@ export default function Dashboard({ session }: DashboardProps) {
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200 table-fixed">
                         <thead className="bg-gray-50">
-                          <tr>
-                            <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('sku')}>
-                              SKU <SortIcon active={forecastSortBy === 'sku'} order={forecastSortOrder} />
-                            </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily7d')}>
-                              {forecastViewMode === 'velocity' ? '7 Day' : forecastViewMode === 'daysLeft' ? '7D Days' : '7D Run Out'} <SortIcon active={forecastSortBy === 'avgDaily7d'} order={forecastSortOrder} />
-                            </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily21d')}>
-                              {forecastViewMode === 'velocity' ? '3 Week' : forecastViewMode === 'daysLeft' ? '3W Days' : '3W Run Out'} <SortIcon active={forecastSortBy === 'avgDaily21d'} order={forecastSortOrder} />
-                            </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily90d')}>
-                              {forecastViewMode === 'velocity' ? '3 Month' : forecastViewMode === 'daysLeft' ? '3M Days' : '3M Run Out'} <SortIcon active={forecastSortBy === 'avgDaily90d'} order={forecastSortOrder} />
-                            </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDailyLastYear30d')}>
-                              {forecastViewMode === 'velocity' ? 'LY 30D' : forecastViewMode === 'daysLeft' ? 'LY Days' : 'LY Run Out'} <SortIcon active={forecastSortBy === 'avgDailyLastYear30d'} order={forecastSortOrder} />
-                            </th>
-                          </tr>
+                          {forecastLayout === 'byPeriod' ? (
+                            <tr>
+                              <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('sku')}>
+                                SKU <SortIcon active={forecastSortBy === 'sku'} order={forecastSortOrder} />
+                              </th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily7d')}>
+                                {forecastViewMode === 'velocity' ? '7 Day' : forecastViewMode === 'daysLeft' ? '7D Days' : '7D Run Out'} <SortIcon active={forecastSortBy === 'avgDaily7d'} order={forecastSortOrder} />
+                              </th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily21d')}>
+                                {forecastViewMode === 'velocity' ? '3 Week' : forecastViewMode === 'daysLeft' ? '3W Days' : '3W Run Out'} <SortIcon active={forecastSortBy === 'avgDaily21d'} order={forecastSortOrder} />
+                              </th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily90d')}>
+                                {forecastViewMode === 'velocity' ? '3 Month' : forecastViewMode === 'daysLeft' ? '3M Days' : '3M Run Out'} <SortIcon active={forecastSortBy === 'avgDaily90d'} order={forecastSortOrder} />
+                              </th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDailyLastYear30d')}>
+                                {forecastViewMode === 'velocity' ? 'LY 30D' : forecastViewMode === 'daysLeft' ? 'LY Days' : 'LY Run Out'} <SortIcon active={forecastSortBy === 'avgDailyLastYear30d'} order={forecastSortOrder} />
+                              </th>
+                            </tr>
+                          ) : (
+                            <tr>
+                              <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('sku')}>
+                                SKU <SortIcon active={forecastSortBy === 'sku'} order={forecastSortOrder} />
+                              </th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
+                              <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Days Left</th>
+                              <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Run Out</th>
+                            </tr>
+                          )}
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {filteredForecasting.map((item, index) => {
@@ -1120,30 +1190,50 @@ export default function Dashboard({ session }: DashboardProps) {
                             const days21d = calcDaysOfStock(inventory, item.avgDaily21d);
                             const days90d = calcDaysOfStock(inventory, item.avgDaily90d);
                             const daysLY30d = calcDaysOfStock(inventory, item.avgDailyLastYear30d);
+                            
+                            // For byMetric layout - get values for selected period
+                            const getSelectedPeriodData = () => {
+                              switch (forecastSelectedPeriod) {
+                                case '7d': return { avgDaily: item.avgDaily7d, days: days7d };
+                                case '21d': return { avgDaily: item.avgDaily21d, days: days21d };
+                                case '90d': return { avgDaily: item.avgDaily90d, days: days90d };
+                                case 'ly30d': return { avgDaily: item.avgDailyLastYear30d, days: daysLY30d };
+                              }
+                            };
+                            const selectedData = getSelectedPeriodData();
+                            
                             return (
                               <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                 <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productName}>{item.sku}</td>
                                 <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{inventory.toLocaleString()}</td>
-                                {forecastViewMode === 'velocity' ? (
-                                  <>
-                                    <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
-                                    <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
-                                    <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
-                                    <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
-                                  </>
-                                ) : forecastViewMode === 'daysLeft' ? (
-                                  <>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
-                                  </>
+                                {forecastLayout === 'byPeriod' ? (
+                                  forecastViewMode === 'velocity' ? (
+                                    <>
+                                      <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
+                                      <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
+                                      <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
+                                      <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
+                                    </>
+                                  ) : forecastViewMode === 'daysLeft' ? (
+                                    <>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatRunOutDate(days7d)}</td>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatRunOutDate(days21d)}</td>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatRunOutDate(days90d)}</td>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatRunOutDate(daysLY30d)}</td>
+                                    </>
+                                  )
                                 ) : (
                                   <>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatRunOutDate(days7d)}</td>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatRunOutDate(days21d)}</td>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatRunOutDate(days90d)}</td>
-                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatRunOutDate(daysLY30d)}</td>
+                                    <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{selectedData.avgDaily.toFixed(1)}</td>
+                                    <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(selectedData.days)}`}>{formatDaysOfStock(selectedData.days)}</td>
+                                    <td className={`w-28 px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(selectedData.days)}`}>{formatRunOutDate(selectedData.days)}</td>
                                   </>
                                 )}
                               </tr>
@@ -1179,14 +1269,24 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200 table-fixed">
                               <thead className="bg-gray-50">
-                                <tr>
-                                  <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
-                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '7 Day' : forecastViewMode === 'daysLeft' ? '7D Days' : '7D Run Out'}</th>
-                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Week' : forecastViewMode === 'daysLeft' ? '3W Days' : '3W Run Out'}</th>
-                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Month' : forecastViewMode === 'daysLeft' ? '3M Days' : '3M Run Out'}</th>
-                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? 'LY 30D' : forecastViewMode === 'daysLeft' ? 'LY Days' : 'LY Run Out'}</th>
-                                </tr>
+                                {forecastLayout === 'byPeriod' ? (
+                                  <tr>
+                                    <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '7 Day' : forecastViewMode === 'daysLeft' ? '7D Days' : '7D Run Out'}</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Week' : forecastViewMode === 'daysLeft' ? '3W Days' : '3W Run Out'}</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Month' : forecastViewMode === 'daysLeft' ? '3M Days' : '3M Run Out'}</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? 'LY 30D' : forecastViewMode === 'daysLeft' ? 'LY Days' : 'LY Run Out'}</th>
+                                  </tr>
+                                ) : (
+                                  <tr>
+                                    <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
+                                    <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Days Left</th>
+                                    <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Run Out</th>
+                                  </tr>
+                                )}
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
                                 {items.map((item, index) => {
@@ -1195,30 +1295,50 @@ export default function Dashboard({ session }: DashboardProps) {
                                   const days21d = calcDaysOfStock(inventory, item.avgDaily21d);
                                   const days90d = calcDaysOfStock(inventory, item.avgDaily90d);
                                   const daysLY30d = calcDaysOfStock(inventory, item.avgDailyLastYear30d);
+                                  
+                                  // For byMetric layout - get values for selected period
+                                  const getSelectedPeriodData = () => {
+                                    switch (forecastSelectedPeriod) {
+                                      case '7d': return { avgDaily: item.avgDaily7d, days: days7d };
+                                      case '21d': return { avgDaily: item.avgDaily21d, days: days21d };
+                                      case '90d': return { avgDaily: item.avgDaily90d, days: days90d };
+                                      case 'ly30d': return { avgDaily: item.avgDailyLastYear30d, days: daysLY30d };
+                                    }
+                                  };
+                                  const selectedData = getSelectedPeriodData();
+                                  
                                   return (
                                     <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                       <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productName}>{item.sku}</td>
                                       <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{inventory.toLocaleString()}</td>
-                                      {forecastViewMode === 'velocity' ? (
-                                        <>
-                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
-                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
-                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
-                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
-                                        </>
-                                      ) : forecastViewMode === 'daysLeft' ? (
-                                        <>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
-                                        </>
+                                      {forecastLayout === 'byPeriod' ? (
+                                        forecastViewMode === 'velocity' ? (
+                                          <>
+                                            <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
+                                            <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
+                                            <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
+                                            <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
+                                          </>
+                                        ) : forecastViewMode === 'daysLeft' ? (
+                                          <>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatRunOutDate(days7d)}</td>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatRunOutDate(days21d)}</td>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatRunOutDate(days90d)}</td>
+                                            <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatRunOutDate(daysLY30d)}</td>
+                                          </>
+                                        )
                                       ) : (
                                         <>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatRunOutDate(days7d)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatRunOutDate(days21d)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatRunOutDate(days90d)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatRunOutDate(daysLY30d)}</td>
+                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{selectedData.avgDaily.toFixed(1)}</td>
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(selectedData.days)}`}>{formatDaysOfStock(selectedData.days)}</td>
+                                          <td className={`w-28 px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(selectedData.days)}`}>{formatRunOutDate(selectedData.days)}</td>
                                         </>
                                       )}
                                     </tr>
