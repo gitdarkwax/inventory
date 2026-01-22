@@ -281,16 +281,22 @@ export class ShopifyQLService {
 
   /**
    * Get forecasting data - average daily sales for different periods
+   * All periods end at end of yesterday (excludes today's partial data)
    */
   async getForecastingData(): Promise<ForecastingData[]> {
     console.log('📊 Fetching sales data for forecasting...');
 
     // Fetch sales data for different periods in parallel
+    // All ranges use full days only (yesterday back), excluding today's incomplete data
     const [sales7d, sales21d, sales90d, salesLastYear30d] = await Promise.all([
+      // 7 days: yesterday and the 6 days before it (7 full days total)
       this.getSKUSalesData('SINCE startOfDay(-7d) UNTIL endOfDay(-1d)'),
+      // 21 days (3 weeks): yesterday and the 20 days before it (21 full days total)
       this.getSKUSalesData('SINCE startOfDay(-21d) UNTIL endOfDay(-1d)'),
+      // 90 days (3 months): yesterday and the 89 days before it (90 full days total)
       this.getSKUSalesData('SINCE startOfDay(-90d) UNTIL endOfDay(-1d)'),
-      this.getSKUSalesData('SINCE startOfDay(-395d) UNTIL endOfDay(-366d)'), // Same 30 days last year
+      // Last year same 30-day period: 365 days ago through 336 days ago (30 full days)
+      this.getSKUSalesData('SINCE startOfDay(-395d) UNTIL endOfDay(-366d)'),
     ]);
 
     console.log(`✅ Fetched sales: 7d=${sales7d.length}, 21d=${sales21d.length}, 90d=${sales90d.length}, LY30d=${salesLastYear30d.length} SKUs`);
