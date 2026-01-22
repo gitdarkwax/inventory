@@ -81,11 +81,12 @@ export default function Dashboard({ session }: DashboardProps) {
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [filterOutOfStock, setFilterOutOfStock] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'grouped'>('list');
+  const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'grouped'>('grouped');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
   const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'incoming'>('sku');
   const [locationSortOrder, setLocationSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [locationViewMode, setLocationViewMode] = useState<'list' | 'grouped'>('grouped');
 
   // Forecasting state
   const [forecastingData, setForecastingData] = useState<ForecastingData | null>(null);
@@ -96,6 +97,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastSortOrder, setForecastSortOrder] = useState<'asc' | 'desc'>('desc');
   const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft'>('velocity');
   const [forecastFilterCategory, setForecastFilterCategory] = useState<string>('all');
+  const [forecastListMode, setForecastListMode] = useState<'list' | 'grouped'>('grouped');
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -436,6 +438,34 @@ export default function Dashboard({ session }: DashboardProps) {
     return getModelPriority(b) - getModelPriority(a);
   });
 
+  // Group location detail items by product model
+  const groupedLocationDetail = filteredLocationDetail.reduce((groups, item) => {
+    const model = extractProductModel(item.productTitle, item.sku);
+    if (!groups[model]) {
+      groups[model] = [];
+    }
+    groups[model].push(item);
+    return groups;
+  }, {} as Record<string, typeof filteredLocationDetail>);
+
+  const sortedLocationGroupNames = Object.keys(groupedLocationDetail).sort((a, b) => {
+    return getModelPriority(b) - getModelPriority(a);
+  });
+
+  // Group forecasting items by product model
+  const groupedForecasting = filteredForecasting.reduce((groups, item) => {
+    const model = extractProductModel(item.productName, item.sku);
+    if (!groups[model]) {
+      groups[model] = [];
+    }
+    groups[model].push(item);
+    return groups;
+  }, {} as Record<string, typeof filteredForecasting>);
+
+  const sortedForecastGroupNames = Object.keys(groupedForecasting).sort((a, b) => {
+    return getModelPriority(b) - getModelPriority(a);
+  });
+
   const SortIcon = ({ active, order }: { active: boolean; order: 'asc' | 'desc' }) => {
     if (!active) return <span className="text-gray-300 ml-1">↕</span>;
     return <span className="ml-1">{order === 'asc' ? '↑' : '↓'}</span>;
@@ -499,6 +529,16 @@ export default function Dashboard({ session }: DashboardProps) {
                     <option key={cat.name} value={cat.name}>{cat.name}</option>
                   ))}
                 </select>
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                  <button onClick={() => setLocationViewMode('list')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${locationViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                    List
+                  </button>
+                  <button onClick={() => setLocationViewMode('grouped')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${locationViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                    Grouped
+                  </button>
+                </div>
                 <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
                   className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                   Low Stock
@@ -513,42 +553,96 @@ export default function Dashboard({ session }: DashboardProps) {
             </div>
           </div>
 
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('sku')}>
-                      SKU <SortIcon active={locationSortBy === 'sku'} order={locationSortOrder} />
-                    </th>
-                    <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('onHand')}>
-                      On Hand <SortIcon active={locationSortBy === 'onHand'} order={locationSortOrder} />
-                    </th>
-                    <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('available')}>
-                      Available <SortIcon active={locationSortBy === 'available'} order={locationSortOrder} />
-                    </th>
-                    <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('committed')}>
-                      Committed <SortIcon active={locationSortBy === 'committed'} order={locationSortOrder} />
-                    </th>
-                    <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('incoming')}>
-                      Incoming <SortIcon active={locationSortBy === 'incoming'} order={locationSortOrder} />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {locationData.map((item, index) => (
-                    <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap" title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
-                      <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.onHand.toLocaleString()}</td>
-                      <td className={`px-3 sm:px-4 py-3 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>{item.available.toLocaleString()}</td>
-                      <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
-                      <td className={`px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+          {/* List View */}
+          {locationViewMode === 'list' && (
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('sku')}>
+                        SKU <SortIcon active={locationSortBy === 'sku'} order={locationSortOrder} />
+                      </th>
+                      <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('onHand')}>
+                        On Hand <SortIcon active={locationSortBy === 'onHand'} order={locationSortOrder} />
+                      </th>
+                      <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('available')}>
+                        Available <SortIcon active={locationSortBy === 'available'} order={locationSortOrder} />
+                      </th>
+                      <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('committed')}>
+                        Committed <SortIcon active={locationSortBy === 'committed'} order={locationSortOrder} />
+                      </th>
+                      <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('incoming')}>
+                        Incoming <SortIcon active={locationSortBy === 'incoming'} order={locationSortOrder} />
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {locationData.map((item, index) => (
+                      <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        <td className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap" title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                        <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.onHand.toLocaleString()}</td>
+                        <td className={`px-3 sm:px-4 py-3 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>{item.available.toLocaleString()}</td>
+                        <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
+                        <td className={`px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {locationData.length === 0 && <div className="p-8 text-center text-gray-500">No inventory items match your filters.</div>}
             </div>
-          </div>
+          )}
+
+          {/* Grouped View */}
+          {locationViewMode === 'grouped' && (
+            <div className="space-y-4">
+              {sortedLocationGroupNames.length === 0 && (
+                <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No inventory items match your filters.</div>
+              )}
+              {sortedLocationGroupNames.map(groupName => {
+                const items = groupedLocationDetail[groupName];
+                const groupAvailable = items.reduce((sum, item) => sum + item.available, 0);
+                return (
+                  <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-sm font-semibold text-gray-900">{groupName}</h3>
+                        <div className="flex gap-4 text-xs text-gray-500">
+                          <span>{items.length} SKUs</span>
+                          <span className="font-medium text-gray-700">{groupAvailable.toLocaleString()} available</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                            <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">On Hand</th>
+                            <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Available</th>
+                            <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Committed</th>
+                            <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {items.map((item, index) => (
+                            <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap" title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                              <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.onHand.toLocaleString()}</td>
+                              <td className={`px-3 sm:px-4 py-2 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>{item.available.toLocaleString()}</td>
+                              <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
+                              <td className={`px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -848,7 +942,18 @@ export default function Dashboard({ session }: DashboardProps) {
                           <option key={cat.name} value={cat.name}>{cat.name}</option>
                         ))}
                       </select>
-                      {/* View Mode Toggle */}
+                      {/* List/Grouped Toggle */}
+                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => setForecastListMode('list')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${forecastListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                          List
+                        </button>
+                        <button onClick={() => setForecastListMode('grouped')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${forecastListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                          Grouped
+                        </button>
+                      </div>
+                      {/* Data Mode Toggle */}
                       <div className="flex bg-gray-100 p-1 rounded-lg">
                         <button
                           onClick={() => setForecastViewMode('velocity')}
@@ -877,70 +982,136 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 </div>
 
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('sku')}>
-                            SKU <SortIcon active={forecastSortBy === 'sku'} order={forecastSortOrder} />
-                          </th>
-                          <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                            Inventory
-                          </th>
-                          <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily7d')}>
-                            {forecastViewMode === 'velocity' ? '7 Day' : '7D Days'} <SortIcon active={forecastSortBy === 'avgDaily7d'} order={forecastSortOrder} />
-                          </th>
-                          <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily21d')}>
-                            {forecastViewMode === 'velocity' ? '3 Week' : '3W Days'} <SortIcon active={forecastSortBy === 'avgDaily21d'} order={forecastSortOrder} />
-                          </th>
-                          <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily90d')}>
-                            {forecastViewMode === 'velocity' ? '3 Month' : '3M Days'} <SortIcon active={forecastSortBy === 'avgDaily90d'} order={forecastSortOrder} />
-                          </th>
-                          <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDailyLastYear30d')}>
-                            {forecastViewMode === 'velocity' ? 'LY 30D' : 'LY Days'} <SortIcon active={forecastSortBy === 'avgDailyLastYear30d'} order={forecastSortOrder} />
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredForecasting.map((item, index) => {
-                          const inventory = item.totalInventory || 0;
-                          
-                          // Calculate days of stock for each period
-                          const days7d = calcDaysOfStock(inventory, item.avgDaily7d);
-                          const days21d = calcDaysOfStock(inventory, item.avgDaily21d);
-                          const days90d = calcDaysOfStock(inventory, item.avgDaily90d);
-                          const daysLY30d = calcDaysOfStock(inventory, item.avgDailyLastYear30d);
-                          
-                          return (
-                            <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap" title={item.productName}>{item.sku}</td>
-                              <td className={`px-3 sm:px-4 py-3 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>
-                                {inventory.toLocaleString()}
-                              </td>
-                              {forecastViewMode === 'velocity' ? (
-                                <>
-                                  <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
-                                  <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
-                                  <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
-                                  <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
-                                </>
-                              ) : (
-                                <>
-                                  <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
-                                  <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
-                                  <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
-                                  <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
-                                </>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                {/* List View */}
+                {forecastListMode === 'list' && (
+                  <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('sku')}>
+                              SKU <SortIcon active={forecastSortBy === 'sku'} order={forecastSortOrder} />
+                            </th>
+                            <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                            <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily7d')}>
+                              {forecastViewMode === 'velocity' ? '7 Day' : '7D Days'} <SortIcon active={forecastSortBy === 'avgDaily7d'} order={forecastSortOrder} />
+                            </th>
+                            <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily21d')}>
+                              {forecastViewMode === 'velocity' ? '3 Week' : '3W Days'} <SortIcon active={forecastSortBy === 'avgDaily21d'} order={forecastSortOrder} />
+                            </th>
+                            <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily90d')}>
+                              {forecastViewMode === 'velocity' ? '3 Month' : '3M Days'} <SortIcon active={forecastSortBy === 'avgDaily90d'} order={forecastSortOrder} />
+                            </th>
+                            <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDailyLastYear30d')}>
+                              {forecastViewMode === 'velocity' ? 'LY 30D' : 'LY Days'} <SortIcon active={forecastSortBy === 'avgDailyLastYear30d'} order={forecastSortOrder} />
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredForecasting.map((item, index) => {
+                            const inventory = item.totalInventory || 0;
+                            const days7d = calcDaysOfStock(inventory, item.avgDaily7d);
+                            const days21d = calcDaysOfStock(inventory, item.avgDaily21d);
+                            const days90d = calcDaysOfStock(inventory, item.avgDaily90d);
+                            const daysLY30d = calcDaysOfStock(inventory, item.avgDailyLastYear30d);
+                            return (
+                              <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap" title={item.productName}>{item.sku}</td>
+                                <td className={`px-3 sm:px-4 py-3 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{inventory.toLocaleString()}</td>
+                                {forecastViewMode === 'velocity' ? (
+                                  <>
+                                    <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
+                                    <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
+                                    <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
+                                    <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
+                                  </>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {filteredForecasting.length === 0 && <div className="p-8 text-center text-gray-500">No forecasting data available.</div>}
                   </div>
-                  {filteredForecasting.length === 0 && <div className="p-8 text-center text-gray-500">No forecasting data available.</div>}
-                </div>
+                )}
+
+                {/* Grouped View */}
+                {forecastListMode === 'grouped' && (
+                  <div className="space-y-4">
+                    {sortedForecastGroupNames.length === 0 && (
+                      <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No forecasting data available.</div>
+                    )}
+                    {sortedForecastGroupNames.map(groupName => {
+                      const items = groupedForecasting[groupName];
+                      const groupInventory = items.reduce((sum, item) => sum + (item.totalInventory || 0), 0);
+                      return (
+                        <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
+                          <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                            <div className="flex justify-between items-center">
+                              <h3 className="text-sm font-semibold text-gray-900">{groupName}</h3>
+                              <div className="flex gap-4 text-xs text-gray-500">
+                                <span>{items.length} SKUs</span>
+                                <span className="font-medium text-gray-700">{groupInventory.toLocaleString()} units</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '7 Day' : '7D Days'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Week' : '3W Days'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Month' : '3M Days'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? 'LY 30D' : 'LY Days'}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {items.map((item, index) => {
+                                  const inventory = item.totalInventory || 0;
+                                  const days7d = calcDaysOfStock(inventory, item.avgDaily7d);
+                                  const days21d = calcDaysOfStock(inventory, item.avgDaily21d);
+                                  const days90d = calcDaysOfStock(inventory, item.avgDaily90d);
+                                  const daysLY30d = calcDaysOfStock(inventory, item.avgDailyLastYear30d);
+                                  return (
+                                    <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                      <td className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap" title={item.productName}>{item.sku}</td>
+                                      <td className={`px-3 sm:px-4 py-2 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{inventory.toLocaleString()}</td>
+                                      {forecastViewMode === 'velocity' ? (
+                                        <>
+                                          <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily7d.toFixed(1)}</td>
+                                          <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily21d.toFixed(1)}</td>
+                                          <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
+                                          <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
+                                        </>
+                                      )}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </>
