@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { signOut } from 'next-auth/react';
+import { PRODUCT_CATEGORIES, findProductCategory } from '@/lib/constants';
 
 // Types
 interface InventoryByLocation {
@@ -79,6 +80,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [filterOutOfStock, setFilterOutOfStock] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
   const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'incoming'>('sku');
@@ -92,6 +94,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastSortBy, setForecastSortBy] = useState<'sku' | 'avgDaily7d' | 'avgDaily21d' | 'avgDaily90d' | 'avgDailyLastYear30d'>('avgDaily7d');
   const [forecastSortOrder, setForecastSortOrder] = useState<'asc' | 'desc'>('desc');
   const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft'>('velocity');
+  const [forecastFilterCategory, setForecastFilterCategory] = useState<string>('all');
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -200,6 +203,10 @@ export default function Dashboard({ session }: DashboardProps) {
         item.productTitle.toLowerCase().includes(searchTerm.toLowerCase());
       if (filterOutOfStock && item.totalAvailable > 0) return false;
       if (filterLowStock && (item.totalAvailable <= 0 || item.totalAvailable > 10)) return false;
+      if (filterCategory !== 'all') {
+        const category = findProductCategory(item.sku, item.productTitle);
+        if (!category || category.name !== filterCategory) return false;
+      }
       return matchesSearch;
     })
     .sort((a, b) => {
@@ -225,9 +232,16 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Filter and sort forecasting
   const filteredForecasting = mergedForecastingData
-    .filter(item => !forecastSearchTerm || 
-      item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
-      item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase()))
+    .filter(item => {
+      const matchesSearch = !forecastSearchTerm || 
+        item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
+        item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase());
+      if (forecastFilterCategory !== 'all') {
+        const category = findProductCategory(item.sku, item.productName);
+        if (!category || category.name !== forecastFilterCategory) return false;
+      }
+      return matchesSearch;
+    })
     .sort((a, b) => {
       let comparison = 0;
       if (forecastSortBy === 'sku') comparison = a.sku.localeCompare(b.sku);
@@ -470,6 +484,16 @@ export default function Dashboard({ session }: DashboardProps) {
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                     <div className="flex gap-2 flex-wrap items-center">
+                      <select 
+                        value={filterCategory} 
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All Categories</option>
+                        {PRODUCT_CATEGORIES.map(cat => (
+                          <option key={cat.name} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
                       <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                         Low Stock ({inventoryData.lowStockCount})
@@ -486,7 +510,6 @@ export default function Dashboard({ session }: DashboardProps) {
                     <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Showing {filteredInventory.length} of {inventoryData.totalSKUs} SKUs</p>
                 </div>
 
                 <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -561,6 +584,16 @@ export default function Dashboard({ session }: DashboardProps) {
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                     <div className="flex gap-2 flex-wrap items-center">
+                      <select 
+                        value={forecastFilterCategory} 
+                        onChange={(e) => setForecastFilterCategory(e.target.value)}
+                        className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All Categories</option>
+                        {PRODUCT_CATEGORIES.map(cat => (
+                          <option key={cat.name} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
                       {/* View Mode Toggle */}
                       <div className="flex bg-gray-100 p-1 rounded-lg">
                         <button
@@ -588,7 +621,6 @@ export default function Dashboard({ session }: DashboardProps) {
                     <input type="text" placeholder="Search by SKU or product..." value={forecastSearchTerm} onChange={(e) => setForecastSearchTerm(e.target.value)}
                       className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Showing {filteredForecasting.length} SKUs</p>
                 </div>
 
                 <div className="bg-white shadow rounded-lg overflow-hidden">
