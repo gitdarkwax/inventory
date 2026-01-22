@@ -381,8 +381,13 @@ export default function Dashboard({ session }: DashboardProps) {
         <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4">
             <div className="flex-1">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">📦 Inventory Dashboard</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">📦 MagBak Inventory Dashboard</h1>
               <p className="text-sm text-gray-500 mt-1">Real-time stock levels and forecasting</p>
+              {inventoryData?.lastUpdated && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Last refreshed: {new Date(inventoryData.lastUpdated).toLocaleString()}
+                </p>
+              )}
             </div>
             {session?.user && (
               <div className="flex items-center gap-3 mt-2 sm:mt-0">

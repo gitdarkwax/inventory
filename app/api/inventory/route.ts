@@ -26,6 +26,7 @@ export async function GET() {
     // Return cached inventory data with metadata
     return NextResponse.json({
       ...cachedData.inventory,
+      lastUpdated: cachedData.lastUpdated,
       cache: {
         lastUpdated: cachedData.lastUpdated,
         age: `${Math.floor((Date.now() - new Date(cachedData.lastUpdated).getTime()) / 1000 / 60)} minutes`,
