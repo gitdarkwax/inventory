@@ -398,15 +398,19 @@ export default function Dashboard({ session }: DashboardProps) {
       return `iPhone ${model}`;
     }
 
-    // Samsung case SKUs: ES25U, ES25P, ES25, MBS25U, MBS25P, MBS25, etc.
-    // Pattern: (ES|MBS) + model number + optional variant (U=Ultra, P=Plus)
-    const samsungCaseMatch = skuUpper.match(/^(ES|MBS)(\d+)(U|P)?/);
-    if (samsungCaseMatch) {
-      const model = samsungCaseMatch[2];
-      const variant = samsungCaseMatch[3];
-      if (variant === 'U') return `Samsung Galaxy S${model} Ultra`;
-      if (variant === 'P') return `Samsung Galaxy S${model}+`;
-      return `Samsung Galaxy S${model}`;
+    // Samsung Galaxy S26 (ES26 prefix)
+    if (/^ES26/i.test(skuUpper)) {
+      return 'Samsung Galaxy S26';
+    }
+
+    // Samsung Galaxy S25 (ES25, MBS25 prefix)
+    if (/^(ES25|MBS25)/i.test(skuUpper)) {
+      return 'Samsung Galaxy S25';
+    }
+
+    // Samsung Galaxy S24 (ES24, MBS24 prefix)
+    if (/^(ES24|MBS24)/i.test(skuUpper)) {
+      return 'Samsung Galaxy S24';
     }
 
     // Pixel Cases (EP, MBP prefix)
@@ -680,7 +684,11 @@ export default function Dashboard({ session }: DashboardProps) {
                 <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No inventory items match your filters.</div>
               )}
               {sortedLocationGroupNames.map(groupName => {
-                const items = groupedLocationDetail[groupName];
+                // Sort items - reverse alphabetical for Screen/Lens Protectors, otherwise alphabetical
+                const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
+                const items = [...groupedLocationDetail[groupName]].sort((a, b) => 
+                  shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
+                );
                 const groupAvailable = items.reduce((sum, item) => sum + item.available, 0);
                 return (
                   <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
@@ -928,7 +936,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No inventory items match your filters.</div>
                     )}
                     {sortedGroupNames.map(groupName => {
-                      const items = groupedInventory[groupName];
+                      // Sort items - reverse alphabetical for Screen/Lens Protectors, otherwise alphabetical
+                      const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
+                      const items = [...groupedInventory[groupName]].sort((a, b) => 
+                        shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
+                      );
                       const groupTotal = items.reduce((sum, item) => sum + item.totalAvailable, 0);
                       return (
                         <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
@@ -1274,7 +1286,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No forecasting data available.</div>
                     )}
                     {sortedForecastGroupNames.map(groupName => {
-                      const items = groupedForecasting[groupName];
+                      // Sort items - reverse alphabetical for Screen/Lens Protectors, otherwise alphabetical
+                      const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
+                      const items = [...groupedForecasting[groupName]].sort((a, b) => 
+                        shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
+                      );
                       const groupInventory = items.reduce((sum, item) => sum + (item.totalInventory || 0), 0);
                       return (
                         <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
