@@ -81,6 +81,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [filterOutOfStock, setFilterOutOfStock] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'grouped'>('list');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
   const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'incoming'>('sku');
@@ -294,6 +295,71 @@ export default function Dashboard({ session }: DashboardProps) {
     if (days >= 999) return 'text-gray-400';
     return 'text-green-600';
   };
+
+  // Extract product model from title for grouping
+  const extractProductModel = (productTitle: string): string => {
+    // iPhone patterns: "iPhone 16 Pro Max", "iPhone 16 Plus", "iPhone 16", etc.
+    const iphoneMatch = productTitle.match(/iPhone\s*(\d+)(\s*(Pro\s*Max|Pro|Plus|mini))?/i);
+    if (iphoneMatch) {
+      const model = iphoneMatch[1];
+      const variant = iphoneMatch[3] ? ` ${iphoneMatch[3]}` : '';
+      return `iPhone ${model}${variant}`;
+    }
+
+    // Samsung Galaxy patterns: "Samsung Galaxy S25 Ultra", "Galaxy S24+", etc.
+    const samsungMatch = productTitle.match(/(Samsung\s+)?Galaxy\s*(S\d+|Z\s*Fold\s*\d+|Z\s*Flip\s*\d+|A\d+)(\s*(Ultra|\+|Plus|FE))?/i);
+    if (samsungMatch) {
+      const model = samsungMatch[2];
+      const variant = samsungMatch[4] ? ` ${samsungMatch[4]}` : '';
+      return `Samsung Galaxy ${model}${variant}`;
+    }
+
+    // Google Pixel patterns: "Google Pixel 9 Pro XL", "Pixel 8a", etc.
+    const pixelMatch = productTitle.match(/(Google\s+)?Pixel\s*(\d+)(\s*(Pro\s*XL|Pro|a|XL))?/i);
+    if (pixelMatch) {
+      const model = pixelMatch[2];
+      const variant = pixelMatch[4] ? ` ${pixelMatch[4]}` : '';
+      return `Pixel ${model}${variant}`;
+    }
+
+    // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
+    const simplified = productTitle.split(/[-|]/)[0].trim();
+    return simplified.length > 40 ? simplified.substring(0, 40) + '...' : simplified;
+  };
+
+  // Group inventory items by product model
+  const groupedInventory = filteredInventory.reduce((groups, item) => {
+    const model = extractProductModel(item.productTitle);
+    if (!groups[model]) {
+      groups[model] = [];
+    }
+    groups[model].push(item);
+    return groups;
+  }, {} as Record<string, typeof filteredInventory>);
+
+  // Sort group names
+  const sortedGroupNames = Object.keys(groupedInventory).sort((a, b) => {
+    // Sort iPhones by number descending (newest first)
+    const aIphone = a.match(/iPhone (\d+)/);
+    const bIphone = b.match(/iPhone (\d+)/);
+    if (aIphone && bIphone) {
+      return parseInt(bIphone[1]) - parseInt(aIphone[1]);
+    }
+    // Sort Samsung by model descending
+    const aSamsung = a.match(/Galaxy S(\d+)/);
+    const bSamsung = b.match(/Galaxy S(\d+)/);
+    if (aSamsung && bSamsung) {
+      return parseInt(bSamsung[1]) - parseInt(aSamsung[1]);
+    }
+    // Sort Pixel by number descending
+    const aPixel = a.match(/Pixel (\d+)/);
+    const bPixel = b.match(/Pixel (\d+)/);
+    if (aPixel && bPixel) {
+      return parseInt(bPixel[1]) - parseInt(aPixel[1]);
+    }
+    // Alphabetical for others
+    return a.localeCompare(b);
+  });
 
   const SortIcon = ({ active, order }: { active: boolean; order: 'asc' | 'desc' }) => {
     if (!active) return <span className="text-gray-300 ml-1">↕</span>;
@@ -524,6 +590,25 @@ export default function Dashboard({ session }: DashboardProps) {
                           <option key={cat.name} value={cat.name}>{cat.name}</option>
                         ))}
                       </select>
+                      {/* View Mode Toggle */}
+                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button
+                          onClick={() => setInventoryViewMode('list')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            inventoryViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          List
+                        </button>
+                        <button
+                          onClick={() => setInventoryViewMode('grouped')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            inventoryViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Grouped
+                        </button>
+                      </div>
                       <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                         Low Stock ({inventoryData.lowStockCount})
@@ -542,48 +627,112 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 </div>
 
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('sku')}>
-                            SKU <SortIcon active={sortBy === 'sku'} order={sortOrder} />
-                          </th>
-                          {inventoryData.locations.map(location => (
-                            <th key={location} className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 hover:text-blue-600"
-                              onClick={() => setSelectedLocation(location)} title={`Click to view ${location} details`}>
-                              {location} →
+                {/* List View */}
+                {inventoryViewMode === 'list' && (
+                  <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('sku')}>
+                              SKU <SortIcon active={sortBy === 'sku'} order={sortOrder} />
                             </th>
-                          ))}
-                          <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
-                            Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredInventory.map((item, index) => (
-                          <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap"
-                              title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
-                            {inventoryData.locations.map(location => {
-                              const qty = item.locations?.[location] ?? 0;
-                              return (
-                                <td key={location} className={`px-3 sm:px-4 py-3 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                  {qty.toLocaleString()}
-                                </td>
-                              );
-                            })}
-                            <td className={`px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                              {item.totalAvailable.toLocaleString()}
-                            </td>
+                            {inventoryData.locations.map(location => (
+                              <th key={location} className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 hover:text-blue-600"
+                                onClick={() => setSelectedLocation(location)} title={`Click to view ${location} details`}>
+                                {location} →
+                              </th>
+                            ))}
+                            <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
+                              Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredInventory.map((item, index) => (
+                            <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap"
+                                title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                              {inventoryData.locations.map(location => {
+                                const qty = item.locations?.[location] ?? 0;
+                                return (
+                                  <td key={location} className={`px-3 sm:px-4 py-3 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                    {qty.toLocaleString()}
+                                  </td>
+                                );
+                              })}
+                              <td className={`px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                {item.totalAvailable.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {filteredInventory.length === 0 && <div className="p-8 text-center text-gray-500">No inventory items match your filters.</div>}
                   </div>
-                  {filteredInventory.length === 0 && <div className="p-8 text-center text-gray-500">No inventory items match your filters.</div>}
-                </div>
+                )}
+
+                {/* Grouped View */}
+                {inventoryViewMode === 'grouped' && (
+                  <div className="space-y-4">
+                    {sortedGroupNames.length === 0 && (
+                      <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No inventory items match your filters.</div>
+                    )}
+                    {sortedGroupNames.map(groupName => {
+                      const items = groupedInventory[groupName];
+                      const groupTotal = items.reduce((sum, item) => sum + item.totalAvailable, 0);
+                      return (
+                        <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
+                          <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                            <div className="flex justify-between items-center">
+                              <h3 className="text-sm font-semibold text-gray-900">{groupName}</h3>
+                              <div className="flex gap-4 text-xs text-gray-500">
+                                <span>{items.length} SKUs</span>
+                                <span className="font-medium text-gray-700">{groupTotal.toLocaleString()} units</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                  {inventoryData.locations.map(location => (
+                                    <th key={location} className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 hover:text-blue-600"
+                                      onClick={() => setSelectedLocation(location)} title={`Click to view ${location} details`}>
+                                      {location} →
+                                    </th>
+                                  ))}
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {items.map((item, index) => (
+                                  <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                    <td className="px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap"
+                                      title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                    {inventoryData.locations.map(location => {
+                                      const qty = item.locations?.[location] ?? 0;
+                                      return (
+                                        <td key={location} className={`px-3 sm:px-4 py-2 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                          {qty.toLocaleString()}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className={`px-3 sm:px-4 py-2 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                      {item.totalAvailable.toLocaleString()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </>
