@@ -8,6 +8,7 @@ export interface ShopifyProduct {
   title: string;
   handle: string;
   status: string;
+  tags: string;
   variants: ShopifyVariant[];
   created_at: string;
   updated_at: string;

@@ -248,9 +248,6 @@ export default function Dashboard({ session }: DashboardProps) {
   // Filter and sort inventory
   const filteredInventory = inventoryData?.inventory
     .filter(item => {
-      // Exclude replacement products
-      if (item.productTitle.toLowerCase().includes('replacement')) return false;
-      
       const matchesSearch = !searchTerm || 
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.productTitle.toLowerCase().includes(searchTerm.toLowerCase());
@@ -273,9 +270,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const filteredLocationDetail = selectedLocation && inventoryData?.locationDetails?.[selectedLocation]
     ? inventoryData.locationDetails[selectedLocation]
         .filter(item => {
-          // Exclude replacement products
-          if (item.productTitle.toLowerCase().includes('replacement')) return false;
-          
           const matchesSearch = !locationSearchTerm || 
             item.sku.toLowerCase().includes(locationSearchTerm.toLowerCase()) ||
             item.productTitle.toLowerCase().includes(locationSearchTerm.toLowerCase());
@@ -296,10 +290,13 @@ export default function Dashboard({ session }: DashboardProps) {
     : [];
 
   // Filter and sort forecasting
+  // Build a set of valid SKUs from inventory (products tagged "inventoried")
+  const inventoriedSkus = new Set(inventoryData?.inventory.map(item => item.sku) || []);
+
   const filteredForecasting = mergedForecastingData
     .filter(item => {
-      // Exclude replacement products
-      if (item.productName.toLowerCase().includes('replacement')) return false;
+      // Only show SKUs that exist in inventory (products tagged "inventoried")
+      if (!inventoriedSkus.has(item.sku)) return false;
       
       const matchesSearch = !forecastSearchTerm || 
         item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||

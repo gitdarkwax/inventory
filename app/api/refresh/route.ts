@@ -99,8 +99,15 @@ async function fetchInventoryData() {
   const products = await shopify.fetchProducts();
   
   // Build a map of inventory_item_id -> variant info
+  // Only include products with the "inventoried" tag
   const variantMap = new Map<string, { sku: string; productTitle: string; variantTitle: string }>();
   for (const product of products) {
+    // Check if product has the "inventoried" tag (tags is a comma-separated string)
+    const productTags = product.tags?.toLowerCase().split(',').map(t => t.trim()) || [];
+    if (!productTags.includes('inventoried')) {
+      continue; // Skip products without the "inventoried" tag
+    }
+    
     for (const variant of product.variants) {
       if (variant.sku && variant.inventory_item_id) {
         variantMap.set(String(variant.inventory_item_id), {
@@ -111,6 +118,8 @@ async function fetchInventoryData() {
       }
     }
   }
+  
+  console.log(`📦 Found ${variantMap.size} variants from products tagged "inventoried"`);
   
   // Fetch detailed inventory levels for each location
   interface DetailedLevel {
