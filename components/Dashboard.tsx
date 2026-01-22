@@ -219,9 +219,18 @@ export default function Dashboard({ session }: DashboardProps) {
   // Filter and sort location detail
   const filteredLocationDetail = selectedLocation && inventoryData?.locationDetails?.[selectedLocation]
     ? inventoryData.locationDetails[selectedLocation]
-        .filter(item => !locationSearchTerm || 
-          item.sku.toLowerCase().includes(locationSearchTerm.toLowerCase()) ||
-          item.productTitle.toLowerCase().includes(locationSearchTerm.toLowerCase()))
+        .filter(item => {
+          const matchesSearch = !locationSearchTerm || 
+            item.sku.toLowerCase().includes(locationSearchTerm.toLowerCase()) ||
+            item.productTitle.toLowerCase().includes(locationSearchTerm.toLowerCase());
+          if (filterOutOfStock && item.available > 0) return false;
+          if (filterLowStock && (item.available <= 0 || item.available > 10)) return false;
+          if (filterCategory !== 'all') {
+            const category = findProductCategory(item.sku, item.productTitle);
+            if (!category || category.name !== filterCategory) return false;
+          }
+          return matchesSearch;
+        })
         .sort((a, b) => {
           let comparison = 0;
           if (locationSortBy === 'sku') comparison = a.sku.localeCompare(b.sku);
@@ -337,9 +346,30 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
 
           <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
-            <input type="text" placeholder="Search by SKU or product name..." value={locationSearchTerm} onChange={(e) => setLocationSearchTerm(e.target.value)}
-              className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <p className="text-xs text-gray-500 mt-2">Showing {locationData.length} SKUs</p>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+              <div className="flex gap-2 flex-wrap items-center">
+                <select 
+                  value={filterCategory} 
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Categories</option>
+                  {PRODUCT_CATEGORIES.map(cat => (
+                    <option key={cat.name} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+                <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
+                  className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                  Low Stock
+                </button>
+                <button onClick={() => { setFilterOutOfStock(!filterOutOfStock); setFilterLowStock(false); }}
+                  className={`px-3 py-2 text-xs font-medium rounded-md ${filterOutOfStock ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                  Out of Stock
+                </button>
+              </div>
+              <input type="text" placeholder="Search by SKU or product..." value={locationSearchTerm} onChange={(e) => setLocationSearchTerm(e.target.value)}
+                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
           </div>
 
           <div className="bg-white shadow rounded-lg overflow-hidden">
