@@ -17,13 +17,27 @@ export class GoogleDriveCacheService {
     const projectId = process.env.GOOGLE_PROJECT_ID;
 
     if (!serviceAccountEmail || !serviceAccountPrivateKey || !projectId) {
-      throw new Error('Missing Google Drive environment variables');
+      throw new Error('Missing Google Drive environment variables: ' + 
+        `email=${!!serviceAccountEmail}, key=${!!serviceAccountPrivateKey}, project=${!!projectId}`);
+    }
+
+    // Handle private key format - Vercel may store it with literal \n or actual newlines
+    let formattedKey = serviceAccountPrivateKey;
+    
+    // If the key contains literal \n strings, replace them with actual newlines
+    if (formattedKey.includes('\\n')) {
+      formattedKey = formattedKey.replace(/\\n/g, '\n');
+    }
+    
+    // Ensure key has proper PEM format
+    if (!formattedKey.includes('-----BEGIN')) {
+      console.error('Private key does not appear to be in PEM format');
     }
 
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: serviceAccountEmail,
-        private_key: serviceAccountPrivateKey.replace(/\\n/g, '\n'),
+        private_key: formattedKey,
         project_id: projectId,
       },
       scopes: [
