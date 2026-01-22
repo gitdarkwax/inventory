@@ -469,9 +469,7 @@ export default function Dashboard({ session }: DashboardProps) {
 
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                    <input type="text" placeholder="Search by SKU or product name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                      className="flex-1 max-w-md px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap items-center">
                       <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                         Low Stock ({inventoryData.lowStockCount})
@@ -485,6 +483,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
                       </button>
                     </div>
+                    <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <p className="text-xs text-gray-500 mt-2">Showing {filteredInventory.length} of {inventoryData.totalSKUs} SKUs</p>
                 </div>
@@ -560,16 +560,6 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="space-y-6">
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        {forecastViewMode === 'velocity' ? 'Sales Velocity by SKU' : 'Days of Stock by SKU'}
-                      </h2>
-                      <p className="text-sm text-gray-500">
-                        {forecastViewMode === 'velocity' 
-                          ? 'Average daily units sold across different time periods' 
-                          : 'Estimated days of stock based on sales velocity'}
-                      </p>
-                    </div>
                     <div className="flex gap-2 flex-wrap items-center">
                       {/* View Mode Toggle */}
                       <div className="flex bg-gray-100 p-1 rounded-lg">
@@ -590,13 +580,13 @@ export default function Dashboard({ session }: DashboardProps) {
                           Days Left
                         </button>
                       </div>
-                      <input type="text" placeholder="Search by SKU or product..." value={forecastSearchTerm} onChange={(e) => setForecastSearchTerm(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       <button onClick={refreshAllData} disabled={isRefreshing}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
                         {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
                       </button>
                     </div>
+                    <input type="text" placeholder="Search by SKU or product..." value={forecastSearchTerm} onChange={(e) => setForecastSearchTerm(e.target.value)}
+                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
                   <p className="text-xs text-gray-500 mt-2">Showing {filteredForecasting.length} SKUs</p>
                 </div>
