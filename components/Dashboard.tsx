@@ -199,6 +199,9 @@ export default function Dashboard({ session }: DashboardProps) {
   // Filter and sort inventory
   const filteredInventory = inventoryData?.inventory
     .filter(item => {
+      // Exclude replacement products
+      if (item.productTitle.toLowerCase().includes('replacement')) return false;
+      
       const matchesSearch = !searchTerm || 
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.productTitle.toLowerCase().includes(searchTerm.toLowerCase());
@@ -221,6 +224,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const filteredLocationDetail = selectedLocation && inventoryData?.locationDetails?.[selectedLocation]
     ? inventoryData.locationDetails[selectedLocation]
         .filter(item => {
+          // Exclude replacement products
+          if (item.productTitle.toLowerCase().includes('replacement')) return false;
+          
           const matchesSearch = !locationSearchTerm || 
             item.sku.toLowerCase().includes(locationSearchTerm.toLowerCase()) ||
             item.productTitle.toLowerCase().includes(locationSearchTerm.toLowerCase());
@@ -243,6 +249,9 @@ export default function Dashboard({ session }: DashboardProps) {
   // Filter and sort forecasting
   const filteredForecasting = mergedForecastingData
     .filter(item => {
+      // Exclude replacement products
+      if (item.productName.toLowerCase().includes('replacement')) return false;
+      
       const matchesSearch = !forecastSearchTerm || 
         item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
         item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase());
@@ -296,11 +305,33 @@ export default function Dashboard({ session }: DashboardProps) {
     return 'text-green-600';
   };
 
-  // Extract product model from title for grouping
-  const extractProductModel = (productTitle: string): string => {
+  // Check if SKU is a phone case (vs accessory like screen protector)
+  const isPhoneCaseSku = (sku: string): boolean => {
+    // Phone case SKUs start with: EC, MBC, MBS, MBP, MBCX, EP
+    return /^(EC|MBC|MBS|MBP|MBCX|EP)\d/i.test(sku);
+  };
+
+  // Extract product model from title and SKU for grouping
+  const extractProductModel = (productTitle: string, sku: string): string => {
+    const titleLower = productTitle.toLowerCase();
+    
+    // Check for screen protectors first
+    if (titleLower.includes('screen protector') || titleLower.includes('screen guard')) {
+      return 'Screen Protectors';
+    }
+    
+    // Check for lens protectors
+    if (titleLower.includes('lens protector') || titleLower.includes('lens guard') || titleLower.includes('camera lens')) {
+      return 'Lens Protectors';
+    }
+
+    // For phone models, only group if it's a case SKU
+    const isCase = isPhoneCaseSku(sku);
+    
     // iPhone patterns: "iPhone 16 Pro Max", "iPhone 16 Plus", "iPhone 16", etc.
     const iphoneMatch = productTitle.match(/iPhone\s*(\d+)(\s*(Pro\s*Max|Pro|Plus|mini))?/i);
     if (iphoneMatch) {
+      if (!isCase) return 'iPhone Accessories';
       const model = iphoneMatch[1];
       const variant = iphoneMatch[3] ? ` ${iphoneMatch[3]}` : '';
       return `iPhone ${model}${variant}`;
@@ -309,6 +340,7 @@ export default function Dashboard({ session }: DashboardProps) {
     // Samsung Galaxy patterns: "Samsung Galaxy S25 Ultra", "Galaxy S24+", etc.
     const samsungMatch = productTitle.match(/(Samsung\s+)?Galaxy\s*(S\d+|Z\s*Fold\s*\d+|Z\s*Flip\s*\d+|A\d+)(\s*(Ultra|\+|Plus|FE))?/i);
     if (samsungMatch) {
+      if (!isCase) return 'Samsung Accessories';
       const model = samsungMatch[2];
       const variant = samsungMatch[4] ? ` ${samsungMatch[4]}` : '';
       return `Samsung Galaxy ${model}${variant}`;
@@ -317,6 +349,7 @@ export default function Dashboard({ session }: DashboardProps) {
     // Google Pixel patterns: "Google Pixel 9 Pro XL", "Pixel 8a", etc.
     const pixelMatch = productTitle.match(/(Google\s+)?Pixel\s*(\d+)(\s*(Pro\s*XL|Pro|a|XL))?/i);
     if (pixelMatch) {
+      if (!isCase) return 'Pixel Accessories';
       const model = pixelMatch[2];
       const variant = pixelMatch[4] ? ` ${pixelMatch[4]}` : '';
       return `Pixel ${model}${variant}`;
@@ -329,7 +362,7 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Group inventory items by product model
   const groupedInventory = filteredInventory.reduce((groups, item) => {
-    const model = extractProductModel(item.productTitle);
+    const model = extractProductModel(item.productTitle, item.sku);
     if (!groups[model]) {
       groups[model] = [];
     }
@@ -337,28 +370,58 @@ export default function Dashboard({ session }: DashboardProps) {
     return groups;
   }, {} as Record<string, typeof filteredInventory>);
 
-  // Sort group names
+  // Get model number for sorting (higher = newer = more revenue)
+  const getModelPriority = (groupName: string): number => {
+    // iPhone - extract number, multiply by 1000 for priority
+    const iphoneMatch = groupName.match(/iPhone (\d+)/);
+    if (iphoneMatch) {
+      const base = parseInt(iphoneMatch[1]) * 1000;
+      // Pro Max > Pro > Plus > base > mini
+      if (groupName.includes('Pro Max')) return base + 4;
+      if (groupName.includes('Pro')) return base + 3;
+      if (groupName.includes('Plus')) return base + 2;
+      if (groupName.includes('mini')) return base;
+      return base + 1;
+    }
+    
+    // Samsung Galaxy S series
+    const samsungMatch = groupName.match(/Galaxy S(\d+)/);
+    if (samsungMatch) {
+      const base = parseInt(samsungMatch[1]) * 100;
+      if (groupName.includes('Ultra')) return base + 3;
+      if (groupName.includes('+') || groupName.includes('Plus')) return base + 2;
+      if (groupName.includes('FE')) return base;
+      return base + 1;
+    }
+    
+    // Samsung Galaxy Z Fold/Flip
+    const zFoldMatch = groupName.match(/Z Fold (\d+)/i);
+    if (zFoldMatch) return parseInt(zFoldMatch[1]) * 50 + 500;
+    const zFlipMatch = groupName.match(/Z Flip (\d+)/i);
+    if (zFlipMatch) return parseInt(zFlipMatch[1]) * 50 + 400;
+    
+    // Pixel
+    const pixelMatch = groupName.match(/Pixel (\d+)/);
+    if (pixelMatch) {
+      const base = parseInt(pixelMatch[1]) * 100;
+      if (groupName.includes('Pro XL')) return base + 3;
+      if (groupName.includes('Pro')) return base + 2;
+      if (groupName.includes('a')) return base;
+      return base + 1;
+    }
+    
+    // Accessories sections at the end
+    if (groupName === 'Screen Protectors') return -100;
+    if (groupName === 'Lens Protectors') return -99;
+    if (groupName.includes('Accessories')) return -50;
+    
+    // Other products - alphabetical but after phones
+    return -10;
+  };
+
+  // Sort group names by revenue priority (higher priority = first)
   const sortedGroupNames = Object.keys(groupedInventory).sort((a, b) => {
-    // Sort iPhones by number descending (newest first)
-    const aIphone = a.match(/iPhone (\d+)/);
-    const bIphone = b.match(/iPhone (\d+)/);
-    if (aIphone && bIphone) {
-      return parseInt(bIphone[1]) - parseInt(aIphone[1]);
-    }
-    // Sort Samsung by model descending
-    const aSamsung = a.match(/Galaxy S(\d+)/);
-    const bSamsung = b.match(/Galaxy S(\d+)/);
-    if (aSamsung && bSamsung) {
-      return parseInt(bSamsung[1]) - parseInt(aSamsung[1]);
-    }
-    // Sort Pixel by number descending
-    const aPixel = a.match(/Pixel (\d+)/);
-    const bPixel = b.match(/Pixel (\d+)/);
-    if (aPixel && bPixel) {
-      return parseInt(bPixel[1]) - parseInt(aPixel[1]);
-    }
-    // Alphabetical for others
-    return a.localeCompare(b);
+    return getModelPriority(b) - getModelPriority(a);
   });
 
   const SortIcon = ({ active, order }: { active: boolean; order: 'asc' | 'desc' }) => {
