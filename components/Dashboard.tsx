@@ -453,6 +453,11 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'MagSticks';
     }
 
+    // RimCase (RPTM prefix)
+    if (/^RPTM/i.test(skuUpper)) {
+      return 'RimCase';
+    }
+
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
     const simplified = productTitle.split(/[-|]/)[0].trim();
     return simplified.length > 40 ? simplified.substring(0, 40) + '...' : simplified;
@@ -503,6 +508,7 @@ export default function Dashboard({ session }: DashboardProps) {
     
     // Accessories - ordered by priority
     if (groupName === 'Wallets') return -10;
+    if (groupName === 'RimCase') return -15;
     if (groupName === 'Wrist Straps') return -20;
     if (groupName === 'KeyTag') return -30;
     if (groupName === 'MagSticks') return -35;
