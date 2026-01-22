@@ -215,7 +215,7 @@ export class ShopifyClient {
         }
       `;
       
-      const response = await fetch(graphqlUrl, {
+      const response: Response = await fetch(graphqlUrl, {
         method: 'POST',
         headers: {
           'X-Shopify-Access-Token': this.config.accessToken,
@@ -234,7 +234,7 @@ export class ShopifyClient {
         throw new Error(`GraphQL API error: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const data: any = await response.json();
       
       if (data.errors) {
         console.error('GraphQL errors:', data.errors);
