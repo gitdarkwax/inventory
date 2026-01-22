@@ -5,7 +5,7 @@
  * Displays inventory levels and forecasting data
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { PRODUCT_CATEGORIES, findProductCategory } from '@/lib/constants';
 
@@ -98,6 +98,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft' | 'runOut'>('velocity');
   const [forecastFilterCategory, setForecastFilterCategory] = useState<string>('all');
   const [forecastListMode, setForecastListMode] = useState<'list' | 'grouped'>('grouped');
+  const [forecastLocations, setForecastLocations] = useState<string[]>(['all']);
+  const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const locationDropdownRef = useRef<HTMLDivElement>(null);
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -185,16 +188,60 @@ export default function Dashboard({ session }: DashboardProps) {
     loadInventoryFromCache();
   }, []);
 
+  // Close location dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target as Node)) {
+        setShowLocationDropdown(false);
+      }
+    };
+    if (showLocationDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLocationDropdown]);
+
+  // Helper to calculate inventory for selected locations
+  const getInventoryForLocations = (inventoryItem: InventoryByLocation | undefined, selectedLocations: string[]): number => {
+    if (!inventoryItem) return 0;
+    if (selectedLocations.includes('all')) return inventoryItem.totalAvailable;
+    return selectedLocations.reduce((sum, loc) => sum + (inventoryItem.locations[loc] || 0), 0);
+  };
+
+  // Toggle location selection
+  const toggleForecastLocation = (location: string) => {
+    if (location === 'all') {
+      setForecastLocations(['all']);
+    } else {
+      let newLocations = forecastLocations.filter(l => l !== 'all');
+      if (newLocations.includes(location)) {
+        newLocations = newLocations.filter(l => l !== location);
+        if (newLocations.length === 0) newLocations = ['all'];
+      } else {
+        newLocations.push(location);
+      }
+      setForecastLocations(newLocations);
+    }
+  };
+
+  // Get location label for dropdown button
+  const getForecastLocationLabel = (): string => {
+    if (forecastLocations.includes('all')) return 'All Locations';
+    if (forecastLocations.length === 1) return forecastLocations[0];
+    return `${forecastLocations.length} Locations`;
+  };
+
   // Merge forecasting with inventory for days of stock calculation
   const mergedForecastingData = forecastingData?.forecasting.map(item => {
     const inventoryItem = inventoryData?.inventory.find(inv => inv.sku === item.sku);
-    const totalInventory = inventoryItem?.totalAvailable || 0;
+    const totalInventory = getInventoryForLocations(inventoryItem, forecastLocations);
     const avgDaily = item.avgDaily21d; // Use 21-day average for days of stock
     const daysOfStock = avgDaily > 0 ? totalInventory / avgDaily : totalInventory > 0 ? 999 : 0;
     return {
       ...item,
       totalInventory,
       daysOfStock,
+      locationInventory: inventoryItem?.locations || {},
     };
   }) || [];
 
@@ -954,6 +1001,48 @@ export default function Dashboard({ session }: DashboardProps) {
                           <option key={cat.name} value={cat.name}>{cat.name}</option>
                         ))}
                       </select>
+                      {/* Location Multi-Select */}
+                      <div className="relative" ref={locationDropdownRef}>
+                        <button
+                          onClick={() => setShowLocationDropdown(!showLocationDropdown)}
+                          className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-1"
+                        >
+                          📍 {getForecastLocationLabel()}
+                          <span className="text-gray-400">▼</span>
+                        </button>
+                        {showLocationDropdown && (
+                          <div className="absolute z-10 mt-1 w-48 bg-white border border-gray-300 rounded-md shadow-lg">
+                            <div className="py-1">
+                              <button
+                                onClick={() => { toggleForecastLocation('all'); setShowLocationDropdown(false); }}
+                                className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 flex items-center gap-2 ${forecastLocations.includes('all') ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                              >
+                                {forecastLocations.includes('all') && <span>✓</span>}
+                                <span className={forecastLocations.includes('all') ? '' : 'ml-5'}>All Locations</span>
+                              </button>
+                              <div className="border-t border-gray-200 my-1"></div>
+                              {inventoryData?.locations.map(location => (
+                                <button
+                                  key={location}
+                                  onClick={() => toggleForecastLocation(location)}
+                                  className={`w-full px-3 py-2 text-left text-xs hover:bg-gray-100 flex items-center gap-2 ${forecastLocations.includes(location) ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}
+                                >
+                                  {forecastLocations.includes(location) && <span>✓</span>}
+                                  <span className={forecastLocations.includes(location) ? '' : 'ml-5'}>{location}</span>
+                                </button>
+                              ))}
+                            </div>
+                            <div className="border-t border-gray-200 px-3 py-2">
+                              <button
+                                onClick={() => setShowLocationDropdown(false)}
+                                className="w-full text-xs text-blue-600 hover:text-blue-800 font-medium"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       {/* List/Grouped Toggle */}
                       <div className="flex bg-gray-100 p-1 rounded-lg">
                         <button onClick={() => setForecastListMode('list')}
