@@ -95,7 +95,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastSearchTerm, setForecastSearchTerm] = useState('');
   const [forecastSortBy, setForecastSortBy] = useState<'sku' | 'avgDaily7d' | 'avgDaily21d' | 'avgDaily90d' | 'avgDailyLastYear30d'>('avgDaily7d');
   const [forecastSortOrder, setForecastSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft'>('velocity');
+  const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft' | 'runOut'>('velocity');
   const [forecastFilterCategory, setForecastFilterCategory] = useState<string>('all');
   const [forecastListMode, setForecastListMode] = useState<'list' | 'grouped'>('grouped');
 
@@ -296,6 +296,18 @@ export default function Dashboard({ session }: DashboardProps) {
     if (days >= 999) return '∞';
     if (days <= 0) return '0';
     return Math.round(days).toString();
+  };
+
+  // Calculate and format run out date
+  const formatRunOutDate = (days: number): string => {
+    if (days >= 999) return '—'; // Infinite/no sales
+    if (days <= 0) return 'Now'; // Already out
+    const runOutDate = new Date();
+    runOutDate.setDate(runOutDate.getDate() + Math.round(days));
+    const month = runOutDate.toLocaleDateString('en-US', { month: 'short' });
+    const day = runOutDate.getDate();
+    const year = runOutDate.getFullYear().toString().slice(-2);
+    return `${month} ${day}, ${year}`;
   };
 
   // Get color class for days of stock
@@ -971,6 +983,14 @@ export default function Dashboard({ session }: DashboardProps) {
                         >
                           Days Left
                         </button>
+                        <button
+                          onClick={() => setForecastViewMode('runOut')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            forecastViewMode === 'runOut' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          Run Out
+                        </button>
                       </div>
                       <button onClick={refreshAllData} disabled={isRefreshing}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
@@ -994,16 +1014,16 @@ export default function Dashboard({ session }: DashboardProps) {
                             </th>
                             <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
                             <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily7d')}>
-                              {forecastViewMode === 'velocity' ? '7 Day' : '7D Days'} <SortIcon active={forecastSortBy === 'avgDaily7d'} order={forecastSortOrder} />
+                              {forecastViewMode === 'velocity' ? '7 Day' : forecastViewMode === 'daysLeft' ? '7D Days' : '7D Run Out'} <SortIcon active={forecastSortBy === 'avgDaily7d'} order={forecastSortOrder} />
                             </th>
                             <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily21d')}>
-                              {forecastViewMode === 'velocity' ? '3 Week' : '3W Days'} <SortIcon active={forecastSortBy === 'avgDaily21d'} order={forecastSortOrder} />
+                              {forecastViewMode === 'velocity' ? '3 Week' : forecastViewMode === 'daysLeft' ? '3W Days' : '3W Run Out'} <SortIcon active={forecastSortBy === 'avgDaily21d'} order={forecastSortOrder} />
                             </th>
                             <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDaily90d')}>
-                              {forecastViewMode === 'velocity' ? '3 Month' : '3M Days'} <SortIcon active={forecastSortBy === 'avgDaily90d'} order={forecastSortOrder} />
+                              {forecastViewMode === 'velocity' ? '3 Month' : forecastViewMode === 'daysLeft' ? '3M Days' : '3M Run Out'} <SortIcon active={forecastSortBy === 'avgDaily90d'} order={forecastSortOrder} />
                             </th>
                             <th className="px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleForecastSort('avgDailyLastYear30d')}>
-                              {forecastViewMode === 'velocity' ? 'LY 30D' : 'LY Days'} <SortIcon active={forecastSortBy === 'avgDailyLastYear30d'} order={forecastSortOrder} />
+                              {forecastViewMode === 'velocity' ? 'LY 30D' : forecastViewMode === 'daysLeft' ? 'LY Days' : 'LY Run Out'} <SortIcon active={forecastSortBy === 'avgDailyLastYear30d'} order={forecastSortOrder} />
                             </th>
                           </tr>
                         </thead>
@@ -1025,12 +1045,19 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
                                     <td className="px-3 sm:px-4 py-3 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
                                   </>
-                                ) : (
+                                ) : forecastViewMode === 'daysLeft' ? (
                                   <>
                                     <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
                                     <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
                                     <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
                                     <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days7d)}`}>{formatRunOutDate(days7d)}</td>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days21d)}`}>{formatRunOutDate(days21d)}</td>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(days90d)}`}>{formatRunOutDate(days90d)}</td>
+                                    <td className={`px-3 sm:px-4 py-3 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatRunOutDate(daysLY30d)}</td>
                                   </>
                                 )}
                               </tr>
@@ -1069,10 +1096,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <tr>
                                   <th className="px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                                   <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Inventory</th>
-                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '7 Day' : '7D Days'}</th>
-                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Week' : '3W Days'}</th>
-                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Month' : '3M Days'}</th>
-                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? 'LY 30D' : 'LY Days'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '7 Day' : forecastViewMode === 'daysLeft' ? '7D Days' : '7D Run Out'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Week' : forecastViewMode === 'daysLeft' ? '3W Days' : '3W Run Out'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? '3 Month' : forecastViewMode === 'daysLeft' ? '3M Days' : '3M Run Out'}</th>
+                                  <th className="px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">{forecastViewMode === 'velocity' ? 'LY 30D' : forecastViewMode === 'daysLeft' ? 'LY Days' : 'LY Run Out'}</th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
@@ -1093,12 +1120,19 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.avgDaily90d.toFixed(1)}</td>
                                           <td className="px-3 sm:px-4 py-2 text-sm text-center text-gray-500">{item.avgDailyLastYear30d.toFixed(1)}</td>
                                         </>
-                                      ) : (
+                                      ) : forecastViewMode === 'daysLeft' ? (
                                         <>
                                           <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatDaysOfStock(days7d)}</td>
                                           <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatDaysOfStock(days21d)}</td>
                                           <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatDaysOfStock(days90d)}</td>
                                           <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatDaysOfStock(daysLY30d)}</td>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days7d)}`}>{formatRunOutDate(days7d)}</td>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days21d)}`}>{formatRunOutDate(days21d)}</td>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(days90d)}`}>{formatRunOutDate(days90d)}</td>
+                                          <td className={`px-3 sm:px-4 py-2 text-sm text-center ${getDaysColor(daysLY30d)}`}>{formatRunOutDate(daysLY30d)}</td>
                                         </>
                                       )}
                                     </tr>
