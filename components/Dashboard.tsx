@@ -311,9 +311,10 @@ export default function Dashboard({ session }: DashboardProps) {
     return /^(EC|ES|MBC|MBS|MBP|MBCX|EP)\d/i.test(sku);
   };
 
-  // Extract product model from title and SKU for grouping
+  // Extract product model from SKU for grouping (SKU is the source of truth)
   const extractProductModel = (productTitle: string, sku: string): string => {
     const titleLower = productTitle.toLowerCase();
+    const skuUpper = sku.toUpperCase();
     
     // Check for screen protectors first
     if (titleLower.includes('screen protector') || titleLower.includes('screen guard')) {
@@ -325,59 +326,46 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'Lens Protectors';
     }
 
-    // For phone models, only group if it's a case SKU
-    const isCase = isPhoneCaseSku(sku);
-    
-    // iPhone patterns - check for specific variants in order of specificity
-    const iphoneMatch = productTitle.match(/iPhone\s*(\d+)/i);
-    if (iphoneMatch) {
-      if (!isCase) return 'iPhone Accessories';
-      const model = iphoneMatch[1];
-      
-      // Check for variant in title (order matters - check most specific first)
-      if (/pro\s*max/i.test(productTitle)) return `iPhone ${model} Pro Max`;
-      if (/\bpro\b/i.test(productTitle)) return `iPhone ${model} Pro`;
-      if (/\bplus\b/i.test(productTitle)) return `iPhone ${model} Plus`;
-      if (/\bmini\b/i.test(productTitle)) return `iPhone ${model} mini`;
+    // iPhone case SKUs: EC17M, EC17P, EC17, MBC17M, MBC17P, MBC17, MBCX17M, etc.
+    // Pattern: (EC|MBC|MBCX) + model number + optional variant (M=Max, P=Pro, PL=Plus, MN=Mini)
+    const iphoneCaseMatch = skuUpper.match(/^(EC|MBC|MBCX)(\d+)(M|P|PL|MN)?/);
+    if (iphoneCaseMatch) {
+      const model = iphoneCaseMatch[2];
+      const variant = iphoneCaseMatch[3];
+      if (variant === 'M') return `iPhone ${model} Pro Max`;
+      if (variant === 'P') return `iPhone ${model} Pro`;
+      if (variant === 'PL') return `iPhone ${model} Plus`;
+      if (variant === 'MN') return `iPhone ${model} mini`;
       return `iPhone ${model}`;
     }
 
-    // Samsung Galaxy patterns
-    const samsungSMatch = productTitle.match(/Galaxy\s*(S\d+)/i);
-    if (samsungSMatch) {
-      if (!isCase) return 'Samsung Accessories';
-      const model = samsungSMatch[1];
-      if (/ultra/i.test(productTitle)) return `Samsung Galaxy ${model} Ultra`;
-      if (/\+|plus/i.test(productTitle)) return `Samsung Galaxy ${model}+`;
-      if (/\bfe\b/i.test(productTitle)) return `Samsung Galaxy ${model} FE`;
-      return `Samsung Galaxy ${model}`;
-    }
-    
-    // Samsung Galaxy Z Fold
-    const zFoldMatch = productTitle.match(/Z\s*Fold\s*(\d+)/i);
-    if (zFoldMatch) {
-      if (!isCase) return 'Samsung Accessories';
-      return `Samsung Galaxy Z Fold ${zFoldMatch[1]}`;
-    }
-    
-    // Samsung Galaxy Z Flip
-    const zFlipMatch = productTitle.match(/Z\s*Flip\s*(\d+)/i);
-    if (zFlipMatch) {
-      if (!isCase) return 'Samsung Accessories';
-      return `Samsung Galaxy Z Flip ${zFlipMatch[1]}`;
+    // Samsung case SKUs: ES25U, ES25P, ES25, MBS25U, MBS25P, MBS25, etc.
+    // Pattern: (ES|MBS) + model number + optional variant (U=Ultra, P=Plus)
+    const samsungCaseMatch = skuUpper.match(/^(ES|MBS)(\d+)(U|P)?/);
+    if (samsungCaseMatch) {
+      const model = samsungCaseMatch[2];
+      const variant = samsungCaseMatch[3];
+      if (variant === 'U') return `Samsung Galaxy S${model} Ultra`;
+      if (variant === 'P') return `Samsung Galaxy S${model}+`;
+      return `Samsung Galaxy S${model}`;
     }
 
-    // Google Pixel patterns
-    const pixelMatch = productTitle.match(/Pixel\s*(\d+)/i);
-    if (pixelMatch) {
-      if (!isCase) return 'Pixel Accessories';
-      const model = pixelMatch[1];
-      if (/pro\s*xl/i.test(productTitle)) return `Pixel ${model} Pro XL`;
-      if (/\bpro\b/i.test(productTitle)) return `Pixel ${model} Pro`;
-      if (/\bxl\b/i.test(productTitle)) return `Pixel ${model} XL`;
-      if (/\ba\b/i.test(productTitle)) return `Pixel ${model}a`;
+    // Pixel case SKUs: EP9PX, EP9P, EP9, MBP9PX, MBP9P, MBP9, etc.
+    // Pattern: (EP|MBP) + model number + optional variant (PX=Pro XL, P=Pro, A=a)
+    const pixelCaseMatch = skuUpper.match(/^(EP|MBP)(\d+)(PX|P|A)?/);
+    if (pixelCaseMatch) {
+      const model = pixelCaseMatch[2];
+      const variant = pixelCaseMatch[3];
+      if (variant === 'PX') return `Pixel ${model} Pro XL`;
+      if (variant === 'P') return `Pixel ${model} Pro`;
+      if (variant === 'A') return `Pixel ${model}a`;
       return `Pixel ${model}`;
     }
+
+    // Check product title for phone references (for non-case items)
+    if (/iphone/i.test(productTitle)) return 'iPhone Accessories';
+    if (/galaxy|samsung/i.test(productTitle)) return 'Samsung Accessories';
+    if (/pixel/i.test(productTitle)) return 'Pixel Accessories';
 
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
     const simplified = productTitle.split(/[-|]/)[0].trim();
