@@ -93,18 +93,30 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastSortOrder, setForecastSortOrder] = useState<'asc' | 'desc'>('desc');
   const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft'>('velocity');
 
-  // Fetch inventory data
-  const fetchInventory = async () => {
+  // Refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [cacheAge, setCacheAge] = useState<string | null>(null);
+
+  // Load cached inventory data
+  const loadInventoryFromCache = async () => {
     setInventoryLoading(true);
     setInventoryError(null);
     try {
       const response = await fetch('/api/inventory');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch inventory');
-      }
       const data = await response.json();
+      if (!response.ok) {
+        // No cache available - this is expected on first load
+        if (response.status === 503) {
+          setInventoryError('No cached data. Click Refresh to load data from Shopify.');
+        } else {
+          throw new Error(data.error || 'Failed to fetch inventory');
+        }
+        return;
+      }
       setInventoryData(data);
+      if (data.cache?.age) {
+        setCacheAge(data.cache.age);
+      }
     } catch (err) {
       setInventoryError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -112,17 +124,21 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
-  // Fetch forecasting data
-  const fetchForecasting = async () => {
+  // Load cached forecasting data
+  const loadForecastingFromCache = async () => {
     setForecastingLoading(true);
     setForecastingError(null);
     try {
       const response = await fetch('/api/forecasting');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch forecasting data');
-      }
       const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 503) {
+          setForecastingError('No cached data. Click Refresh to load data from Shopify.');
+        } else {
+          throw new Error(data.error || 'Failed to fetch forecasting data');
+        }
+        return;
+      }
       setForecastingData(data);
     } catch (err) {
       setForecastingError(err instanceof Error ? err.message : 'Unknown error');
@@ -131,18 +147,40 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
+  // Refresh all data from Shopify (called when user clicks Refresh button)
+  const refreshAllData = async () => {
+    setIsRefreshing(true);
+    setInventoryError(null);
+    setForecastingError(null);
+    try {
+      const response = await fetch('/api/refresh');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Refresh failed');
+      }
+      // Reload both caches after successful refresh
+      await Promise.all([loadInventoryFromCache(), loadForecastingFromCache()]);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Refresh failed';
+      setInventoryError(errorMsg);
+      setForecastingError(errorMsg);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Load data when tab changes
   useEffect(() => {
     if (activeTab === 'inventory' && !inventoryData && !inventoryLoading) {
-      fetchInventory();
+      loadInventoryFromCache();
     } else if (activeTab === 'forecasting' && !forecastingData && !forecastingLoading) {
-      fetchForecasting();
+      loadForecastingFromCache();
     }
   }, [activeTab]);
 
-  // Initial load
+  // Initial load from cache
   useEffect(() => {
-    fetchInventory();
+    loadInventoryFromCache();
   }, []);
 
   // Merge forecasting with inventory for days of stock calculation
@@ -390,9 +428,12 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
 
             {inventoryError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-red-700">{inventoryError}</p>
-                <button onClick={fetchInventory} className="mt-2 text-sm text-red-600 hover:text-red-800 underline">Try again</button>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
+                <p className="text-sm text-yellow-800 mb-4">{inventoryError}</p>
+                <button onClick={refreshAllData} disabled={isRefreshing}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                </button>
               </div>
             )}
 
@@ -430,10 +471,16 @@ export default function Dashboard({ session }: DashboardProps) {
                         className={`px-3 py-2 text-xs font-medium rounded-md ${filterOutOfStock ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                         Out of Stock ({inventoryData.outOfStockCount})
                       </button>
-                      <button onClick={fetchInventory} className="px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700">🔄 Refresh</button>
+                      <button onClick={refreshAllData} disabled={isRefreshing}
+                        className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+                      </button>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Showing {filteredInventory.length} of {inventoryData.totalSKUs} SKUs</p>
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-xs text-gray-500">Showing {filteredInventory.length} of {inventoryData.totalSKUs} SKUs</p>
+                    {cacheAge && <p className="text-xs text-gray-400">Last updated: {cacheAge} ago</p>}
+                  </div>
                 </div>
 
                 <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -494,9 +541,12 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
 
             {forecastingError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-red-700">{forecastingError}</p>
-                <button onClick={fetchForecasting} className="mt-2 text-sm text-red-600 hover:text-red-800 underline">Try again</button>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
+                <p className="text-sm text-yellow-800 mb-4">{forecastingError}</p>
+                <button onClick={refreshAllData} disabled={isRefreshing}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                </button>
               </div>
             )}
 
@@ -536,7 +586,10 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                       <input type="text" placeholder="Search by SKU or product..." value={forecastSearchTerm} onChange={(e) => setForecastSearchTerm(e.target.value)}
                         className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                      <button onClick={fetchForecasting} className="px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700">🔄 Refresh</button>
+                      <button onClick={refreshAllData} disabled={isRefreshing}
+                        className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+                      </button>
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">Showing {filteredForecasting.length} SKUs</p>
