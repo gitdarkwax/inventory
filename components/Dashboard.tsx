@@ -373,16 +373,15 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Extract product model from SKU for grouping (SKU is the source of truth)
   const extractProductModel = (productTitle: string, sku: string): string => {
-    const titleLower = productTitle.toLowerCase();
     const skuUpper = sku.toUpperCase();
     
-    // Check for screen protectors first
-    if (titleLower.includes('screen protector') || titleLower.includes('screen guard')) {
+    // Screen Protectors (SP prefix)
+    if (/^SP/i.test(skuUpper)) {
       return 'Screen Protectors';
     }
     
-    // Check for lens protectors
-    if (titleLower.includes('lens protector') || titleLower.includes('lens guard') || titleLower.includes('camera lens')) {
+    // Lens Protectors (LP prefix)
+    if (/^LP/i.test(skuUpper)) {
       return 'Lens Protectors';
     }
 
@@ -410,22 +409,40 @@ export default function Dashboard({ session }: DashboardProps) {
       return `Samsung Galaxy S${model}`;
     }
 
-    // Pixel case SKUs: EP9PX, EP9P, EP9, MBP9PX, MBP9P, MBP9, etc.
-    // Pattern: (EP|MBP) + model number + optional variant (PX=Pro XL, P=Pro, A=a)
-    const pixelCaseMatch = skuUpper.match(/^(EP|MBP)(\d+)(PX|P|A)?/);
-    if (pixelCaseMatch) {
-      const model = pixelCaseMatch[2];
-      const variant = pixelCaseMatch[3];
-      if (variant === 'PX') return `Pixel ${model} Pro XL`;
-      if (variant === 'P') return `Pixel ${model} Pro`;
-      if (variant === 'A') return `Pixel ${model}a`;
-      return `Pixel ${model}`;
+    // Pixel Cases (EP, MBP prefix)
+    if (/^(EP|MBP)\d/i.test(skuUpper)) {
+      return 'Pixel Cases';
     }
 
-    // Check product title for phone references (for non-case items)
-    if (/iphone/i.test(productTitle)) return 'iPhone Accessories';
-    if (/galaxy|samsung/i.test(productTitle)) return 'Samsung Accessories';
-    if (/pixel/i.test(productTitle)) return 'Pixel Accessories';
+    // Wrist Straps (WRT prefix)
+    if (/^WRT/i.test(skuUpper)) {
+      return 'Wrist Straps';
+    }
+
+    // Wallets (FMWLT, MBWLT prefix)
+    if (/^(FMWLT|MBWLT)/i.test(skuUpper)) {
+      return 'Wallets';
+    }
+
+    // Color Accessories (ACC, ACU, ACP, LF, ACS prefix)
+    if (/^(ACC|ACU|ACP|LF|ACS)/i.test(skuUpper)) {
+      return 'Color Accessories';
+    }
+
+    // KeyTag (MBKH prefix)
+    if (/^MBKH/i.test(skuUpper)) {
+      return 'KeyTag';
+    }
+
+    // Tesla Charger (MBT prefix)
+    if (/^MBT/i.test(skuUpper)) {
+      return 'Tesla Charger';
+    }
+
+    // Chargers (MBQI, TVL prefix)
+    if (/^(MBQI|TVL)/i.test(skuUpper)) {
+      return 'Chargers';
+    }
 
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
     const simplified = productTitle.split(/[-|]/)[0].trim();
@@ -472,23 +489,21 @@ export default function Dashboard({ session }: DashboardProps) {
     const zFlipMatch = groupName.match(/Z Flip (\d+)/i);
     if (zFlipMatch) return parseInt(zFlipMatch[1]) * 50 + 400;
     
-    // Pixel
-    const pixelMatch = groupName.match(/Pixel (\d+)/);
-    if (pixelMatch) {
-      const base = parseInt(pixelMatch[1]) * 100;
-      if (groupName.includes('Pro XL')) return base + 3;
-      if (groupName.includes('Pro')) return base + 2;
-      if (groupName.includes('a')) return base;
-      return base + 1;
-    }
+    // Pixel Cases (after Samsung)
+    if (groupName === 'Pixel Cases') return 50;
     
-    // Accessories sections at the end
-    if (groupName === 'Screen Protectors') return -100;
-    if (groupName === 'Lens Protectors') return -99;
-    if (groupName.includes('Accessories')) return -50;
+    // Accessories - ordered by priority
+    if (groupName === 'Wallets') return -10;
+    if (groupName === 'Wrist Straps') return -20;
+    if (groupName === 'KeyTag') return -30;
+    if (groupName === 'Tesla Charger') return -40;
+    if (groupName === 'Chargers') return -50;
+    if (groupName === 'Color Accessories') return -60;
+    if (groupName === 'Screen Protectors') return -70;
+    if (groupName === 'Lens Protectors') return -80;
     
-    // Other products - alphabetical but after phones
-    return -10;
+    // Other products - at the end
+    return -100;
   };
 
   // Sort group names by revenue priority (higher priority = first)
