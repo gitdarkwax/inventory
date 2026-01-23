@@ -1127,6 +1127,16 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
+          {/* Phase Out Link */}
+          <div className="flex justify-end mb-1">
+            <button
+              onClick={() => setShowPhaseOutModal(true)}
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+            >
+              Manage Phase Outs
+            </button>
+          </div>
+          
           {/* Tabs and Refresh */}
           <div className="flex items-center justify-between">
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
@@ -1163,21 +1173,13 @@ export default function Dashboard({ session }: DashboardProps) {
                 🏭 Production
               </button>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <button
-                onClick={() => setShowPhaseOutModal(true)}
-                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-              >
-                Manage Phase Outs
-              </button>
-              <button 
-                onClick={refreshAllData} 
-                disabled={isRefreshing}
-                className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-              >
-                {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
-              </button>
-            </div>
+            <button 
+              onClick={refreshAllData} 
+              disabled={isRefreshing}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+            >
+              {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+            </button>
           </div>
         </div>
 
@@ -3241,27 +3243,59 @@ export default function Dashboard({ session }: DashboardProps) {
                 <p className="text-sm text-gray-500 mt-1">SKUs being phased out won&apos;t require production planning</p>
               </div>
               <div className="px-6 py-4 flex-1 overflow-y-auto">
-                {/* Add new SKU */}
-                <div className="flex gap-2 mb-4">
-                  <input
-                    type="text"
-                    value={newPhaseOutSku}
-                    onChange={(e) => setNewPhaseOutSku(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && addPhaseOutSku()}
-                    placeholder="Enter SKU..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <button
-                    onClick={addPhaseOutSku}
-                    disabled={isAddingPhaseOut || !newPhaseOutSku.trim()}
-                    className={`px-4 py-2 text-sm font-medium rounded-md ${
-                      isAddingPhaseOut || !newPhaseOutSku.trim()
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {isAddingPhaseOut ? 'Adding...' : 'Add'}
-                  </button>
+                {/* Add new SKU with autocomplete */}
+                <div className="mb-4">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={newPhaseOutSku}
+                        onChange={(e) => setNewPhaseOutSku(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && addPhaseOutSku()}
+                        placeholder="Enter SKU..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {/* SKU Suggestions Dropdown */}
+                      {newPhaseOutSku.length >= 2 && inventoryData?.inventory && (() => {
+                        const suggestions = inventoryData.inventory
+                          .filter(inv => 
+                            inv.sku.toUpperCase().includes(newPhaseOutSku) &&
+                            !phaseOutSkus.some(s => s.toLowerCase() === inv.sku.toLowerCase())
+                          )
+                          .slice(0, 8);
+                        
+                        if (suggestions.length === 0) return null;
+                        
+                        return (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                            {suggestions.map((inv) => (
+                              <button
+                                key={inv.sku}
+                                onClick={() => {
+                                  setNewPhaseOutSku(inv.sku);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
+                              >
+                                <span className="font-medium">{inv.sku}</span>
+                                <span className="text-gray-500 ml-2 text-xs">{inv.productTitle}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <button
+                      onClick={addPhaseOutSku}
+                      disabled={isAddingPhaseOut || !newPhaseOutSku.trim()}
+                      className={`px-4 py-2 text-sm font-medium rounded-md ${
+                        isAddingPhaseOut || !newPhaseOutSku.trim()
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {isAddingPhaseOut ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* List of phase out SKUs */}
