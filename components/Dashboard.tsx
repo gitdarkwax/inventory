@@ -128,7 +128,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [inventoryLocationFilter, setInventoryLocationFilter] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
-  const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'incoming'>('sku');
+  const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'inboundAir' | 'inboundSea'>('sku');
   const [locationSortOrder, setLocationSortOrder] = useState<'asc' | 'desc'>('asc');
   const [locationViewMode, setLocationViewMode] = useState<'list' | 'grouped'>('grouped');
 
@@ -1040,8 +1040,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('committed')}>
                         Committed <SortIcon active={locationSortBy === 'committed'} order={locationSortOrder} />
                       </th>
-                      <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('incoming')}>
-                        Incoming <SortIcon active={locationSortBy === 'incoming'} order={locationSortOrder} />
+                      <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('inboundAir')}>
+                        In Air <SortIcon active={locationSortBy === 'inboundAir'} order={locationSortOrder} />
+                      </th>
+                      <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('inboundSea')}>
+                        In Sea <SortIcon active={locationSortBy === 'inboundSea'} order={locationSortOrder} />
                       </th>
                     </tr>
                   </thead>
@@ -1052,7 +1055,18 @@ export default function Dashboard({ session }: DashboardProps) {
                         <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.onHand.toLocaleString()}</td>
                         <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>{item.available.toLocaleString()}</td>
                         <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
-                        <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                        <td 
+                          className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                        >
+                          {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
+                        </td>
+                        <td 
+                          className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                        >
+                          {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1337,8 +1351,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('committed')}>
                                   Committed <SortIcon active={locationSortBy === 'committed'} order={locationSortOrder} />
                                 </th>
-                                <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('incoming')}>
-                                  Incoming <SortIcon active={locationSortBy === 'incoming'} order={locationSortOrder} />
+                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('inboundAir')}>
+                                  In Air <SortIcon active={locationSortBy === 'inboundAir'} order={locationSortOrder} />
+                                </th>
+                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('inboundSea')}>
+                                  In Sea <SortIcon active={locationSortBy === 'inboundSea'} order={locationSortOrder} />
                                 </th>
                               </>
                             ) : (
@@ -1372,8 +1389,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.committed > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
                                   {item.committed.toLocaleString()}
                                 </td>
-                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                  {item.incoming.toLocaleString()}
+                                <td 
+                                  className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                  title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                >
+                                  {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
+                                </td>
+                                <td 
+                                  className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                  title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                >
+                                  {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                 </td>
                               </tr>
                             ))
@@ -1448,7 +1474,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                       <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">On Hand</th>
                                       <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Available</th>
                                       <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Committed</th>
-                                      <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
+                                      <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air</th>
+                                      <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea</th>
                                     </tr>
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
@@ -1465,8 +1492,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.committed > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
                                           {item.committed.toLocaleString()}
                                         </td>
-                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                          {item.incoming.toLocaleString()}
+                                        <td 
+                                          className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                        >
+                                          {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
+                                        </td>
+                                        <td 
+                                          className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                        >
+                                          {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                         </td>
                                       </tr>
                                     ))}
