@@ -152,7 +152,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
-  const [planningShowInventoryCols, setPlanningShowInventoryCols] = useState(true);
 
   // Purchase Order state (from manual production orders)
   const [purchaseOrderData, setPurchaseOrderData] = useState<PurchaseOrderData | null>(null);
@@ -1062,39 +1061,48 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
-          {/* Tabs */}
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-            <button
-              onClick={() => setActiveTab('inventory')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-              }`}
+          {/* Tabs and Refresh */}
+          <div className="flex items-center justify-between">
+            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+              <button
+                onClick={() => setActiveTab('inventory')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                📦 Inventory
+              </button>
+              <button
+                onClick={() => setActiveTab('forecasting')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                📈 Forecasting
+              </button>
+              <button
+                onClick={() => setActiveTab('planning')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                📋 Planning
+              </button>
+              <button
+                onClick={() => setActiveTab('production')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                🏭 Production
+              </button>
+            </div>
+            <button 
+              onClick={refreshAllData} 
+              disabled={isRefreshing}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
             >
-              📦 Inventory
-            </button>
-            <button
-              onClick={() => setActiveTab('forecasting')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-              }`}
-            >
-              📈 Forecasting
-            </button>
-            <button
-              onClick={() => setActiveTab('planning')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-              }`}
-            >
-              📋 Planning
-            </button>
-            <button
-              onClick={() => setActiveTab('production')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-              }`}
-            >
-              🏭 Production
+              {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
             </button>
           </div>
         </div>
@@ -1179,10 +1187,6 @@ export default function Dashboard({ session }: DashboardProps) {
                       <button onClick={() => { setFilterOutOfStock(!filterOutOfStock); setFilterLowStock(false); }}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${filterOutOfStock ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                         Out of Stock ({inventoryData.outOfStockCount})
-                      </button>
-                      <button onClick={refreshAllData} disabled={isRefreshing}
-                        className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
                       </button>
                     </div>
                     <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
@@ -1476,10 +1480,6 @@ export default function Dashboard({ session }: DashboardProps) {
                           </button>
                         </div>
                       )}
-                      <button onClick={refreshAllData} disabled={isRefreshing}
-                        className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
-                      </button>
                     </div>
                     <input type="text" placeholder="Search by SKU or product..." value={forecastSearchTerm} onChange={(e) => setForecastSearchTerm(e.target.value)}
                       className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -1748,35 +1748,38 @@ export default function Dashboard({ session }: DashboardProps) {
                         </button>
                       </div>
                       {/* Burn Rate Period Toggle */}
-                      <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button
-                          onClick={() => setPlanningBurnPeriod('7d')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            planningBurnPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          7 Days
-                        </button>
-                        <button
-                          onClick={() => setPlanningBurnPeriod('21d')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            planningBurnPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          21 Days
-                        </button>
-                        <button
-                          onClick={() => setPlanningBurnPeriod('90d')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            planningBurnPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          90 Days
-                        </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">Burn Rate Period:</span>
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                          <button
+                            onClick={() => setPlanningBurnPeriod('7d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              planningBurnPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            7 Days
+                          </button>
+                          <button
+                            onClick={() => setPlanningBurnPeriod('21d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              planningBurnPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            21 Days
+                          </button>
+                          <button
+                            onClick={() => setPlanningBurnPeriod('90d')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                              planningBurnPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            90 Days
+                          </button>
+                        </div>
                       </div>
                       {/* LA Target Days */}
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-gray-500">LA:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">Units needed in LA for:</span>
                         <select
                           value={planningLaTargetDays}
                           onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
@@ -1790,19 +1793,6 @@ export default function Dashboard({ session }: DashboardProps) {
                           <option value={180}>180 days</option>
                         </select>
                       </div>
-                      {/* Expand/Collapse Inventory Columns */}
-                      <button
-                        type="button"
-                        onClick={() => setPlanningShowInventoryCols(!planningShowInventoryCols)}
-                        className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md bg-white"
-                        title={planningShowInventoryCols ? 'Collapse inventory columns' : 'Expand inventory columns'}
-                      >
-                        {planningShowInventoryCols ? '◀ Collapse' : '▶ Expand'}
-                      </button>
-                      <button onClick={refreshAllData} disabled={isRefreshing}
-                        className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
-                      </button>
                     </div>
                     <input type="text" placeholder="Search by SKU or product..." value={planningSearchTerm} onChange={(e) => setPlanningSearchTerm(e.target.value)}
                       className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -2012,11 +2002,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
-                  // Helper to get LA runout date
-                  const getLaRunoutDate = (laRunwayDays: number): string => {
-                    if (laRunwayDays >= 999) return 'No sales data';
+                  // Helper to get runout date from runway days
+                  const getRunoutDate = (runwayDays: number): string => {
+                    if (runwayDays >= 999) return 'No sales data';
                     const runoutDate = new Date();
-                    runoutDate.setDate(runoutDate.getDate() + laRunwayDays);
+                    runoutDate.setDate(runoutDate.getDate() + runwayDays);
                     return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                   };
                   
@@ -2028,22 +2018,18 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
                               SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
                             </th>
-                            {planningShowInventoryCols && (
-                              <>
-                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
-                                  LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
-                                </th>
-                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('incoming')}>
-                                  Incoming <SortIcon active={planningSortBy === 'incoming'} order={planningSortOrder} />
-                                </th>
-                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
-                                  China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
-                                </th>
-                                <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
-                                  In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
-                                </th>
-                              </>
-                            )}
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
+                              LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('incoming')}>
+                              Incoming <SortIcon active={planningSortBy === 'incoming'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
+                              China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
+                              In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
+                            </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
                             </th>
@@ -2066,19 +2052,12 @@ export default function Dashboard({ session }: DashboardProps) {
                         {items.map((item, index) => (
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                            {planningShowInventoryCols && (
-                              <>
-                                <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                                <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
-                                <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                              </>
-                            )}
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
-                            <td 
-                              className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}
-                              title={`LA runs out: ${getLaRunoutDate(item.laRunwayDays)}`}
-                            >
+                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                               {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                             </td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
@@ -2091,7 +2070,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                 {item.prodStatus}
                               </span>
                             </td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}>
+                            <td 
+                              className={`w-20 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                              title={`Runs out: ${getRunoutDate(item.runway)}`}
+                            >
                               {item.runway >= 999 ? '∞' : `${item.runway}d`}
                             </td>
                           </tr>
@@ -2140,14 +2122,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <thead className="bg-gray-50">
                                       <tr>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                        {planningShowInventoryCols && (
-                                          <>
-                                            <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
-                                            <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
-                                            <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
-                                            <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
-                                          </>
-                                        )}
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Need</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
@@ -2159,19 +2137,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                       {sortedItems.map((item, index) => (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                           <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                                          {planningShowInventoryCols && (
-                                            <>
-                                              <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                                              <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
-                                              <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                                              <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                                            </>
-                                          )}
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
-                                          <td 
-                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}
-                                            title={`LA runs out: ${getLaRunoutDate(item.laRunwayDays)}`}
-                                          >
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                             {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                                           </td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
@@ -2184,7 +2155,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                               {item.prodStatus}
                                             </span>
                                           </td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                          <td 
+                                            className={`w-20 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                                            title={`Runs out: ${getRunoutDate(item.runway)}`}
+                                          >
                                             {item.runway >= 999 ? '∞' : `${item.runway}d`}
                                           </td>
                                         </tr>
