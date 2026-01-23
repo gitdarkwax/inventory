@@ -95,12 +95,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { orderId, notes, vendor, eta, status, deliveries } = body as {
+    const { orderId, items, notes, vendor, eta, status, deliveries } = body as {
       orderId: string;
+      items?: { sku: string; quantity: number }[];
       notes?: string;
       vendor?: string;
       eta?: string;
-      status?: 'in_production' | 'partial' | 'completed';
+      status?: 'in_production' | 'partial' | 'completed' | 'cancelled';
       deliveries?: { sku: string; quantity: number }[];
     };
 
@@ -125,6 +126,7 @@ export async function PATCH(request: NextRequest) {
 
     // Otherwise, update order fields
     const updatedOrder = await ProductionOrdersService.updateOrder(orderId, {
+      items,
       notes,
       vendor,
       eta,

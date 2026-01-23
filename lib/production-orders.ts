@@ -16,17 +16,19 @@ export interface ProductionOrder {
   notes: string;
   vendor?: string;
   eta?: string; // ISO date string
-  status: 'in_production' | 'partial' | 'completed';
+  status: 'in_production' | 'partial' | 'completed' | 'cancelled';
   createdBy: string;
   createdByEmail: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  cancelledAt?: string;
 }
 
 export interface ProductionOrdersCache {
   orders: ProductionOrder[];
   lastUpdated: string;
+  nextOrderNumber?: number; // Track sequential PO numbers
 }
 
 export class ProductionOrdersService {
@@ -249,6 +251,11 @@ export class ProductionOrdersService {
   ): Promise<ProductionOrder> {
     const cache = await ProductionOrdersService.loadOrders();
     
+    // Generate sequential PO number
+    const nextNum = cache.nextOrderNumber || 1;
+    const orderId = `PO-${String(nextNum).padStart(3, '0')}`;
+    cache.nextOrderNumber = nextNum + 1;
+    
     // Initialize items with receivedQuantity = 0
     const orderItems: ProductionOrderItem[] = items.map(item => ({
       sku: item.sku,
@@ -257,7 +264,7 @@ export class ProductionOrdersService {
     }));
     
     const newOrder: ProductionOrder = {
-      id: `PO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: orderId,
       items: orderItems,
       notes,
       vendor,
@@ -282,7 +289,9 @@ export class ProductionOrdersService {
    */
   static async updateOrder(
     orderId: string,
-    updates: Partial<Pick<ProductionOrder, 'notes' | 'vendor' | 'eta' | 'status'>>
+    updates: Partial<Pick<ProductionOrder, 'notes' | 'vendor' | 'eta' | 'status'>> & {
+      items?: { sku: string; quantity: number }[];
+    }
   ): Promise<ProductionOrder | null> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -291,6 +300,18 @@ export class ProductionOrdersService {
 
     const order = cache.orders[orderIndex];
     
+    // Update items if provided (preserve receivedQuantity for existing SKUs)
+    if (updates.items) {
+      order.items = updates.items.map(newItem => {
+        const existingItem = order.items.find(i => i.sku === newItem.sku);
+        return {
+          sku: newItem.sku,
+          quantity: newItem.quantity,
+          receivedQuantity: existingItem?.receivedQuantity || 0,
+        };
+      });
+    }
+    
     if (updates.notes !== undefined) order.notes = updates.notes;
     if (updates.vendor !== undefined) order.vendor = updates.vendor;
     if (updates.eta !== undefined) order.eta = updates.eta;
@@ -298,6 +319,9 @@ export class ProductionOrdersService {
       order.status = updates.status;
       if (updates.status === 'completed') {
         order.completedAt = new Date().toISOString();
+      }
+      if (updates.status === 'cancelled') {
+        order.cancelledAt = new Date().toISOString();
       }
     }
     order.updatedAt = new Date().toISOString();

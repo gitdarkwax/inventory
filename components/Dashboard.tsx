@@ -87,12 +87,13 @@ interface ProductionOrder {
   notes: string;
   vendor?: string;
   eta?: string;
-  status: 'in_production' | 'partial' | 'completed';
+  status: 'in_production' | 'partial' | 'completed' | 'cancelled';
   createdBy: string;
   createdByEmail: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  cancelledAt?: string;
 }
 
 type TabType = 'inventory' | 'forecasting' | 'planning' | 'production';
@@ -158,6 +159,12 @@ export default function Dashboard({ session }: DashboardProps) {
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editOrderItems, setEditOrderItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [editOrderVendor, setEditOrderVendor] = useState('');
+  const [editOrderEta, setEditOrderEta] = useState('');
+  const [editOrderNotes, setEditOrderNotes] = useState('');
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -323,6 +330,66 @@ export default function Dashboard({ session }: DashboardProps) {
       }
     } catch (err) {
       alert('Failed to log delivery');
+    }
+  };
+
+  // Save edited production order
+  const saveEditOrder = async (orderId: string) => {
+    const validItems = editOrderItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validItems.length === 0) {
+      alert('Please add at least one item with a valid SKU and quantity');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/production-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          items: validItems,
+          vendor: editOrderVendor || undefined,
+          eta: editOrderEta || undefined,
+          notes: editOrderNotes,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShowEditForm(false);
+        setSelectedOrder(data.order);
+        await loadProductionOrders();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to update order');
+      }
+    } catch (err) {
+      alert('Failed to update order');
+    }
+  };
+
+  // Cancel production order
+  const cancelOrder = async (orderId: string) => {
+    try {
+      const response = await fetch('/api/production-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: 'cancelled' }),
+      });
+
+      if (response.ok) {
+        setShowCancelConfirm(false);
+        setSelectedOrder(null);
+        await loadProductionOrders();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to cancel order');
+      }
+    } catch (err) {
+      alert('Failed to cancel order');
     }
   };
 
@@ -2009,7 +2076,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     {productionOrders
                       .filter(order => {
                         if (productionFilterStatus === 'active') return ['in_production', 'partial'].includes(order.status);
-                        if (productionFilterStatus === 'completed') return order.status === 'completed';
+                        if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
                         return true;
                       })
                       .map((order) => {
@@ -2033,10 +2100,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                 order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
                                 order.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
                                 order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                                 'bg-gray-100 text-gray-800'
                               }`}>
                                 {order.status === 'in_production' ? 'In Production' : 
                                  order.status === 'partial' ? 'Partial Delivery' : 
+                                 order.status === 'cancelled' ? 'Cancelled' :
                                  'Completed'}
                               </span>
                             </td>
@@ -2053,7 +2122,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       })}
                     {productionOrders.filter(order => {
                       if (productionFilterStatus === 'active') return ['in_production', 'partial'].includes(order.status);
-                      if (productionFilterStatus === 'completed') return order.status === 'completed';
+                      if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
                       return true;
                     }).length === 0 && (
                       <tr>
@@ -2215,19 +2284,21 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
 
             {/* Order Details Modal */}
-            {selectedOrder && !showDeliveryForm && (
+            {selectedOrder && !showDeliveryForm && !showEditForm && !showCancelConfirm && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-gray-900">Order Details</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">{selectedOrder.id}</h3>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       selectedOrder.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
                       selectedOrder.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
                       selectedOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
                       {selectedOrder.status === 'in_production' ? 'In Production' : 
                        selectedOrder.status === 'partial' ? 'Partial Delivery' : 
+                       selectedOrder.status === 'cancelled' ? 'Cancelled' :
                        'Completed'}
                     </span>
                   </div>
@@ -2320,32 +2391,51 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 border-t border-gray-200">
                     <div className="flex justify-between items-center">
                       <div className="flex gap-2">
-                        {selectedOrder.status !== 'completed' && (
-                          <button
-                            onClick={() => {
-                              // Pre-populate delivery items with remaining quantities
-                              setDeliveryItems(
-                                selectedOrder.items
-                                  .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
-                                  .map(item => ({ 
-                                    sku: item.sku, 
-                                    quantity: String(item.quantity - (item.receivedQuantity || 0))
-                                  }))
-                              );
-                              setShowDeliveryForm(true);
-                            }}
-                            className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
-                          >
-                            Log Delivery
-                          </button>
-                        )}
-                        {selectedOrder.status !== 'completed' && (
-                          <button
-                            onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
-                            className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
-                          >
-                            Mark Complete (All Received)
-                          </button>
+                        {!['completed', 'cancelled'].includes(selectedOrder.status) && (
+                          <>
+                            <button
+                              onClick={() => {
+                                // Pre-populate delivery items with remaining quantities
+                                setDeliveryItems(
+                                  selectedOrder.items
+                                    .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
+                                    .map(item => ({ 
+                                      sku: item.sku, 
+                                      quantity: String(item.quantity - (item.receivedQuantity || 0))
+                                    }))
+                                );
+                                setShowDeliveryForm(true);
+                              }}
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                            >
+                              Log Delivery
+                            </button>
+                            <button
+                              onClick={() => {
+                                // Pre-populate edit form with current values
+                                setEditOrderItems(selectedOrder.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                setEditOrderVendor(selectedOrder.vendor || '');
+                                setEditOrderEta(selectedOrder.eta || '');
+                                setEditOrderNotes(selectedOrder.notes || '');
+                                setShowEditForm(true);
+                              }}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
+                              className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
+                            >
+                              Mark Complete
+                            </button>
+                            <button
+                              onClick={() => setShowCancelConfirm(true)}
+                              className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
+                            >
+                              Cancel Order
+                            </button>
+                          </>
                         )}
                       </div>
                       <button
@@ -2407,6 +2497,139 @@ export default function Dashboard({ session }: DashboardProps) {
                       className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
                     >
                       Confirm Delivery
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Edit Order Modal */}
+            {showEditForm && selectedOrder && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.id}</h3>
+                  </div>
+                  <div className="px-6 py-4 space-y-4">
+                    {/* Items */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                      {editOrderItems.map((item, index) => (
+                        <div key={index} className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            placeholder="SKU"
+                            value={item.sku}
+                            onChange={(e) => {
+                              const updated = [...editOrderItems];
+                              updated[index].sku = e.target.value.toUpperCase();
+                              setEditOrderItems(updated);
+                            }}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...editOrderItems];
+                              updated[index].quantity = e.target.value;
+                              setEditOrderItems(updated);
+                            }}
+                            className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                          {editOrderItems.length > 1 && (
+                            <button
+                              onClick={() => setEditOrderItems(editOrderItems.filter((_, i) => i !== index))}
+                              className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setEditOrderItems([...editOrderItems, { sku: '', quantity: '' }])}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        + Add another SKU
+                      </button>
+                    </div>
+                    {/* Vendor and ETA */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Vendor</label>
+                        <input
+                          type="text"
+                          value={editOrderVendor}
+                          onChange={(e) => setEditOrderVendor(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">ETA</label>
+                        <input
+                          type="date"
+                          value={editOrderEta}
+                          onChange={(e) => setEditOrderEta(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                    </div>
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                      <textarea
+                        value={editOrderNotes}
+                        onChange={(e) => setEditOrderNotes(e.target.value)}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowEditForm(false)}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => saveEditOrder(selectedOrder.id)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Cancel Confirmation Modal */}
+            {showCancelConfirm && selectedOrder && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Cancel Order?</h3>
+                  </div>
+                  <div className="px-6 py-4">
+                    <p className="text-gray-600">
+                      Are you sure you want to cancel <span className="font-medium">{selectedOrder.id}</span>? 
+                      This action cannot be undone.
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowCancelConfirm(false)}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                    >
+                      Keep Order
+                    </button>
+                    <button
+                      onClick={() => cancelOrder(selectedOrder.id)}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                    >
+                      Yes, Cancel Order
                     </button>
                   </div>
                 </div>
