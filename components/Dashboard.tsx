@@ -601,6 +601,10 @@ export default function Dashboard({ session }: DashboardProps) {
   // Filter and sort inventory
   const filteredInventory = inventoryData?.inventory
     .filter(item => {
+      // Phase out filter: hide phased out SKUs with zero total inventory
+      const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+      if (isPhaseOut && item.totalAvailable <= 0) return false;
+      
       const matchesSearch = !searchTerm || 
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.productTitle.toLowerCase().includes(searchTerm.toLowerCase());
@@ -637,6 +641,10 @@ export default function Dashboard({ session }: DashboardProps) {
   const filteredLocationDetail = activeLocationFilter && inventoryData?.locationDetails?.[activeLocationFilter]
     ? inventoryData.locationDetails[activeLocationFilter]
         .filter(item => {
+          // Phase out filter: hide phased out SKUs with zero available in this location
+          const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+          if (isPhaseOut && item.available <= 0) return false;
+          
           // Use main searchTerm for inline view, locationSearchTerm for modal
           const activeSearchTerm = inventoryLocationFilter ? searchTerm : locationSearchTerm;
           const matchesSearch = !activeSearchTerm || 
@@ -666,6 +674,10 @@ export default function Dashboard({ session }: DashboardProps) {
     .filter(item => {
       // Only show SKUs that exist in inventory (products tagged "inventoried")
       if (!inventoriedSkus.has(item.sku)) return false;
+      
+      // Phase out filter: hide phased out SKUs with zero total inventory
+      const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+      if (isPhaseOut && item.totalInventory <= 0) return false;
       
       const matchesSearch = !forecastSearchTerm || 
         item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
