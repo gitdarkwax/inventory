@@ -41,9 +41,9 @@ export async function GET(request: NextRequest) {
     const forecastingData = await fetchForecastingData();
     console.log(`✅ Forecasting data fetched: ${forecastingData.length} SKUs`);
 
-    // Fetch purchase order data
-    const purchaseOrderData = await fetchPurchaseOrderData();
-    console.log(`✅ Purchase order data fetched: ${purchaseOrderData.length} SKUs with pending POs`);
+    // Note: PO data requires Stocky API integration (not available via Shopify GraphQL)
+    // For now, PO Qty column will show '—' until Stocky API is configured
+    const purchaseOrderData: { sku: string; pendingQuantity: number }[] = [];
 
     // Save to cache
     const cache = new InventoryCacheService();
@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
         },
         purchaseOrders: {
           totalSKUs: purchaseOrderData.length,
+          note: 'Requires Stocky API integration',
         },
       },
     });
@@ -266,12 +267,4 @@ async function fetchInventoryData() {
 async function fetchForecastingData() {
   const shopifyQL = new ShopifyQLService();
   return await shopifyQL.getForecastingData();
-}
-
-/**
- * Fetch purchase order data from Shopify
- */
-async function fetchPurchaseOrderData() {
-  const shopifyQL = new ShopifyQLService();
-  return await shopifyQL.getPurchaseOrderData();
 }
