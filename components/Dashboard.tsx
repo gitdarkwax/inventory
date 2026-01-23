@@ -76,7 +76,24 @@ interface DashboardProps {
   };
 }
 
-type TabType = 'inventory' | 'forecasting' | 'planning';
+interface ProductionOrderItem {
+  sku: string;
+  quantity: number;
+}
+
+interface ProductionOrder {
+  id: string;
+  items: ProductionOrderItem[];
+  notes: string;
+  status: 'pending' | 'in_production' | 'shipped' | 'completed' | 'cancelled';
+  createdBy: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+type TabType = 'inventory' | 'forecasting' | 'planning' | 'production';
 
 export default function Dashboard({ session }: DashboardProps) {
   // Tab state
@@ -123,8 +140,17 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'shipType'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // Purchase Order state
+  // Purchase Order state (from manual production orders)
   const [purchaseOrderData, setPurchaseOrderData] = useState<PurchaseOrderData | null>(null);
+
+  // Production Orders state
+  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([]);
+  const [productionOrdersLoading, setProductionOrdersLoading] = useState(false);
+  const [showNewOrderForm, setShowNewOrderForm] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
+  const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
+  const [newOrderNotes, setNewOrderNotes] = useState('');
+  const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -176,6 +202,83 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
+  // Load production orders
+  const loadProductionOrders = async () => {
+    setProductionOrdersLoading(true);
+    try {
+      const response = await fetch('/api/production-orders');
+      const data = await response.json();
+      if (response.ok) {
+        setProductionOrders(data.orders || []);
+        // Also update PO data for Planning tab
+        const pendingResponse = await fetch('/api/production-orders/pending');
+        const pendingData = await pendingResponse.json();
+        if (pendingResponse.ok) {
+          setPurchaseOrderData({
+            purchaseOrders: pendingData.pendingBysku || [],
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load production orders:', err);
+    } finally {
+      setProductionOrdersLoading(false);
+    }
+  };
+
+  // Create new production order
+  const createProductionOrder = async () => {
+    const validItems = newOrderItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validItems.length === 0) {
+      alert('Please add at least one item with a valid SKU and quantity');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/production-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: validItems, notes: newOrderNotes }),
+      });
+
+      if (response.ok) {
+        setShowNewOrderForm(false);
+        setNewOrderItems([{ sku: '', quantity: '' }]);
+        setNewOrderNotes('');
+        await loadProductionOrders();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to create order');
+      }
+    } catch (err) {
+      alert('Failed to create order');
+    }
+  };
+
+  // Update production order status
+  const updateOrderStatus = async (orderId: string, status: ProductionOrder['status']) => {
+    try {
+      const response = await fetch('/api/production-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status }),
+      });
+
+      if (response.ok) {
+        await loadProductionOrders();
+        setSelectedOrder(null);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to update order');
+      }
+    } catch (err) {
+      alert('Failed to update order');
+    }
+  };
+
   // Refresh all data from Shopify (called when user clicks Refresh button)
   const refreshAllData = async () => {
     setIsRefreshing(true);
@@ -208,12 +311,16 @@ export default function Dashboard({ session }: DashboardProps) {
       // Planning tab needs both inventory and forecasting data
       if (!inventoryData && !inventoryLoading) loadInventoryFromCache();
       if (!forecastingData && !forecastingLoading) loadForecastingFromCache();
+      if (productionOrders.length === 0 && !productionOrdersLoading) loadProductionOrders();
+    } else if (activeTab === 'production') {
+      if (productionOrders.length === 0 && !productionOrdersLoading) loadProductionOrders();
     }
   }, [activeTab]);
 
   // Initial load from cache
   useEffect(() => {
     loadInventoryFromCache();
+    loadProductionOrders(); // Also load PO data for Planning tab
   }, []);
 
   // Close location dropdown when clicking outside
@@ -828,6 +935,14 @@ export default function Dashboard({ session }: DashboardProps) {
               }`}
             >
               📋 Planning
+            </button>
+            <button
+              onClick={() => setActiveTab('production')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+              }`}
+            >
+              🏭 Production
             </button>
           </div>
         </div>
@@ -1557,9 +1672,9 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
-                  // Get pending PO quantity for a SKU
+                  // Get pending PO quantity for a SKU (from manual production orders)
                   const getPOQuantity = (sku: string): number => {
-                    const po = inventoryData.purchaseOrders?.find(p => p.sku === sku);
+                    const po = purchaseOrderData?.purchaseOrders?.find(p => p.sku === sku);
                     return po?.pendingQuantity || 0;
                   };
                   
@@ -1798,6 +1913,316 @@ export default function Dashboard({ session }: DashboardProps) {
               </div>
             )}
           </>
+        )}
+
+        {/* Production Tab */}
+        {activeTab === 'production' && (
+          <div className="space-y-4">
+            {/* Header with New Order button */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <select
+                  value={productionFilterStatus}
+                  onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+                >
+                  <option value="active">Active Orders</option>
+                  <option value="completed">Completed/Cancelled</option>
+                  <option value="all">All Orders</option>
+                </select>
+              </div>
+              <button
+                onClick={() => setShowNewOrderForm(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+              >
+                + New Production Order
+              </button>
+            </div>
+
+            {/* Orders List */}
+            {productionOrdersLoading ? (
+              <div className="bg-white shadow rounded-lg p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-2 text-gray-600">Loading orders...</p>
+              </div>
+            ) : (
+              <div className="bg-white shadow rounded-lg overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {productionOrders
+                      .filter(order => {
+                        if (productionFilterStatus === 'active') return ['pending', 'in_production', 'shipped'].includes(order.status);
+                        if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
+                        return true;
+                      })
+                      .map((order) => (
+                        <tr key={order.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.id.split('-').slice(0, 2).join('-')}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {order.items.length} SKU{order.items.length !== 1 ? 's' : ''} ({order.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()} units)
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
+                              order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                              order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {order.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{order.createdBy}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => setSelectedOrder(order)}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    {productionOrders.filter(order => {
+                      if (productionFilterStatus === 'active') return ['pending', 'in_production', 'shipped'].includes(order.status);
+                      if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
+                      return true;
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                          No orders found. Click "New Production Order" to create one.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* New Order Modal */}
+            {showNewOrderForm && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">New Production Order</h3>
+                  </div>
+                  <div className="px-6 py-4 space-y-4">
+                    {/* Items */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                      {newOrderItems.map((item, index) => (
+                        <div key={index} className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            placeholder="SKU"
+                            value={item.sku}
+                            onChange={(e) => {
+                              const updated = [...newOrderItems];
+                              updated[index].sku = e.target.value;
+                              setNewOrderItems(updated);
+                            }}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                          <input
+                            type="number"
+                            placeholder="Qty"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...newOrderItems];
+                              updated[index].quantity = e.target.value;
+                              setNewOrderItems(updated);
+                            }}
+                            className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                          {newOrderItems.length > 1 && (
+                            <button
+                              onClick={() => setNewOrderItems(newOrderItems.filter((_, i) => i !== index))}
+                              className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => setNewOrderItems([...newOrderItems, { sku: '', quantity: '' }])}
+                        className="text-sm text-blue-600 hover:text-blue-800"
+                      >
+                        + Add another SKU
+                      </button>
+                    </div>
+                    {/* Notes */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Notes / Comments</label>
+                      <textarea
+                        value={newOrderNotes}
+                        onChange={(e) => setNewOrderNotes(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="Optional notes about this production order..."
+                      />
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setShowNewOrderForm(false);
+                        setNewOrderItems([{ sku: '', quantity: '' }]);
+                        setNewOrderNotes('');
+                      }}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={createProductionOrder}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                    >
+                      Create Order
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Order Details Modal */}
+            {selectedOrder && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-gray-900">Order Details</h3>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      selectedOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      selectedOrder.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
+                      selectedOrder.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                      selectedOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {selectedOrder.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="px-6 py-4 space-y-4">
+                    {/* Meta info */}
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Order ID:</span>
+                        <span className="ml-2 text-gray-900">{selectedOrder.id}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Created by:</span>
+                        <span className="ml-2 text-gray-900">{selectedOrder.createdBy}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Created:</span>
+                        <span className="ml-2 text-gray-900">
+                          {new Date(selectedOrder.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Last updated:</span>
+                        <span className="ml-2 text-gray-900">
+                          {new Date(selectedOrder.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Items */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Items ({selectedOrder.items.length})</h4>
+                      <div className="bg-gray-50 rounded-md overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead>
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {selectedOrder.items.map((item, index) => (
+                              <tr key={index}>
+                                <td className="px-4 py-2 text-sm text-gray-900">{item.sku}</td>
+                                <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-gray-100">
+                              <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
+                              <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
+                                {selectedOrder.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    {/* Notes */}
+                    {selectedOrder.notes && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Notes</h4>
+                        <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">{selectedOrder.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Actions */}
+                  <div className="px-6 py-4 border-t border-gray-200">
+                    <div className="flex justify-between items-center">
+                      <div className="flex gap-2">
+                        {selectedOrder.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => updateOrderStatus(selectedOrder.id, 'in_production')}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                            >
+                              Start Production
+                            </button>
+                            <button
+                              onClick={() => updateOrderStatus(selectedOrder.id, 'cancelled')}
+                              className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
+                            >
+                              Cancel Order
+                            </button>
+                          </>
+                        )}
+                        {selectedOrder.status === 'in_production' && (
+                          <button
+                            onClick={() => updateOrderStatus(selectedOrder.id, 'shipped')}
+                            className="px-3 py-1.5 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700"
+                          >
+                            Mark Shipped
+                          </button>
+                        )}
+                        {selectedOrder.status === 'shipped' && (
+                          <button
+                            onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                          >
+                            Mark Completed
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setSelectedOrder(null)}
+                        className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
