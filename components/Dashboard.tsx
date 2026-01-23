@@ -148,6 +148,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningSearchTerm, setPlanningSearchTerm] = useState('');
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
+  const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'laRunway' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -1892,7 +1893,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
                       // Filter by ship type
                       const matchesShipType = planningFilterShipType === 'all' || item.shipType === planningFilterShipType;
-                      return matchesSearch && matchesShipType;
+                      // Filter by prod status
+                      const matchesProdStatus = planningFilterProdStatus === 'all' || item.prodStatus === planningFilterProdStatus;
+                      return matchesSearch && matchesShipType && matchesProdStatus;
                     })
                     .sort((a, b) => {
                       let comparison = 0;
@@ -2029,22 +2032,46 @@ export default function Dashboard({ session }: DashboardProps) {
                     <>
                       {/* Metrics Section */}
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                        <button 
+                          onClick={() => {
+                            setPlanningFilterProdStatus('all');
+                            setPlanningFilterShipType(planningFilterShipType === 'Sea' ? 'all' : 'Sea');
+                          }}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-green-300 ${planningFilterShipType === 'Sea' ? 'border-green-500' : 'border-transparent'}`}
+                        >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Sea</p>
                           <p className="text-lg sm:text-xl font-bold text-green-600">{planningMetrics.sea}</p>
-                        </div>
-                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setPlanningFilterProdStatus('all');
+                            setPlanningFilterShipType(planningFilterShipType === 'Slow Air' ? 'all' : 'Slow Air');
+                          }}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-blue-300 ${planningFilterShipType === 'Slow Air' ? 'border-blue-500' : 'border-transparent'}`}
+                        >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Slow Air</p>
                           <p className="text-lg sm:text-xl font-bold text-blue-600">{planningMetrics.slowAir}</p>
-                        </div>
-                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setPlanningFilterProdStatus('all');
+                            setPlanningFilterShipType(planningFilterShipType === 'Express' ? 'all' : 'Express');
+                          }}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-orange-300 ${planningFilterShipType === 'Express' ? 'border-orange-500' : 'border-transparent'}`}
+                        >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Express</p>
                           <p className="text-lg sm:text-xl font-bold text-orange-600">{planningMetrics.express}</p>
-                        </div>
-                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setPlanningFilterShipType('all');
+                            setPlanningFilterProdStatus(planningFilterProdStatus === 'Order More' ? 'all' : 'Order More');
+                          }}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-red-300 ${planningFilterProdStatus === 'Order More' ? 'border-red-500' : 'border-transparent'}`}
+                        >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Order More</p>
                           <p className="text-lg sm:text-xl font-bold text-red-600">{planningMetrics.orderMore}</p>
-                        </div>
+                        </button>
                       </div>
 
                       {/* Filter Bar */}
