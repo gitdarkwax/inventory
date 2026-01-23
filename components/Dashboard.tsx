@@ -1731,7 +1731,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select 
                           value={planningFilterCategory} 
                           onChange={(e) => setPlanningFilterCategory(e.target.value)}
-                          className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="all">All Categories</option>
                           {PRODUCT_CATEGORIES.map(cat => (
@@ -1742,7 +1742,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       {/* List/Grouped Toggle */}
                       <div className="flex flex-col">
                         <span className="text-[10px] text-gray-400 mb-1">View</span>
-                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
                           <button onClick={() => setPlanningListMode('list')}
                             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
                             List
@@ -1756,7 +1756,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       {/* Burn Rate Period Toggle */}
                       <div className="flex flex-col">
                         <span className="text-[10px] text-gray-400 mb-1">Burn Rate Period</span>
-                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
                           <button
                             onClick={() => setPlanningBurnPeriod('7d')}
                             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
@@ -1789,7 +1789,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={planningLaTargetDays}
                           onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
-                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white"
+                          className="h-[34px] px-3 text-xs border border-gray-300 rounded-lg bg-white"
                         >
                           <option value={14}>14 days</option>
                           <option value={30}>30 days</option>
