@@ -148,7 +148,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningSearchTerm, setPlanningSearchTerm] = useState('');
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterCategory, setPlanningFilterCategory] = useState<string>('all');
-  const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('list');
+  const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
@@ -1748,8 +1748,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         </button>
                       </div>
                       {/* Burn Rate Period Toggle */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">Burn Rate Period:</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-gray-500">Burn Rate Period</span>
                         <div className="flex bg-gray-100 p-1 rounded-lg">
                           <button
                             onClick={() => setPlanningBurnPeriod('7d')}
@@ -1778,8 +1778,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
                       </div>
                       {/* LA Target Days */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">Units needed in LA for:</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-gray-500">Units needed in LA for</span>
                         <select
                           value={planningLaTargetDays}
                           onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
