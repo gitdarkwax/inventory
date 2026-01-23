@@ -1229,24 +1229,28 @@ export default function Dashboard({ session }: DashboardProps) {
                     const colors = ['blue', 'green', 'purple', 'orange'];
                     const color = colors[idx % colors.length];
                     const isSelected = inventoryLocationFilter === location;
-                    const colorMap: Record<string, string> = {
-                      blue: '#2563eb',
-                      green: '#16a34a',
-                      purple: '#9333ea',
-                      orange: '#ea580c',
-                    };
+                    const borderClass = isSelected 
+                      ? color === 'blue' ? 'border-blue-500' 
+                      : color === 'green' ? 'border-green-500' 
+                      : color === 'purple' ? 'border-purple-500' 
+                      : 'border-orange-500'
+                      : 'border-transparent';
+                    const hoverClass = color === 'blue' ? 'hover:border-blue-300' 
+                      : color === 'green' ? 'hover:border-green-300' 
+                      : color === 'purple' ? 'hover:border-purple-300' 
+                      : 'hover:border-orange-300';
+                    const textColorClass = color === 'blue' ? 'text-blue-600' 
+                      : color === 'green' ? 'text-green-600' 
+                      : color === 'purple' ? 'text-purple-600' 
+                      : 'text-orange-600';
                     return (
                       <button
                         key={location}
                         onClick={() => setInventoryLocationFilter(isSelected ? null : location)}
-                        className={`text-center shadow rounded-lg p-3 sm:p-4 transition-all ${
-                          isSelected ? 'text-white' : 'bg-white hover:bg-gray-50'
-                        }`}
-                        style={isSelected ? { backgroundColor: colorMap[color] } : {}}
+                        className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer ${hoverClass} ${borderClass}`}
                       >
-                        <p className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>{location}</p>
-                        <p className="text-lg sm:text-xl font-bold"
-                          style={{ color: isSelected ? 'white' : colorMap[color] }}>
+                        <p className="text-xs sm:text-sm font-medium text-gray-500">{location}</p>
+                        <p className={`text-lg sm:text-xl font-bold ${textColorClass}`}>
                           {locationTotal.toLocaleString()}
                         </p>
                       </button>
