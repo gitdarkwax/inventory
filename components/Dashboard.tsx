@@ -119,13 +119,14 @@ export default function Dashboard({ session }: DashboardProps) {
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'sku' | 'total'>('sku');
+  const [sortBy, setSortBy] = useState<string>('sku');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [filterOutOfStock, setFilterOutOfStock] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'grouped'>('grouped');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const [inventoryLocationFilter, setInventoryLocationFilter] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
   const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'incoming'>('sku');
   const [locationSortOrder, setLocationSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -609,12 +610,25 @@ export default function Dashboard({ session }: DashboardProps) {
         const category = findProductCategory(item.sku, item.productTitle);
         if (!category || category.name !== filterCategory) return false;
       }
+      // Filter by location if a location filter is set
+      if (inventoryLocationFilter) {
+        const locationQty = item.locations[inventoryLocationFilter] || 0;
+        if (locationQty <= 0) return false;
+      }
       return matchesSearch;
     })
     .sort((a, b) => {
       let comparison = 0;
-      if (sortBy === 'sku') comparison = a.sku.localeCompare(b.sku);
-      else if (sortBy === 'total') comparison = a.totalAvailable - b.totalAvailable;
+      if (sortBy === 'sku') {
+        comparison = a.sku.localeCompare(b.sku);
+      } else if (sortBy === 'total') {
+        comparison = a.totalAvailable - b.totalAvailable;
+      } else {
+        // Sort by location quantity
+        const aQty = a.locations[sortBy] || 0;
+        const bQty = b.locations[sortBy] || 0;
+        comparison = aQty - bQty;
+      }
       return sortOrder === 'asc' ? comparison : -comparison;
     }) || [];
 
@@ -666,7 +680,7 @@ export default function Dashboard({ session }: DashboardProps) {
       return forecastSortOrder === 'asc' ? comparison : -comparison;
     });
 
-  const handleSort = (column: 'sku' | 'total') => {
+  const handleSort = (column: string) => {
     if (sortBy === column) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     else { setSortBy(column); setSortOrder('asc'); }
   };
@@ -1162,7 +1176,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                 }`}
               >
-                📋 Planning
+                📋 LA Planning
               </button>
               <button
                 onClick={() => setActiveTab('production')}
@@ -1170,7 +1184,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                 }`}
               >
-                🏭 Production
+                📦 PO Tracker
               </button>
             </div>
             <button 
@@ -1205,23 +1219,47 @@ export default function Dashboard({ session }: DashboardProps) {
 
             {!inventoryLoading && inventoryData && (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Total SKUs</p>
-                    <p className="text-lg sm:text-xl font-bold text-blue-600">{inventoryData.totalSKUs.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Total Units</p>
-                    <p className="text-lg sm:text-xl font-bold text-green-600">{inventoryData.totalUnits.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Low Stock</p>
-                    <p className="text-lg sm:text-xl font-bold text-orange-600">{inventoryData.lowStockCount.toLocaleString()}</p>
-                  </div>
-                  <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
-                    <p className="text-xs sm:text-sm font-medium text-gray-500">Out of Stock</p>
-                    <p className="text-lg sm:text-xl font-bold text-red-600">{inventoryData.outOfStockCount.toLocaleString()}</p>
-                  </div>
+                {/* Location Tiles */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                  {/* All Locations Tile */}
+                  <button
+                    onClick={() => setInventoryLocationFilter(null)}
+                    className={`text-center shadow rounded-lg p-3 sm:p-4 transition-all ${
+                      inventoryLocationFilter === null
+                        ? 'bg-blue-600 text-white ring-2 ring-blue-600'
+                        : 'bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <p className={`text-xs sm:text-sm font-medium ${inventoryLocationFilter === null ? 'text-blue-100' : 'text-gray-500'}`}>All Locations</p>
+                    <p className={`text-lg sm:text-xl font-bold ${inventoryLocationFilter === null ? 'text-white' : 'text-blue-600'}`}>
+                      {inventoryData.totalUnits.toLocaleString()}
+                    </p>
+                  </button>
+                  {/* Location Tiles */}
+                  {inventoryData.locations.map((location, idx) => {
+                    const locationTotal = inventoryData.inventory.reduce((sum, item) => sum + (item.locations[location] || 0), 0);
+                    const colors = ['green', 'purple', 'orange', 'red'];
+                    const color = colors[idx % colors.length];
+                    const isSelected = inventoryLocationFilter === location;
+                    return (
+                      <button
+                        key={location}
+                        onClick={() => setInventoryLocationFilter(isSelected ? null : location)}
+                        className={`text-center shadow rounded-lg p-3 sm:p-4 transition-all ${
+                          isSelected
+                            ? `bg-${color}-600 text-white ring-2 ring-${color}-600`
+                            : 'bg-white hover:bg-gray-50'
+                        }`}
+                        style={isSelected ? { backgroundColor: color === 'green' ? '#16a34a' : color === 'purple' ? '#9333ea' : color === 'orange' ? '#ea580c' : '#dc2626' } : {}}
+                      >
+                        <p className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>{location}</p>
+                        <p className={`text-lg sm:text-xl font-bold ${isSelected ? 'text-white' : `text-${color}-600`}`}
+                          style={!isSelected ? { color: color === 'green' ? '#16a34a' : color === 'purple' ? '#9333ea' : color === 'orange' ? '#ea580c' : '#dc2626' } : {}}>
+                          {locationTotal.toLocaleString()}
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
@@ -1281,9 +1319,9 @@ export default function Dashboard({ session }: DashboardProps) {
                               SKU <SortIcon active={sortBy === 'sku'} order={sortOrder} />
                             </th>
                             {inventoryData.locations.map(location => (
-                              <th key={location} className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 hover:text-blue-600"
-                                onClick={() => setSelectedLocation(location)} title={`Click to view ${location} details`}>
-                                {location} →
+                              <th key={location} className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                onClick={() => handleSort(location)}>
+                                {location} <SortIcon active={sortBy === location} order={sortOrder} />
                               </th>
                             ))}
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
@@ -1344,14 +1382,18 @@ export default function Dashboard({ session }: DashboardProps) {
                             <table className="min-w-full divide-y divide-gray-200 table-fixed">
                               <thead className="bg-gray-50">
                                 <tr>
-                                  <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                  <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('sku')}>
+                                    SKU <SortIcon active={sortBy === 'sku'} order={sortOrder} />
+                                  </th>
                                   {inventoryData.locations.map(location => (
-                                    <th key={location} className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 hover:text-blue-600"
-                                      onClick={() => setSelectedLocation(location)} title={`Click to view ${location} details`}>
-                                      {location} →
+                                    <th key={location} className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                      onClick={() => handleSort(location)}>
+                                      {location} <SortIcon active={sortBy === location} order={sortOrder} />
                                     </th>
                                   ))}
-                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Total</th>
+                                  <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
+                                    Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
