@@ -2106,35 +2106,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </button>
                               </div>
                             </div>
-                            {/* Burn Rate Period Toggle */}
+                            {/* Burn Rate Period Dropdown */}
                             <div className="flex flex-col">
                               <span className="text-[10px] text-gray-400 mb-1">Burn Rate Period</span>
-                              <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
-                                <button
-                                  onClick={() => setPlanningBurnPeriod('7d')}
-                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                                    planningBurnPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                                  }`}
-                                >
-                                  7 Days
-                                </button>
-                                <button
-                                  onClick={() => setPlanningBurnPeriod('21d')}
-                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                                    planningBurnPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                                  }`}
-                                >
-                                  21 Days
-                                </button>
-                                <button
-                                  onClick={() => setPlanningBurnPeriod('90d')}
-                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                                    planningBurnPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                                  }`}
-                                >
-                                  90 Days
-                                </button>
-                              </div>
+                              <select
+                                value={planningBurnPeriod}
+                                onChange={(e) => setPlanningBurnPeriod(e.target.value as '7d' | '21d' | '90d')}
+                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="7d">7 Days</option>
+                                <option value="21d">21 Days</option>
+                                <option value="90d">90 Days</option>
+                              </select>
                             </div>
                             {/* LA Target Days */}
                             <div className="flex flex-col">
@@ -2252,6 +2235,49 @@ export default function Dashboard({ session }: DashboardProps) {
                           })}
                         </div>
                       )}
+
+                      {/* Export Button */}
+                      <div className="mt-6 flex justify-center">
+                        <button
+                          onClick={() => {
+                            // Build CSV content
+                            const headers = ['SKU', 'Product', 'LA', 'Incoming', 'China', 'In Prod', 'Units/Day', 'LA Need', 'Ship Type', 'Prod Status', 'LA Runway', 'ALL Runway'];
+                            const rows = planningItems.map(item => [
+                              item.sku,
+                              `"${item.productTitle.replace(/"/g, '""')}"`,
+                              item.la,
+                              item.incoming,
+                              item.china,
+                              item.poQty,
+                              item.unitsPerDay.toFixed(1),
+                              item.laNeed,
+                              item.shipType,
+                              item.prodStatus,
+                              item.laRunway >= 999 ? 'N/A' : `${item.laRunway}d`,
+                              item.runway >= 999 ? 'N/A' : `${item.runway}d`
+                            ]);
+                            
+                            const csvContent = [
+                              headers.join(','),
+                              ...rows.map(row => row.join(','))
+                            ].join('\n');
+                            
+                            // Create and download file
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const link = document.createElement('a');
+                            const url = URL.createObjectURL(blob);
+                            link.setAttribute('href', url);
+                            link.setAttribute('download', `planning-export-${new Date().toISOString().split('T')[0]}.csv`);
+                            link.style.visibility = 'hidden';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                        >
+                          <span>📥</span> Export to Excel
+                        </button>
+                      </div>
                     </>
                   );
                 })()}
