@@ -153,7 +153,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
-  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'laRunway' | 'prodStatus' | 'runway'>('shipType');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
 
@@ -1883,12 +1883,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       const unitsPerDay = getUnitsPerDay(inv.sku);
                       const shipType = getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
                       
-                      // Calculate LA runway (days of LA + Incoming inventory)
-                      const laRunway = unitsPerDay > 0 ? Math.round((laInventory + incoming) / unitsPerDay) : 999;
+                      // Calculate Runway Air (days of LA + Inbound Air only)
+                      const runwayAir = unitsPerDay > 0 ? Math.round((laInventory + inboundAir) / unitsPerDay) : 999;
                       
-                      // Calculate ALL runway (days of inventory) including In Production
-                      const totalInventory = laInventory + incoming + chinaInventory + poQty;
-                      const runway = unitsPerDay > 0 ? Math.round(totalInventory / unitsPerDay) : 999;
+                      // Calculate Runway (days of LA + Inbound Air + Inbound Sea)
+                      const runway = unitsPerDay > 0 ? Math.round((laInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
                       
                       // Calculate LA Need: units needed to cover target days minus (LA qty - committed)
                       const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory - laCommitted)));
@@ -1916,7 +1915,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         unitsPerDay,
                         laNeed: laNeeded,
                         shipType,
-                        laRunway,
+                        runwayAir,
                         runway,
                         prodStatus,
                       };
@@ -1955,7 +1954,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         case 'unitsPerDay': comparison = a.unitsPerDay - b.unitsPerDay; break;
                         case 'laNeed': comparison = a.laNeed - b.laNeed; break;
                         case 'shipType': comparison = (shipTypePriority[a.shipType] || 99) - (shipTypePriority[b.shipType] || 99); break;
-                        case 'laRunway': comparison = a.laRunway - b.laRunway; break;
+                        case 'runwayAir': comparison = a.runwayAir - b.runwayAir; break;
                         case 'prodStatus': comparison = (prodStatusPriority[a.prodStatus] || 99) - (prodStatusPriority[b.prodStatus] || 99); break;
                         case 'runway': comparison = a.runway - b.runway; break;
                       }
@@ -2029,11 +2028,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
                               Prod Status <SortIcon active={planningSortBy === 'prodStatus'} order={planningSortOrder} />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laRunway')}>
-                              LA Runway <SortIcon active={planningSortBy === 'laRunway'} order={planningSortOrder} />
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
+                              Runway Air <SortIcon active={planningSortBy === 'runwayAir'} order={planningSortOrder} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runway')}>
-                              ALL Runway <SortIcon active={planningSortBy === 'runway'} order={planningSortOrder} />
+                              Runway <SortIcon active={planningSortBy === 'runway'} order={planningSortOrder} />
                             </th>
                           </tr>
                         </thead>
@@ -2072,14 +2071,14 @@ export default function Dashboard({ session }: DashboardProps) {
                               </span>
                             </td>
                             <td 
-                              className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.laRunway < 60 ? 'text-red-600 font-medium' : item.laRunway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
-                              title={`LA runs out: ${getRunoutDate(item.laRunway)}`}
+                              className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                              title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                             >
-                              {item.laRunway >= 999 ? '∞' : `${item.laRunway}d`}
+                              {item.runwayAir >= 999 ? '∞' : `${item.runwayAir}d`}
                             </td>
                             <td 
                               className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
-                              title={`ALL runs out: ${getRunoutDate(item.runway)}`}
+                              title={`Runs out: ${getRunoutDate(item.runway)}`}
                             >
                               {item.runway >= 999 ? '∞' : `${item.runway}d`}
                             </td>
@@ -2249,8 +2248,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Need</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
                                         <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Runway</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">ALL Runway</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -2287,14 +2286,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                             </span>
                                           </td>
                                           <td 
-                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.laRunway < 60 ? 'text-red-600 font-medium' : item.laRunway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
-                                            title={`LA runs out: ${getRunoutDate(item.laRunway)}`}
+                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                                            title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                                           >
-                                            {item.laRunway >= 999 ? '∞' : `${item.laRunway}d`}
+                                            {item.runwayAir >= 999 ? '∞' : `${item.runwayAir}d`}
                                           </td>
                                           <td 
                                             className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
-                                            title={`ALL runs out: ${getRunoutDate(item.runway)}`}
+                                            title={`Runs out: ${getRunoutDate(item.runway)}`}
                                           >
                                             {item.runway >= 999 ? '∞' : `${item.runway}d`}
                                           </td>
@@ -2314,7 +2313,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'LA', 'In Air', 'In Sea', 'China', 'In Prod', 'Units/Day', 'LA Need', 'Ship Type', 'Prod Status', 'LA Runway', 'ALL Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'LA', 'In Air', 'In Sea', 'China', 'In Prod', 'Units/Day', 'LA Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
@@ -2327,7 +2326,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               item.laNeed,
                               item.shipType,
                               item.prodStatus,
-                              item.laRunway >= 999 ? 'N/A' : `${item.laRunway}d`,
+                              item.runwayAir >= 999 ? 'N/A' : `${item.runwayAir}d`,
                               item.runway >= 999 ? 'N/A' : `${item.runway}d`,
                               `"${item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('; ').replace(/"/g, '""')}"`
                             ]);
