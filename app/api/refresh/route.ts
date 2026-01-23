@@ -41,11 +41,16 @@ export async function GET(request: NextRequest) {
     const forecastingData = await fetchForecastingData();
     console.log(`✅ Forecasting data fetched: ${forecastingData.length} SKUs`);
 
+    // Fetch purchase order data
+    const purchaseOrderData = await fetchPurchaseOrderData();
+    console.log(`✅ Purchase order data fetched: ${purchaseOrderData.length} SKUs with pending POs`);
+
     // Save to cache
     const cache = new InventoryCacheService();
     await cache.saveCache({
       inventory: inventoryData,
       forecasting: { forecasting: forecastingData },
+      purchaseOrders: { purchaseOrders: purchaseOrderData },
     });
 
     const duration = Date.now() - startTime;
@@ -63,6 +68,9 @@ export async function GET(request: NextRequest) {
         },
         forecasting: {
           totalSKUs: forecastingData.length,
+        },
+        purchaseOrders: {
+          totalSKUs: purchaseOrderData.length,
         },
       },
     });
@@ -258,4 +266,12 @@ async function fetchInventoryData() {
 async function fetchForecastingData() {
   const shopifyQL = new ShopifyQLService();
   return await shopifyQL.getForecastingData();
+}
+
+/**
+ * Fetch purchase order data from Shopify
+ */
+async function fetchPurchaseOrderData() {
+  const shopifyQL = new ShopifyQLService();
+  return await shopifyQL.getPurchaseOrderData();
 }

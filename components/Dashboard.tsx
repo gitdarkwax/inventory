@@ -36,6 +36,7 @@ interface InventorySummary {
   locations: string[];
   inventory: InventoryByLocation[];
   locationDetails: Record<string, LocationDetail[]>;
+  purchaseOrders?: PurchaseOrderItem[];
   lastUpdated: string;
 }
 
@@ -53,6 +54,16 @@ interface ForecastingItem {
 interface ForecastingData {
   forecasting: ForecastingItem[];
   lastUpdated: string;
+}
+
+interface PurchaseOrderItem {
+  sku: string;
+  pendingQuantity: number;
+}
+
+interface PurchaseOrderData {
+  purchaseOrders: PurchaseOrderItem[];
+  lastUpdated?: string;
 }
 
 interface DashboardProps {
@@ -109,8 +120,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterCategory, setPlanningFilterCategory] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('list');
-  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'unitsPerDay' | 'shipType'>('shipType');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'shipType'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Purchase Order state
+  const [purchaseOrderData, setPurchaseOrderData] = useState<PurchaseOrderData | null>(null);
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1543,6 +1557,12 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
+                  // Get pending PO quantity for a SKU
+                  const getPOQuantity = (sku: string): number => {
+                    const po = inventoryData.purchaseOrders?.find(p => p.sku === sku);
+                    return po?.pendingQuantity || 0;
+                  };
+                  
                   // Calculate ship type
                   const getShipType = (laInventory: number, incoming: number, chinaInventory: number, unitsPerDay: number): string => {
                     const laTotal = laInventory + incoming;
@@ -1599,6 +1619,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       const laInventory = getLAInventory(inv.sku);
                       const incoming = getLAIncoming(inv.sku);
                       const chinaInventory = getChinaInventory(inv.sku);
+                      const poQty = getPOQuantity(inv.sku);
                       const unitsPerDay = getUnitsPerDay(inv.sku);
                       const shipType = getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
                       
@@ -1608,6 +1629,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         la: laInventory,
                         incoming,
                         china: chinaInventory,
+                        poQty,
                         unitsPerDay,
                         shipType,
                       };
@@ -1619,6 +1641,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         case 'la': comparison = a.la - b.la; break;
                         case 'incoming': comparison = a.incoming - b.incoming; break;
                         case 'china': comparison = a.china - b.china; break;
+                        case 'poQty': comparison = a.poQty - b.poQty; break;
                         case 'unitsPerDay': comparison = a.unitsPerDay - b.unitsPerDay; break;
                         case 'shipType': comparison = (shipTypePriority[a.shipType] || 99) - (shipTypePriority[b.shipType] || 99); break;
                       }
@@ -1665,6 +1688,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
                               China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
                             </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
+                              PO Qty <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
+                            </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
                             </th>
@@ -1681,6 +1707,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
@@ -1736,6 +1763,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">PO Qty</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
                                       </tr>
@@ -1747,6 +1775,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>

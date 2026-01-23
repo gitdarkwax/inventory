@@ -36,6 +36,11 @@ export interface ForecastingItem {
   avgDailyLastYear30d: number;
 }
 
+export interface PurchaseOrderItem {
+  sku: string;
+  pendingQuantity: number;
+}
+
 export interface CachedInventoryData {
   inventory: {
     totalSKUs: number;
@@ -48,6 +53,9 @@ export interface CachedInventoryData {
   };
   forecasting: {
     forecasting: ForecastingItem[];
+  };
+  purchaseOrders?: {
+    purchaseOrders: PurchaseOrderItem[];
   };
   lastUpdated: string;
 }
