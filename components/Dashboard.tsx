@@ -149,8 +149,10 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterCategory, setPlanningFilterCategory] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('list');
-  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'shipType' | 'prodStatus'>('shipType');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
+  const [planningShowInventoryCols, setPlanningShowInventoryCols] = useState(true);
 
   // Purchase Order state (from manual production orders)
   const [purchaseOrderData, setPurchaseOrderData] = useState<PurchaseOrderData | null>(null);
@@ -1772,6 +1774,31 @@ export default function Dashboard({ session }: DashboardProps) {
                           90 Days
                         </button>
                       </div>
+                      {/* LA Target Days */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-500">LA:</span>
+                        <select
+                          value={planningLaTargetDays}
+                          onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
+                          className="px-2 py-1.5 text-xs border border-gray-300 rounded-md bg-white"
+                        >
+                          <option value={14}>14 days</option>
+                          <option value={30}>30 days</option>
+                          <option value={60}>60 days</option>
+                          <option value={90}>90 days</option>
+                          <option value={120}>120 days</option>
+                          <option value={180}>180 days</option>
+                        </select>
+                      </div>
+                      {/* Expand/Collapse Inventory Columns */}
+                      <button
+                        type="button"
+                        onClick={() => setPlanningShowInventoryCols(!planningShowInventoryCols)}
+                        className="px-2 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md bg-white"
+                        title={planningShowInventoryCols ? 'Collapse inventory columns' : 'Expand inventory columns'}
+                      >
+                        {planningShowInventoryCols ? '◀ Collapse' : '▶ Expand'}
+                      </button>
                       <button onClick={refreshAllData} disabled={isRefreshing}
                         className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
                         {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
@@ -1909,9 +1936,15 @@ export default function Dashboard({ session }: DashboardProps) {
                       const unitsPerDay = getUnitsPerDay(inv.sku);
                       const shipType = getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
                       
-                      // Calculate runway (days of inventory)
-                      const totalInventory = laInventory + incoming + chinaInventory;
-                      const runway = unitsPerDay > 0 ? totalInventory / unitsPerDay : 999;
+                      // Calculate runway (days of inventory) including In Production
+                      const totalInventory = laInventory + incoming + chinaInventory + poQty;
+                      const runway = unitsPerDay > 0 ? Math.round(totalInventory / unitsPerDay) : 999;
+                      
+                      // Calculate LA Need: units needed to cover target days minus current LA qty
+                      const laNeeded = Math.max(0, (planningLaTargetDays * unitsPerDay) - laInventory);
+                      
+                      // Calculate days until LA runs out (for tooltip)
+                      const laRunwayDays = unitsPerDay > 0 ? Math.round(laInventory / unitsPerDay) : 999;
                       
                       // Determine prod status based on runway and PO
                       const hasPO = poQty > 0;
@@ -1932,6 +1965,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         china: chinaInventory,
                         poQty,
                         unitsPerDay,
+                        laNeed: laNeeded,
+                        laRunwayDays,
                         shipType,
                         runway,
                         prodStatus,
@@ -1946,8 +1981,10 @@ export default function Dashboard({ session }: DashboardProps) {
                         case 'china': comparison = a.china - b.china; break;
                         case 'poQty': comparison = a.poQty - b.poQty; break;
                         case 'unitsPerDay': comparison = a.unitsPerDay - b.unitsPerDay; break;
+                        case 'laNeed': comparison = a.laNeed - b.laNeed; break;
                         case 'shipType': comparison = (shipTypePriority[a.shipType] || 99) - (shipTypePriority[b.shipType] || 99); break;
                         case 'prodStatus': comparison = (prodStatusPriority[a.prodStatus] || 99) - (prodStatusPriority[b.prodStatus] || 99); break;
+                        case 'runway': comparison = a.runway - b.runway; break;
                       }
                       return planningSortOrder === 'asc' ? comparison : -comparison;
                     });
@@ -1975,6 +2012,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
+                  // Helper to get LA runout date
+                  const getLaRunoutDate = (laRunwayDays: number): string => {
+                    if (laRunwayDays >= 999) return 'No sales data';
+                    const runoutDate = new Date();
+                    runoutDate.setDate(runoutDate.getDate() + laRunwayDays);
+                    return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  };
+                  
                   const PlanningTable = ({ items, showHeader = true }: { items: typeof planningItems; showHeader?: boolean }) => (
                     <table className="min-w-full divide-y divide-gray-200 table-fixed">
                       {showHeader && (
@@ -1983,26 +2028,36 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
                               SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
-                              LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
-                            </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('incoming')}>
-                              Incoming <SortIcon active={planningSortBy === 'incoming'} order={planningSortOrder} />
-                            </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
-                              China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
-                            </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
-                              In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
-                            </th>
+                            {planningShowInventoryCols && (
+                              <>
+                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
+                                  LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                                </th>
+                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('incoming')}>
+                                  Incoming <SortIcon active={planningSortBy === 'incoming'} order={planningSortOrder} />
+                                </th>
+                                <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
+                                  China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
+                                </th>
+                                <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
+                                  In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
+                                </th>
+                              </>
+                            )}
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
+                              LA Need <SortIcon active={planningSortBy === 'laNeed'} order={planningSortOrder} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
                               Ship Type <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
                             </th>
                             <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
                               Prod Status <SortIcon active={planningSortBy === 'prodStatus'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runway')}>
+                              Runway <SortIcon active={planningSortBy === 'runway'} order={planningSortOrder} />
                             </th>
                           </tr>
                         </thead>
@@ -2011,11 +2066,21 @@ export default function Dashboard({ session }: DashboardProps) {
                         {items.map((item, index) => (
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                            {planningShowInventoryCols && (
+                              <>
+                                <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                                <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                              </>
+                            )}
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                            <td 
+                              className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}
+                              title={`LA runs out: ${getLaRunoutDate(item.laRunwayDays)}`}
+                            >
+                              {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
+                            </td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
                                 {item.shipType}
@@ -2025,6 +2090,9 @@ export default function Dashboard({ session }: DashboardProps) {
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProdStatusColor(item.prodStatus)}`}>
                                 {item.prodStatus}
                               </span>
+                            </td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}>
+                              {item.runway >= 999 ? '∞' : `${item.runway}d`}
                             </td>
                           </tr>
                         ))}
@@ -2072,24 +2140,40 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <thead className="bg-gray-50">
                                       <tr>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
+                                        {planningShowInventoryCols && (
+                                          <>
+                                            <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
+                                            <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
+                                            <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
+                                            <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
+                                          </>
+                                        )}
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Need</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
                                         <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
                                       {sortedItems.map((item, index) => (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                           <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                                          {planningShowInventoryCols && (
+                                            <>
+                                              <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                              <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                                              <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                                              <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                                            </>
+                                          )}
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                                          <td 
+                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}
+                                            title={`LA runs out: ${getLaRunoutDate(item.laRunwayDays)}`}
+                                          >
+                                            {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
+                                          </td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
                                               {item.shipType}
@@ -2099,6 +2183,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProdStatusColor(item.prodStatus)}`}>
                                               {item.prodStatus}
                                             </span>
+                                          </td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                            {item.runway >= 999 ? '∞' : `${item.runway}d`}
                                           </td>
                                         </tr>
                                       ))}
