@@ -1725,31 +1725,37 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="space-y-6">
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                    <div className="flex gap-2 flex-wrap items-center">
-                      <select 
-                        value={planningFilterCategory} 
-                        onChange={(e) => setPlanningFilterCategory(e.target.value)}
-                        className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="all">All Categories</option>
-                        {PRODUCT_CATEGORIES.map(cat => (
-                          <option key={cat.name} value={cat.name}>{cat.name}</option>
-                        ))}
-                      </select>
+                    <div className="flex gap-3 flex-wrap items-end">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Category</span>
+                        <select 
+                          value={planningFilterCategory} 
+                          onChange={(e) => setPlanningFilterCategory(e.target.value)}
+                          className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="all">All Categories</option>
+                          {PRODUCT_CATEGORIES.map(cat => (
+                            <option key={cat.name} value={cat.name}>{cat.name}</option>
+                          ))}
+                        </select>
+                      </div>
                       {/* List/Grouped Toggle */}
-                      <div className="flex bg-gray-100 p-1 rounded-lg">
-                        <button onClick={() => setPlanningListMode('list')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-                          List
-                        </button>
-                        <button onClick={() => setPlanningListMode('grouped')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-                          Grouped
-                        </button>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">View</span>
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                          <button onClick={() => setPlanningListMode('list')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                            List
+                          </button>
+                          <button onClick={() => setPlanningListMode('grouped')}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                            Grouped
+                          </button>
+                        </div>
                       </div>
                       {/* Burn Rate Period Toggle */}
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs text-gray-500">Burn Rate Period</span>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Burn Rate Period</span>
                         <div className="flex bg-gray-100 p-1 rounded-lg">
                           <button
                             onClick={() => setPlanningBurnPeriod('7d')}
@@ -1778,12 +1784,12 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
                       </div>
                       {/* LA Target Days */}
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs text-gray-500">Units needed in LA for</span>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Units needed in LA for</span>
                         <select
                           value={planningLaTargetDays}
                           onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
-                          className="px-2 py-1.5 text-xs border border-gray-300 rounded-md bg-white"
+                          className="px-3 py-1.5 text-xs border border-gray-300 rounded-md bg-white"
                         >
                           <option value={14}>14 days</option>
                           <option value={30}>30 days</option>
