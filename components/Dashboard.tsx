@@ -1931,10 +1931,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       const runway = unitsPerDay > 0 ? Math.round(totalInventory / unitsPerDay) : 999;
                       
                       // Calculate LA Need: units needed to cover target days minus current LA qty
-                      const laNeeded = Math.max(0, (planningLaTargetDays * unitsPerDay) - laInventory);
-                      
-                      // Calculate days until LA runs out (for tooltip)
-                      const laRunwayDays = unitsPerDay > 0 ? Math.round(laInventory / unitsPerDay) : 999;
+                      const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - laInventory));
                       
                       // Determine prod status based on runway and PO
                       const hasPO = poQty > 0;
@@ -1956,7 +1953,6 @@ export default function Dashboard({ session }: DashboardProps) {
                         poQty,
                         unitsPerDay,
                         laNeed: laNeeded,
-                        laRunwayDays,
                         shipType,
                         runway,
                         prodStatus,
@@ -2005,6 +2001,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Helper to get runout date from runway days
                   const getRunoutDate = (runwayDays: number): string => {
                     if (runwayDays >= 999) return 'No sales data';
+                    if (runwayDays <= 0) return 'Out of Stock';
                     const runoutDate = new Date();
                     runoutDate.setDate(runoutDate.getDate() + runwayDays);
                     return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
