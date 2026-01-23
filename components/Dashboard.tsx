@@ -1961,8 +1961,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Check if SKU is in phase out list
                       const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === inv.sku.toLowerCase());
                       
-                      // If phase out with no LA inventory, mark for filtering
-                      if (isPhaseOut && laInventory <= 0) {
+                      // Calculate total inventory across all warehouses (LA + China + Incoming + In Production)
+                      const totalInventory = laInventory + chinaInventory + incoming + poQty;
+                      
+                      // If phase out with no inventory anywhere, mark for filtering
+                      if (isPhaseOut && totalInventory <= 0) {
                         return null; // Will be filtered out
                       }
                       
