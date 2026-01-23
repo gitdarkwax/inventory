@@ -311,6 +311,141 @@ export class ShopifyClient {
   }
 
   /**
+   * Fetch inventory transfers (for inbound air/sea tracking)
+   * Returns transfers with their tags, notes, and line items
+   */
+  async fetchTransfers(): Promise<Array<{
+    id: string;
+    number: string;
+    status: string;
+    tags: string[];
+    note: string | null;
+    destinationLocationId: string;
+    lineItems: Array<{
+      inventoryItemId: string;
+      sku: string;
+      quantity: number;
+      receivedQuantity: number;
+    }>;
+  }>> {
+    const graphqlUrl = `https://${this.config.shop}/admin/api/2024-10/graphql.json`;
+    const results: Array<{
+      id: string;
+      number: string;
+      status: string;
+      tags: string[];
+      note: string | null;
+      destinationLocationId: string;
+      lineItems: Array<{
+        inventoryItemId: string;
+        sku: string;
+        quantity: number;
+        receivedQuantity: number;
+      }>;
+    }> = [];
+    
+    let cursor: string | null = null;
+    let hasNextPage = true;
+    
+    while (hasNextPage) {
+      const query = `
+        query($cursor: String) {
+          inventoryTransfers(first: 50, after: $cursor, query: "status:pending OR status:partially_received") {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            edges {
+              node {
+                id
+                number
+                status
+                tags
+                note
+                destinationLocation {
+                  id
+                }
+                expectedArrivalDate
+                inventoryTransferItems(first: 250) {
+                  edges {
+                    node {
+                      inventoryItem {
+                        id
+                        sku
+                      }
+                      quantity
+                      receivedQuantity
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      const response: Response = await fetch(graphqlUrl, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': this.config.accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: { cursor },
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`GraphQL API error: ${response.statusText}`);
+      }
+      
+      const data: any = await response.json();
+      
+      if (data.errors) {
+        console.error('GraphQL errors:', data.errors);
+        throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+      }
+      
+      const transfers = data.data?.inventoryTransfers;
+      if (!transfers) break;
+      
+      for (const edge of transfers.edges) {
+        const node = edge.node;
+        const destLocationId = node.destinationLocation?.id?.replace('gid://shopify/Location/', '') || '';
+        
+        const lineItems = node.inventoryTransferItems.edges.map((itemEdge: any) => ({
+          inventoryItemId: itemEdge.node.inventoryItem.id.replace('gid://shopify/InventoryItem/', ''),
+          sku: itemEdge.node.inventoryItem.sku || '',
+          quantity: itemEdge.node.quantity,
+          receivedQuantity: itemEdge.node.receivedQuantity || 0,
+        }));
+        
+        results.push({
+          id: node.id.replace('gid://shopify/InventoryTransfer/', ''),
+          number: node.number || '',
+          status: node.status,
+          tags: node.tags || [],
+          note: node.note || null,
+          destinationLocationId: destLocationId,
+          lineItems,
+        });
+      }
+      
+      hasNextPage = transfers.pageInfo.hasNextPage;
+      cursor = transfers.pageInfo.endCursor;
+      
+      // Rate limiting
+      if (hasNextPage) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    console.log(`📦 Fetched ${results.length} pending/partial transfers`);
+    return results;
+  }
+
+  /**
    * Extract next page URL from Link header
    */
   private getNextPageUrl(linkHeader: string | null): string | null {

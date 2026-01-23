@@ -26,6 +26,9 @@ interface LocationDetail {
   onHand: number;
   committed: number;
   incoming: number;
+  inboundAir: number;
+  inboundSea: number;
+  transferNotes: Array<{ id: string; note: string | null }>;
 }
 
 interface InventorySummary {
@@ -150,7 +153,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
-  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'laRunway' | 'prodStatus' | 'runway'>('shipType');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'laRunway' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
 
@@ -1737,12 +1740,33 @@ export default function Dashboard({ session }: DashboardProps) {
                     return laOffice + dtlaWH;
                   };
                   
-                  // Get incoming to LA Office (from locationDetails)
-                  const getLAIncoming = (sku: string): number => {
+                  // Get inbound air to LA Office
+                  const getLAInboundAir = (sku: string): number => {
                     const laDetails = inventoryData.locationDetails?.['LA Office'];
                     if (!laDetails) return 0;
                     const detail = laDetails.find(d => d.sku === sku);
-                    return detail?.incoming || 0;
+                    return detail?.inboundAir || 0;
+                  };
+                  
+                  // Get inbound sea to LA Office
+                  const getLAInboundSea = (sku: string): number => {
+                    const laDetails = inventoryData.locationDetails?.['LA Office'];
+                    if (!laDetails) return 0;
+                    const detail = laDetails.find(d => d.sku === sku);
+                    return detail?.inboundSea || 0;
+                  };
+                  
+                  // Get total incoming to LA Office (air + sea)
+                  const getLAIncoming = (sku: string): number => {
+                    return getLAInboundAir(sku) + getLAInboundSea(sku);
+                  };
+                  
+                  // Get transfer notes for LA Office
+                  const getLATransferNotes = (sku: string): Array<{ id: string; note: string | null }> => {
+                    const laDetails = inventoryData.locationDetails?.['LA Office'];
+                    if (!laDetails) return [];
+                    const detail = laDetails.find(d => d.sku === sku);
+                    return detail?.transferNotes || [];
                   };
                   
                   // Get committed from LA (LA Office + DTLA WH)
@@ -1850,7 +1874,10 @@ export default function Dashboard({ session }: DashboardProps) {
                     .map(inv => {
                       const laInventory = getLAInventory(inv.sku);
                       const laCommitted = getLACommitted(inv.sku);
-                      const incoming = getLAIncoming(inv.sku);
+                      const inboundAir = getLAInboundAir(inv.sku);
+                      const inboundSea = getLAInboundSea(inv.sku);
+                      const incoming = inboundAir + inboundSea;
+                      const transferNotes = getLATransferNotes(inv.sku);
                       const chinaInventory = getChinaInventory(inv.sku);
                       const poQty = getPOQuantity(inv.sku);
                       const unitsPerDay = getUnitsPerDay(inv.sku);
@@ -1881,7 +1908,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         sku: inv.sku,
                         productTitle: inv.productTitle,
                         la: laInventory,
-                        incoming,
+                        inboundAir,
+                        inboundSea,
+                        transferNotes,
                         china: chinaInventory,
                         poQty,
                         unitsPerDay,
@@ -1919,7 +1948,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       switch (planningSortBy) {
                         case 'sku': comparison = a.sku.localeCompare(b.sku); break;
                         case 'la': comparison = a.la - b.la; break;
-                        case 'incoming': comparison = a.incoming - b.incoming; break;
+                        case 'inboundAir': comparison = a.inboundAir - b.inboundAir; break;
+                        case 'inboundSea': comparison = a.inboundSea - b.inboundSea; break;
                         case 'china': comparison = a.china - b.china; break;
                         case 'poQty': comparison = a.poQty - b.poQty; break;
                         case 'unitsPerDay': comparison = a.unitsPerDay - b.unitsPerDay; break;
@@ -1975,8 +2005,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
                               LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('incoming')}>
-                              Incoming <SortIcon active={planningSortBy === 'incoming'} order={planningSortOrder} />
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundAir')}>
+                              In Air <SortIcon active={planningSortBy === 'inboundAir'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundSea')}>
+                              In Sea <SortIcon active={planningSortBy === 'inboundSea'} order={planningSortOrder} />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
                               China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
@@ -2010,7 +2043,18 @@ export default function Dashboard({ session }: DashboardProps) {
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                            <td 
+                              className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                              title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                            >
+                              {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
+                            </td>
+                            <td 
+                              className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                              title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                            >
+                              {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
+                            </td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
                             <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
@@ -2197,7 +2241,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                       <tr>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
@@ -2213,7 +2258,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                           <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                                          <td 
+                                            className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                            title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                          >
+                                            {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
+                                          </td>
+                                          <td 
+                                            className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                            title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                          >
+                                            {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
+                                          </td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
@@ -2258,12 +2314,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'LA', 'Incoming', 'China', 'In Prod', 'Units/Day', 'LA Need', 'Ship Type', 'Prod Status', 'LA Runway', 'ALL Runway'];
+                            const headers = ['SKU', 'Product', 'LA', 'In Air', 'In Sea', 'China', 'In Prod', 'Units/Day', 'LA Need', 'Ship Type', 'Prod Status', 'LA Runway', 'ALL Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
                               item.la,
-                              item.incoming,
+                              item.inboundAir,
+                              item.inboundSea,
                               item.china,
                               item.poQty,
                               item.unitsPerDay.toFixed(1),
@@ -2271,7 +2328,8 @@ export default function Dashboard({ session }: DashboardProps) {
                               item.shipType,
                               item.prodStatus,
                               item.laRunway >= 999 ? 'N/A' : `${item.laRunway}d`,
-                              item.runway >= 999 ? 'N/A' : `${item.runway}d`
+                              item.runway >= 999 ? 'N/A' : `${item.runway}d`,
+                              `"${item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('; ').replace(/"/g, '""')}"`
                             ]);
                             
                             const csvContent = [

@@ -95,6 +95,12 @@ async function fetchInventoryData() {
   const locations = await shopify.fetchLocations();
   const activeLocations = locations.filter(l => l.active);
   
+  // Build location ID to display name map
+  const locationIdToName: Record<string, string> = {};
+  for (const loc of activeLocations) {
+    locationIdToName[loc.id] = locationDisplayNames[loc.name] || loc.name;
+  }
+  
   // Fetch all products with variants
   const products = await shopify.fetchProducts();
   
@@ -120,6 +126,56 @@ async function fetchInventoryData() {
   }
   
   console.log(`📦 Found ${variantMap.size} variants from products tagged "inventoried"`);
+  
+  // Fetch transfers for inbound air/sea tracking
+  const transfers = await shopify.fetchTransfers();
+  console.log(`📦 Fetched ${transfers.length} pending transfers`);
+  
+  // Build transfer data by SKU (for LA Office destination)
+  interface TransferInfo {
+    transferId: string;
+    transferNumber: string;
+    note: string | null;
+    quantity: number;
+    type: 'air' | 'sea' | 'unknown';
+  }
+  
+  const skuTransfers = new Map<string, TransferInfo[]>();
+  
+  for (const transfer of transfers) {
+    const destName = locationIdToName[transfer.destinationLocationId];
+    // Only track transfers to LA Office
+    if (destName !== 'LA Office') continue;
+    
+    // Determine transfer type from tags
+    const tagsLower = transfer.tags.map(t => t.toLowerCase());
+    let transferType: 'air' | 'sea' | 'unknown' = 'unknown';
+    if (tagsLower.includes('air')) {
+      transferType = 'air';
+    } else if (tagsLower.includes('sea')) {
+      transferType = 'sea';
+    }
+    
+    for (const item of transfer.lineItems) {
+      const pendingQty = item.quantity - item.receivedQuantity;
+      if (pendingQty <= 0) continue;
+      
+      const sku = item.sku;
+      if (!sku) continue;
+      
+      if (!skuTransfers.has(sku)) {
+        skuTransfers.set(sku, []);
+      }
+      
+      skuTransfers.get(sku)!.push({
+        transferId: transfer.id,
+        transferNumber: transfer.number,
+        note: transfer.note,
+        quantity: pendingQty,
+        type: transferType,
+      });
+    }
+  }
   
   // Fetch detailed inventory levels for each location
   interface DetailedLevel {
@@ -162,6 +218,9 @@ async function fetchInventoryData() {
     onHand: number;
     committed: number;
     incoming: number;
+    inboundAir: number;
+    inboundSea: number;
+    transferNotes: Array<{ id: string; note: string | null }>;
   }>>();
   
   // Initialize location detail maps
@@ -193,12 +252,24 @@ async function fetchInventoryData() {
     // Location detail data
     const locDetailMap = locationDetailMap.get(level.displayName);
     if (locDetailMap) {
+      // Get transfer info for this SKU
+      const transfersForSku = skuTransfers.get(variantInfo.sku) || [];
+      const inboundAir = transfersForSku.filter(t => t.type === 'air').reduce((sum, t) => sum + t.quantity, 0);
+      const inboundSea = transfersForSku.filter(t => t.type === 'sea').reduce((sum, t) => sum + t.quantity, 0);
+      const transferNotes = transfersForSku.map(t => ({ id: t.transferNumber, note: t.note }));
+      
       const existing = locDetailMap.get(variantInfo.sku);
       if (existing) {
         existing.available += level.available;
         existing.onHand += level.onHand;
         existing.committed += level.committed;
         existing.incoming += level.incoming;
+        // Only update air/sea for LA Office
+        if (level.displayName === 'LA Office') {
+          existing.inboundAir = inboundAir;
+          existing.inboundSea = inboundSea;
+          existing.transferNotes = transferNotes;
+        }
       } else {
         locDetailMap.set(variantInfo.sku, {
           sku: variantInfo.sku,
@@ -208,6 +279,9 @@ async function fetchInventoryData() {
           onHand: level.onHand,
           committed: level.committed,
           incoming: level.incoming,
+          inboundAir: level.displayName === 'LA Office' ? inboundAir : 0,
+          inboundSea: level.displayName === 'LA Office' ? inboundSea : 0,
+          transferNotes: level.displayName === 'LA Office' ? transferNotes : [],
         });
       }
     }
@@ -229,6 +303,9 @@ async function fetchInventoryData() {
     onHand: number;
     committed: number;
     incoming: number;
+    inboundAir: number;
+    inboundSea: number;
+    transferNotes: Array<{ id: string; note: string | null }>;
   }>> = {};
   
   for (const [locName, skuMapInner] of locationDetailMap) {
