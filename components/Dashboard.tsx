@@ -1745,6 +1745,22 @@ export default function Dashboard({ session }: DashboardProps) {
                     return detail?.incoming || 0;
                   };
                   
+                  // Get committed from LA (LA Office + DTLA WH)
+                  const getLACommitted = (sku: string): number => {
+                    const laOfficeDetails = inventoryData.locationDetails?.['LA Office'];
+                    const dtlaDetails = inventoryData.locationDetails?.['DTLA WH'];
+                    let committed = 0;
+                    if (laOfficeDetails) {
+                      const detail = laOfficeDetails.find(d => d.sku === sku);
+                      committed += detail?.committed || 0;
+                    }
+                    if (dtlaDetails) {
+                      const detail = dtlaDetails.find(d => d.sku === sku);
+                      committed += detail?.committed || 0;
+                    }
+                    return committed;
+                  };
+                  
                   // Get China WH inventory
                   const getChinaInventory = (sku: string): number => {
                     const inv = inventoryData.inventory.find(i => i.sku === sku);
@@ -1833,6 +1849,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   const allPlanningItems = inventoryData.inventory
                     .map(inv => {
                       const laInventory = getLAInventory(inv.sku);
+                      const laCommitted = getLACommitted(inv.sku);
                       const incoming = getLAIncoming(inv.sku);
                       const chinaInventory = getChinaInventory(inv.sku);
                       const poQty = getPOQuantity(inv.sku);
@@ -1846,8 +1863,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       const totalInventory = laInventory + incoming + chinaInventory + poQty;
                       const runway = unitsPerDay > 0 ? Math.round(totalInventory / unitsPerDay) : 999;
                       
-                      // Calculate LA Need: units needed to cover target days minus current LA qty
-                      const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - laInventory));
+                      // Calculate LA Need: units needed to cover target days minus (LA qty - committed)
+                      const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory - laCommitted)));
                       
                       // Determine prod status based on runway and PO
                       const hasPO = poQty > 0;
