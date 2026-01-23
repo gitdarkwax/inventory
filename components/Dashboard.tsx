@@ -1723,89 +1723,6 @@ export default function Dashboard({ session }: DashboardProps) {
 
             {!inventoryLoading && !forecastingLoading && inventoryData && forecastingData && (
               <div className="space-y-6">
-                <div className="bg-white shadow rounded-lg p-4 sm:p-6">
-                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                    <div className="flex gap-3 flex-wrap items-end">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-400 mb-1">Ship Type</span>
-                        <select 
-                          value={planningFilterShipType} 
-                          onChange={(e) => setPlanningFilterShipType(e.target.value)}
-                          className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="all">All Ship Types</option>
-                          <option value="Sea">Sea</option>
-                          <option value="Slow Air">Slow Air</option>
-                          <option value="Express">Express</option>
-                          <option value="Order More">Order More</option>
-                        </select>
-                      </div>
-                      {/* List/Grouped Toggle */}
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-400 mb-1">View</span>
-                        <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
-                          <button onClick={() => setPlanningListMode('list')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-                            List
-                          </button>
-                          <button onClick={() => setPlanningListMode('grouped')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-                            Grouped
-                          </button>
-                        </div>
-                      </div>
-                      {/* Burn Rate Period Toggle */}
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-400 mb-1">Burn Rate Period</span>
-                        <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
-                          <button
-                            onClick={() => setPlanningBurnPeriod('7d')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                              planningBurnPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                          >
-                            7 Days
-                          </button>
-                          <button
-                            onClick={() => setPlanningBurnPeriod('21d')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                              planningBurnPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                          >
-                            21 Days
-                          </button>
-                          <button
-                            onClick={() => setPlanningBurnPeriod('90d')}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                              planningBurnPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                          >
-                            90 Days
-                          </button>
-                        </div>
-                      </div>
-                      {/* LA Target Days */}
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-400 mb-1">Units needed in LA for</span>
-                        <select
-                          value={planningLaTargetDays}
-                          onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
-                          className="h-[34px] px-3 text-xs border border-gray-300 rounded-lg bg-white"
-                        >
-                          <option value={14}>14 days</option>
-                          <option value={30}>30 days</option>
-                          <option value={60}>60 days</option>
-                          <option value={90}>90 days</option>
-                          <option value={120}>120 days</option>
-                          <option value={180}>180 days</option>
-                        </select>
-                      </div>
-                    </div>
-                    <input type="text" placeholder="Search by SKU or product..." value={planningSearchTerm} onChange={(e) => setPlanningSearchTerm(e.target.value)}
-                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-
                 {(() => {
                   // Build planning data by combining inventory and forecasting
                   const inventoriedSkus = new Set(inventoryData.inventory.map(item => item.sku));
@@ -1959,11 +1876,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     });
                   
                   // Calculate metrics from all items (before filtering)
-                  const shipTypeMetrics = {
+                  const planningMetrics = {
                     sea: allPlanningItems.filter(item => item.shipType === 'Sea').length,
                     slowAir: allPlanningItems.filter(item => item.shipType === 'Slow Air').length,
                     express: allPlanningItems.filter(item => item.shipType === 'Express').length,
-                    orderMore: allPlanningItems.filter(item => item.shipType === 'Order More').length,
+                    orderMore: allPlanningItems.filter(item => item.prodStatus === 'Order More').length,
                   };
                   
                   // Filter and sort planning items for display
@@ -2111,35 +2028,107 @@ export default function Dashboard({ session }: DashboardProps) {
                   return (
                     <>
                       {/* Metrics Section */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                        <button 
-                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Sea' ? 'all' : 'Sea')}
-                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Sea' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white hover:border-green-300'}`}
-                        >
-                          <div className="text-2xl font-bold text-green-600">{shipTypeMetrics.sea}</div>
-                          <div className="text-xs text-gray-500">Sea</div>
-                        </button>
-                        <button 
-                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Slow Air' ? 'all' : 'Slow Air')}
-                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Slow Air' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}
-                        >
-                          <div className="text-2xl font-bold text-blue-600">{shipTypeMetrics.slowAir}</div>
-                          <div className="text-xs text-gray-500">Slow Air</div>
-                        </button>
-                        <button 
-                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Express' ? 'all' : 'Express')}
-                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Express' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white hover:border-orange-300'}`}
-                        >
-                          <div className="text-2xl font-bold text-orange-600">{shipTypeMetrics.express}</div>
-                          <div className="text-xs text-gray-500">Express</div>
-                        </button>
-                        <button 
-                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Order More' ? 'all' : 'Order More')}
-                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Order More' ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white hover:border-red-300'}`}
-                        >
-                          <div className="text-2xl font-bold text-red-600">{shipTypeMetrics.orderMore}</div>
-                          <div className="text-xs text-gray-500">Order More</div>
-                        </button>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                          <p className="text-xs sm:text-sm font-medium text-gray-500">Sea</p>
+                          <p className="text-lg sm:text-xl font-bold text-green-600">{planningMetrics.sea}</p>
+                        </div>
+                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                          <p className="text-xs sm:text-sm font-medium text-gray-500">Slow Air</p>
+                          <p className="text-lg sm:text-xl font-bold text-blue-600">{planningMetrics.slowAir}</p>
+                        </div>
+                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                          <p className="text-xs sm:text-sm font-medium text-gray-500">Express</p>
+                          <p className="text-lg sm:text-xl font-bold text-orange-600">{planningMetrics.express}</p>
+                        </div>
+                        <div className="text-center bg-white shadow rounded-lg p-3 sm:p-4">
+                          <p className="text-xs sm:text-sm font-medium text-gray-500">Order More</p>
+                          <p className="text-lg sm:text-xl font-bold text-red-600">{planningMetrics.orderMore}</p>
+                        </div>
+                      </div>
+
+                      {/* Filter Bar */}
+                      <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                          <div className="flex gap-3 flex-wrap items-end">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">Ship Type</span>
+                              <select 
+                                value={planningFilterShipType} 
+                                onChange={(e) => setPlanningFilterShipType(e.target.value)}
+                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="all">All Ship Types</option>
+                                <option value="Sea">Sea</option>
+                                <option value="Slow Air">Slow Air</option>
+                                <option value="Express">Express</option>
+                                <option value="Order More">Order More</option>
+                              </select>
+                            </div>
+                            {/* List/Grouped Toggle */}
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">View</span>
+                              <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
+                                <button onClick={() => setPlanningListMode('list')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                                  List
+                                </button>
+                                <button onClick={() => setPlanningListMode('grouped')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                                  Grouped
+                                </button>
+                              </div>
+                            </div>
+                            {/* Burn Rate Period Toggle */}
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">Burn Rate Period</span>
+                              <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
+                                <button
+                                  onClick={() => setPlanningBurnPeriod('7d')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                    planningBurnPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                  }`}
+                                >
+                                  7 Days
+                                </button>
+                                <button
+                                  onClick={() => setPlanningBurnPeriod('21d')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                    planningBurnPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                  }`}
+                                >
+                                  21 Days
+                                </button>
+                                <button
+                                  onClick={() => setPlanningBurnPeriod('90d')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                    planningBurnPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                  }`}
+                                >
+                                  90 Days
+                                </button>
+                              </div>
+                            </div>
+                            {/* LA Target Days */}
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">Units needed in LA for</span>
+                              <select
+                                value={planningLaTargetDays}
+                                onChange={(e) => setPlanningLaTargetDays(Number(e.target.value))}
+                                className="h-[34px] px-3 text-xs border border-gray-300 rounded-lg bg-white"
+                              >
+                                <option value={14}>14 days</option>
+                                <option value={30}>30 days</option>
+                                <option value={60}>60 days</option>
+                                <option value={90}>90 days</option>
+                                <option value={120}>120 days</option>
+                                <option value={180}>180 days</option>
+                              </select>
+                            </div>
+                          </div>
+                          <input type="text" placeholder="Search by SKU or product..." value={planningSearchTerm} onChange={(e) => setPlanningSearchTerm(e.target.value)}
+                            className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
                       </div>
 
                       {/* List View */}
