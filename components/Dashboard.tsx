@@ -165,6 +165,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editOrderEta, setEditOrderEta] = useState('');
   const [editOrderNotes, setEditOrderNotes] = useState('');
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -242,6 +244,8 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Create new production order
   const createProductionOrder = async () => {
+    if (isCreatingOrder) return; // Prevent double-clicks
+    
     const validItems = newOrderItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
@@ -251,6 +255,7 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    setIsCreatingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
         method: 'POST',
@@ -276,6 +281,8 @@ export default function Dashboard({ session }: DashboardProps) {
       }
     } catch (err) {
       alert('Failed to create order');
+    } finally {
+      setIsCreatingOrder(false);
     }
   };
 
@@ -373,6 +380,9 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Cancel production order
   const cancelOrder = async (orderId: string) => {
+    if (isCancellingOrder) return; // Prevent double-clicks
+    
+    setIsCancellingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
         method: 'PATCH',
@@ -390,6 +400,8 @@ export default function Dashboard({ session }: DashboardProps) {
       }
     } catch (err) {
       alert('Failed to cancel order');
+    } finally {
+      setIsCancellingOrder(false);
     }
   };
 
@@ -2245,16 +2257,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              updateOrderStatus(order.id, 'completed');
-                                            }}
-                                            className="px-3 py-1.5 text-gray-600 hover:bg-gray-200 active:bg-gray-300 rounded-md text-sm font-medium"
-                                          >
-                                            Mark Complete
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
                                               setShowCancelConfirm(true);
                                             }}
                                             className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
@@ -2443,9 +2445,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={createProductionOrder}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                      disabled={isCreatingOrder}
+                      className={`px-4 py-2 rounded-md text-sm font-medium ${
+                        isCreatingOrder 
+                          ? 'bg-blue-400 text-white cursor-not-allowed' 
+                          : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                      }`}
                     >
-                      Create Order
+                      {isCreatingOrder ? 'Creating...' : 'Create Order'}
                     </button>
                   </div>
                 </div>
@@ -2635,9 +2642,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => cancelOrder(selectedOrder.id)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 active:bg-red-800"
+                      disabled={isCancellingOrder}
+                      className={`px-4 py-2 rounded-md text-sm font-medium ${
+                        isCancellingOrder
+                          ? 'bg-red-400 text-white cursor-not-allowed'
+                          : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+                      }`}
                     >
-                      Yes, Cancel Order
+                      {isCancellingOrder ? 'Cancelling...' : 'Yes, Cancel Order'}
                     </button>
                   </div>
                 </div>
