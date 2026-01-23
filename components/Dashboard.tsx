@@ -112,7 +112,7 @@ type TabType = 'inventory' | 'forecasting' | 'planning' | 'production';
 
 export default function Dashboard({ session }: DashboardProps) {
   // Tab state
-  const [activeTab, setActiveTab] = useState<TabType>('inventory');
+  const [activeTab, setActiveTab] = useState<TabType>('planning');
   
   // Inventory state
   const [inventoryData, setInventoryData] = useState<InventorySummary | null>(null);
@@ -1170,22 +1170,6 @@ export default function Dashboard({ session }: DashboardProps) {
           <div className="flex items-center justify-between">
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
               <button
-                onClick={() => setActiveTab('inventory')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📦 Inventory
-              </button>
-              <button
-                onClick={() => setActiveTab('forecasting')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📈 Forecasting
-              </button>
-              <button
                 onClick={() => setActiveTab('planning')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
@@ -1200,6 +1184,22 @@ export default function Dashboard({ session }: DashboardProps) {
                 }`}
               >
                 📦 PO Tracker
+              </button>
+              <button
+                onClick={() => setActiveTab('inventory')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                📦 Inventory
+              </button>
+              <button
+                onClick={() => setActiveTab('forecasting')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                📈 Forecasting
               </button>
             </div>
             <button 
