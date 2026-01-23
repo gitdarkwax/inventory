@@ -74,6 +74,18 @@ export interface ForecastingData {
   daysOfStock?: number;
 }
 
+export interface TransferData {
+  transferName: string;
+  originName: string;
+  destinationName: string;
+  status: string;
+  note: string;
+  tags: string;
+  createdAt: string;
+  sku: string;
+  orderedQuantity: number;
+}
+
 export class ShopifyQLService {
   private shop: string;
   private accessToken: string;
@@ -343,5 +355,58 @@ export class ShopifyQLService {
 
     console.log(`✅ Built forecasting data for ${forecastingData.length} SKUs`);
     return forecastingData;
+  }
+
+  /**
+   * Get inventory transfer data for pending/partial transfers
+   * Returns transfers with their tags, notes, and quantities by SKU
+   */
+  async getTransferData(): Promise<TransferData[]> {
+    console.log('📦 Fetching transfer data from Shopify...');
+    
+    const query = `
+      FROM inventory_transfers
+      SHOW transfer_name, inventory_origin_name, destination_name,
+        transfer_status, transfer_note, transfer_tags, transfer_created_at,
+        product_variant_sku, ordered_quantity
+      GROUP BY transfer_name, inventory_origin_name, destination_name,
+        transfer_status, transfer_note, transfer_tags, transfer_created_at,
+        product_variant_sku
+      SINCE startOfDay(-90d) UNTIL today
+      ORDER BY transfer_name DESC, product_variant_sku ASC
+    `;
+
+    const result = await this.executeQuery(query);
+
+    if (result.parseErrors && result.parseErrors.length > 0) {
+      throw new Error(`ShopifyQL parse errors: ${result.parseErrors.join(', ')}`);
+    }
+
+    if (!result.tableData) {
+      console.log('⚠️ No transfer data returned');
+      return [];
+    }
+
+    // Parse raw rows into TransferData objects
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const transfers: TransferData[] = result.tableData.rows.map((row: any) => ({
+      transferName: row.transfer_name || '',
+      originName: row.inventory_origin_name || '',
+      destinationName: row.destination_name || '',
+      status: row.transfer_status || '',
+      note: row.transfer_note || '',
+      tags: row.transfer_tags || '',
+      createdAt: row.transfer_created_at || '',
+      sku: row.product_variant_sku || '',
+      orderedQuantity: parseInt(row.ordered_quantity || '0', 10),
+    }));
+
+    // Filter to only pending or partial transfers
+    const pendingTransfers = transfers.filter(t => 
+      t.status === 'pending' || t.status === 'partially_received'
+    );
+
+    console.log(`✅ Loaded ${pendingTransfers.length} pending transfer line items`);
+    return pendingTransfers;
   }
 }

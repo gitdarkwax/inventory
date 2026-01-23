@@ -90,16 +90,11 @@ export async function POST(request: NextRequest) {
  */
 async function fetchInventoryData() {
   const shopify = new ShopifyClient();
+  const shopifyQL = new ShopifyQLService();
   
   // Fetch all locations
   const locations = await shopify.fetchLocations();
   const activeLocations = locations.filter(l => l.active);
-  
-  // Build location ID to display name map
-  const locationIdToName: Record<string, string> = {};
-  for (const loc of activeLocations) {
-    locationIdToName[loc.id] = locationDisplayNames[loc.name] || loc.name;
-  }
   
   // Fetch all products with variants
   const products = await shopify.fetchProducts();
@@ -127,15 +122,14 @@ async function fetchInventoryData() {
   
   console.log(`📦 Found ${variantMap.size} variants from products tagged "inventoried"`);
   
-  // Fetch transfers for inbound air/sea tracking
-  const transfers = await shopify.fetchTransfers();
-  console.log(`📦 Fetched ${transfers.length} pending transfers`);
+  // Fetch transfers for inbound air/sea tracking using ShopifyQL
+  const transfers = await shopifyQL.getTransferData();
+  console.log(`📦 Fetched ${transfers.length} pending transfer line items`);
   
   // Build transfer data by SKU (for LA Office destination)
   interface TransferInfo {
-    transferId: string;
-    transferNumber: string;
-    note: string | null;
+    transferName: string;
+    note: string;
     quantity: number;
     type: 'air' | 'sea' | 'unknown';
   }
@@ -143,12 +137,14 @@ async function fetchInventoryData() {
   const skuTransfers = new Map<string, TransferInfo[]>();
   
   for (const transfer of transfers) {
-    const destName = locationIdToName[transfer.destinationLocationId];
+    // Map destination name to display name
+    const destName = locationDisplayNames[transfer.destinationName] || transfer.destinationName;
+    
     // Only track transfers to LA Office
     if (destName !== 'LA Office') continue;
     
-    // Determine transfer type from tags
-    const tagsLower = transfer.tags.map(t => t.toLowerCase());
+    // Determine transfer type from tags (tags is a comma-separated string)
+    const tagsLower = transfer.tags.toLowerCase();
     let transferType: 'air' | 'sea' | 'unknown' = 'unknown';
     if (tagsLower.includes('air')) {
       transferType = 'air';
@@ -156,25 +152,19 @@ async function fetchInventoryData() {
       transferType = 'sea';
     }
     
-    for (const item of transfer.lineItems) {
-      const pendingQty = item.quantity - item.receivedQuantity;
-      if (pendingQty <= 0) continue;
-      
-      const sku = item.sku;
-      if (!sku) continue;
-      
-      if (!skuTransfers.has(sku)) {
-        skuTransfers.set(sku, []);
-      }
-      
-      skuTransfers.get(sku)!.push({
-        transferId: transfer.id,
-        transferNumber: transfer.number,
-        note: transfer.note,
-        quantity: pendingQty,
-        type: transferType,
-      });
+    const sku = transfer.sku;
+    if (!sku) continue;
+    
+    if (!skuTransfers.has(sku)) {
+      skuTransfers.set(sku, []);
     }
+    
+    skuTransfers.get(sku)!.push({
+      transferName: transfer.transferName,
+      note: transfer.note,
+      quantity: transfer.orderedQuantity,
+      type: transferType,
+    });
   }
   
   // Fetch detailed inventory levels for each location
@@ -256,7 +246,7 @@ async function fetchInventoryData() {
       const transfersForSku = skuTransfers.get(variantInfo.sku) || [];
       const inboundAir = transfersForSku.filter(t => t.type === 'air').reduce((sum, t) => sum + t.quantity, 0);
       const inboundSea = transfersForSku.filter(t => t.type === 'sea').reduce((sum, t) => sum + t.quantity, 0);
-      const transferNotes = transfersForSku.map(t => ({ id: t.transferNumber, note: t.note }));
+      const transferNotes = transfersForSku.map(t => ({ id: t.transferName, note: t.note }));
       
       const existing = locDetailMap.get(variantInfo.sku);
       if (existing) {
