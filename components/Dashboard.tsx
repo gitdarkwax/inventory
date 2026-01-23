@@ -167,6 +167,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [isLoggingDelivery, setIsLoggingDelivery] = useState(false);
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -309,6 +311,8 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Log delivery for production order
   const logDelivery = async (orderId: string) => {
+    if (isLoggingDelivery) return; // Prevent double-clicks
+    
     const validDeliveries = deliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
@@ -318,6 +322,7 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    setIsLoggingDelivery(true);
     try {
       const response = await fetch('/api/production-orders', {
         method: 'PATCH',
@@ -337,11 +342,15 @@ export default function Dashboard({ session }: DashboardProps) {
       }
     } catch (err) {
       alert('Failed to log delivery');
+    } finally {
+      setIsLoggingDelivery(false);
     }
   };
 
   // Save edited production order
   const saveEditOrder = async (orderId: string) => {
+    if (isSavingOrder) return; // Prevent double-clicks
+    
     const validItems = editOrderItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
@@ -351,6 +360,7 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    setIsSavingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
         method: 'PATCH',
@@ -375,6 +385,8 @@ export default function Dashboard({ session }: DashboardProps) {
       }
     } catch (err) {
       alert('Failed to update order');
+    } finally {
+      setIsSavingOrder(false);
     }
   };
 
@@ -2505,9 +2517,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => logDelivery(selectedOrder.id)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                      disabled={isLoggingDelivery}
+                      className={`px-4 py-2 rounded-md text-sm font-medium ${
+                        isLoggingDelivery
+                          ? 'bg-green-400 text-white cursor-not-allowed'
+                          : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                      }`}
                     >
-                      Confirm Delivery
+                      {isLoggingDelivery ? 'Saving...' : 'Confirm Delivery'}
                     </button>
                   </div>
                 </div>
@@ -2609,9 +2626,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => saveEditOrder(selectedOrder.id)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                      disabled={isSavingOrder}
+                      className={`px-4 py-2 rounded-md text-sm font-medium ${
+                        isSavingOrder
+                          ? 'bg-blue-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                      }`}
                     >
-                      Save Changes
+                      {isSavingOrder ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 </div>
