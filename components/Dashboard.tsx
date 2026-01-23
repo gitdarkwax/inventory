@@ -3303,7 +3303,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   <p className="text-sm text-gray-500 text-center py-4">No SKUs in phase out list</p>
                 ) : (
                   <div className="space-y-2">
-                    {phaseOutSkus.map((sku) => (
+                    {[...phaseOutSkus].sort((a, b) => a.localeCompare(b)).map((sku) => (
                       <div key={sku} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md">
                         <span className="text-sm font-medium text-gray-900">{sku}</span>
                         <button
