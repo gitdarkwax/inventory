@@ -1240,9 +1240,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         key={location}
                         onClick={() => setInventoryLocationFilter(isSelected ? null : location)}
                         className={`text-center shadow rounded-lg p-3 sm:p-4 transition-all ${
-                          isSelected ? 'text-white ring-2' : 'bg-white hover:bg-gray-50'
+                          isSelected ? 'text-white' : 'bg-white hover:bg-gray-50'
                         }`}
-                        style={isSelected ? { backgroundColor: colorMap[color], ringColor: colorMap[color] } : {}}
+                        style={isSelected ? { backgroundColor: colorMap[color] } : {}}
                       >
                         <p className={`text-xs sm:text-sm font-medium ${isSelected ? 'text-white/80' : 'text-gray-500'}`}>{location}</p>
                         <p className="text-lg sm:text-xl font-bold"
