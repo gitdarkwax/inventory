@@ -7,13 +7,16 @@ import { google } from 'googleapis';
 export interface ProductionOrderItem {
   sku: string;
   quantity: number;
+  receivedQuantity: number; // Track how much has been received
 }
 
 export interface ProductionOrder {
   id: string;
   items: ProductionOrderItem[];
   notes: string;
-  status: 'pending' | 'in_production' | 'shipped' | 'completed' | 'cancelled';
+  vendor?: string;
+  eta?: string; // ISO date string
+  status: 'in_production' | 'partial' | 'completed';
   createdBy: string;
   createdByEmail: string;
   createdAt: string;
@@ -237,18 +240,29 @@ export class ProductionOrdersService {
    * Create a new production order
    */
   static async createOrder(
-    items: ProductionOrderItem[],
+    items: { sku: string; quantity: number }[],
     notes: string,
     createdBy: string,
-    createdByEmail: string
+    createdByEmail: string,
+    vendor?: string,
+    eta?: string
   ): Promise<ProductionOrder> {
     const cache = await ProductionOrdersService.loadOrders();
     
+    // Initialize items with receivedQuantity = 0
+    const orderItems: ProductionOrderItem[] = items.map(item => ({
+      sku: item.sku,
+      quantity: item.quantity,
+      receivedQuantity: 0,
+    }));
+    
     const newOrder: ProductionOrder = {
       id: `PO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      items,
+      items: orderItems,
       notes,
-      status: 'pending',
+      vendor,
+      eta,
+      status: 'in_production',
       createdBy,
       createdByEmail,
       createdAt: new Date().toISOString(),
@@ -268,7 +282,7 @@ export class ProductionOrdersService {
    */
   static async updateOrder(
     orderId: string,
-    updates: Partial<Pick<ProductionOrder, 'items' | 'notes' | 'status'>>
+    updates: Partial<Pick<ProductionOrder, 'notes' | 'vendor' | 'eta' | 'status'>>
   ): Promise<ProductionOrder | null> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -277,8 +291,9 @@ export class ProductionOrdersService {
 
     const order = cache.orders[orderIndex];
     
-    if (updates.items) order.items = updates.items;
     if (updates.notes !== undefined) order.notes = updates.notes;
+    if (updates.vendor !== undefined) order.vendor = updates.vendor;
+    if (updates.eta !== undefined) order.eta = updates.eta;
     if (updates.status) {
       order.status = updates.status;
       if (updates.status === 'completed') {
@@ -294,22 +309,77 @@ export class ProductionOrdersService {
   }
 
   /**
-   * Get pending PO quantities by SKU
+   * Get pending PO quantities by SKU (ordered - received)
    */
   static async getPendingQuantitiesBySku(): Promise<Map<string, number>> {
     const cache = await ProductionOrdersService.loadOrders();
     const quantities = new Map<string, number>();
 
     for (const order of cache.orders) {
-      // Only count pending, in_production, and shipped orders
-      if (['pending', 'in_production', 'shipped'].includes(order.status)) {
+      // Only count in_production and partial orders (not completed)
+      if (['in_production', 'partial'].includes(order.status)) {
         for (const item of order.items) {
-          const current = quantities.get(item.sku) || 0;
-          quantities.set(item.sku, current + item.quantity);
+          // Pending = ordered - received
+          const pending = item.quantity - (item.receivedQuantity || 0);
+          if (pending > 0) {
+            const current = quantities.get(item.sku) || 0;
+            quantities.set(item.sku, current + pending);
+          }
         }
       }
     }
 
     return quantities;
+  }
+
+  /**
+   * Log a partial or full delivery for an order
+   */
+  static async logDelivery(
+    orderId: string,
+    deliveries: { sku: string; quantity: number }[]
+  ): Promise<ProductionOrder | null> {
+    const cache = await ProductionOrdersService.loadOrders();
+    
+    const orderIndex = cache.orders.findIndex(o => o.id === orderId);
+    if (orderIndex === -1) return null;
+
+    const order = cache.orders[orderIndex];
+    
+    // Update received quantities
+    for (const delivery of deliveries) {
+      const item = order.items.find(i => i.sku === delivery.sku);
+      if (item) {
+        item.receivedQuantity = (item.receivedQuantity || 0) + delivery.quantity;
+        // Cap at ordered quantity
+        if (item.receivedQuantity > item.quantity) {
+          item.receivedQuantity = item.quantity;
+        }
+      }
+    }
+
+    // Check if all items are fully received
+    const allReceived = order.items.every(item => 
+      (item.receivedQuantity || 0) >= item.quantity
+    );
+    
+    const anyReceived = order.items.some(item => 
+      (item.receivedQuantity || 0) > 0
+    );
+
+    // Update status based on delivery state
+    if (allReceived) {
+      order.status = 'completed';
+      order.completedAt = new Date().toISOString();
+    } else if (anyReceived) {
+      order.status = 'partial';
+    }
+
+    order.updatedAt = new Date().toISOString();
+    cache.lastUpdated = new Date().toISOString();
+    
+    await ProductionOrdersService.saveOrders(cache);
+    
+    return order;
   }
 }

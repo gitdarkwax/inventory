@@ -78,13 +78,16 @@ interface DashboardProps {
 interface ProductionOrderItem {
   sku: string;
   quantity: number;
+  receivedQuantity: number;
 }
 
 interface ProductionOrder {
   id: string;
   items: ProductionOrderItem[];
   notes: string;
-  status: 'pending' | 'in_production' | 'shipped' | 'completed' | 'cancelled';
+  vendor?: string;
+  eta?: string;
+  status: 'in_production' | 'partial' | 'completed';
   createdBy: string;
   createdByEmail: string;
   createdAt: string;
@@ -149,8 +152,12 @@ export default function Dashboard({ session }: DashboardProps) {
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
   const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
   const [newOrderNotes, setNewOrderNotes] = useState('');
+  const [newOrderVendor, setNewOrderVendor] = useState('');
+  const [newOrderEta, setNewOrderEta] = useState('');
   const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
-  const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null); // Which input field is showing suggestions
+  const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
+  const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -241,13 +248,20 @@ export default function Dashboard({ session }: DashboardProps) {
       const response = await fetch('/api/production-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: validItems, notes: newOrderNotes }),
+        body: JSON.stringify({ 
+          items: validItems, 
+          notes: newOrderNotes,
+          vendor: newOrderVendor || undefined,
+          eta: newOrderEta || undefined,
+        }),
       });
 
       if (response.ok) {
         setShowNewOrderForm(false);
         setNewOrderItems([{ sku: '', quantity: '' }]);
         setNewOrderNotes('');
+        setNewOrderVendor('');
+        setNewOrderEta('');
         await loadProductionOrders();
       } else {
         const data = await response.json();
@@ -276,6 +290,39 @@ export default function Dashboard({ session }: DashboardProps) {
       }
     } catch (err) {
       alert('Failed to update order');
+    }
+  };
+
+  // Log delivery for production order
+  const logDelivery = async (orderId: string) => {
+    const validDeliveries = deliveryItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validDeliveries.length === 0) {
+      alert('Please enter at least one delivery quantity');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/production-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, deliveries: validDeliveries }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShowDeliveryForm(false);
+        setDeliveryItems([]);
+        setSelectedOrder(data.order);
+        await loadProductionOrders();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to log delivery');
+      }
+    } catch (err) {
+      alert('Failed to log delivery');
     }
   };
 
@@ -1927,7 +1974,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
                 >
                   <option value="active">Active Orders</option>
-                  <option value="completed">Completed/Cancelled</option>
+                  <option value="completed">Completed</option>
                   <option value="all">All Orders</option>
                 </select>
               </div>
@@ -1952,53 +1999,61 @@ export default function Dashboard({ session }: DashboardProps) {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created By</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {productionOrders
                       .filter(order => {
-                        if (productionFilterStatus === 'active') return ['pending', 'in_production', 'shipped'].includes(order.status);
-                        if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
+                        if (productionFilterStatus === 'active') return ['in_production', 'partial'].includes(order.status);
+                        if (productionFilterStatus === 'completed') return order.status === 'completed';
                         return true;
                       })
-                      .map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.id.split('-').slice(0, 2).join('-')}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {order.items.length} SKU{order.items.length !== 1 ? 's' : ''} ({order.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()} units)
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
-                              order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
-                              order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {order.status.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{order.createdBy}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">
-                            {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => setSelectedOrder(order)}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                            >
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      .map((order) => {
+                        const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
+                        const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
+                        return (
+                          <tr key={order.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.id.split('-').slice(0, 2).join('-')}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {order.items.length} SKU{order.items.length !== 1 ? 's' : ''} 
+                              <span className="text-gray-400 ml-1">
+                                ({totalReceived.toLocaleString()}/{totalOrdered.toLocaleString()})
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
+                                order.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                                order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {order.status === 'in_production' ? 'In Production' : 
+                                 order.status === 'partial' ? 'Partial Delivery' : 
+                                 'Completed'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => setSelectedOrder(order)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                View Details
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     {productionOrders.filter(order => {
-                      if (productionFilterStatus === 'active') return ['pending', 'in_production', 'shipped'].includes(order.status);
-                      if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
+                      if (productionFilterStatus === 'active') return ['in_production', 'partial'].includes(order.status);
+                      if (productionFilterStatus === 'completed') return order.status === 'completed';
                       return true;
                     }).length === 0 && (
                       <tr>
@@ -2101,15 +2156,37 @@ export default function Dashboard({ session }: DashboardProps) {
                         + Add another SKU
                       </button>
                     </div>
+                    {/* Vendor and ETA */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Vendor (optional)</label>
+                        <input
+                          type="text"
+                          value={newOrderVendor}
+                          onChange={(e) => setNewOrderVendor(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          placeholder="e.g. Factory ABC"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">ETA (optional)</label>
+                        <input
+                          type="date"
+                          value={newOrderEta}
+                          onChange={(e) => setNewOrderEta(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                    </div>
                     {/* Notes */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Notes / Comments</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Notes / Comments (optional)</label>
                       <textarea
                         value={newOrderNotes}
                         onChange={(e) => setNewOrderNotes(e.target.value)}
-                        rows={3}
+                        rows={2}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="Optional notes about this production order..."
+                        placeholder="Additional notes..."
                       />
                     </div>
                   </div>
@@ -2119,6 +2196,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         setShowNewOrderForm(false);
                         setNewOrderItems([{ sku: '', quantity: '' }]);
                         setNewOrderNotes('');
+                        setNewOrderVendor('');
+                        setNewOrderEta('');
                       }}
                       className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
                     >
@@ -2136,19 +2215,20 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
 
             {/* Order Details Modal */}
-            {selectedOrder && (
+            {selectedOrder && !showDeliveryForm && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <h3 className="text-lg font-semibold text-gray-900">Order Details</h3>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      selectedOrder.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                       selectedOrder.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
-                      selectedOrder.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                      selectedOrder.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
                       selectedOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
-                      {selectedOrder.status.replace('_', ' ')}
+                      {selectedOrder.status === 'in_production' ? 'In Production' : 
+                       selectedOrder.status === 'partial' ? 'Partial Delivery' : 
+                       'Completed'}
                     </span>
                   </div>
                   <div className="px-6 py-4 space-y-4">
@@ -2163,15 +2243,25 @@ export default function Dashboard({ session }: DashboardProps) {
                         <span className="ml-2 text-gray-900">{selectedOrder.createdBy}</span>
                       </div>
                       <div>
+                        <span className="text-gray-500">Vendor:</span>
+                        <span className="ml-2 text-gray-900">{selectedOrder.vendor || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">ETA:</span>
+                        <span className="ml-2 text-gray-900">
+                          {selectedOrder.eta ? new Date(selectedOrder.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </span>
+                      </div>
+                      <div>
                         <span className="text-gray-500">Created:</span>
                         <span className="ml-2 text-gray-900">
-                          {new Date(selectedOrder.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(selectedOrder.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500">Last updated:</span>
                         <span className="ml-2 text-gray-900">
-                          {new Date(selectedOrder.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(selectedOrder.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </span>
                       </div>
                     </div>
@@ -2183,20 +2273,35 @@ export default function Dashboard({ session }: DashboardProps) {
                           <thead>
                             <tr>
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
-                            {selectedOrder.items.map((item, index) => (
-                              <tr key={index}>
-                                <td className="px-4 py-2 text-sm text-gray-900">{item.sku}</td>
-                                <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
-                              </tr>
-                            ))}
+                            {selectedOrder.items.map((item, index) => {
+                              const pending = item.quantity - (item.receivedQuantity || 0);
+                              return (
+                                <tr key={index}>
+                                  <td className="px-4 py-2 text-sm text-gray-900">{item.sku}</td>
+                                  <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
+                                  <td className="px-4 py-2 text-sm text-green-600 text-right">{(item.receivedQuantity || 0).toLocaleString()}</td>
+                                  <td className={`px-4 py-2 text-sm text-right ${pending > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                                    {pending.toLocaleString()}
+                                  </td>
+                                </tr>
+                              );
+                            })}
                             <tr className="bg-gray-100">
                               <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
                               <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
                                 {selectedOrder.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-green-600 text-right">
+                                {selectedOrder.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-sm font-medium text-orange-600 text-right">
+                                {selectedOrder.items.reduce((sum, i) => sum + (i.quantity - (i.receivedQuantity || 0)), 0).toLocaleString()}
                               </td>
                             </tr>
                           </tbody>
@@ -2215,36 +2320,26 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 border-t border-gray-200">
                     <div className="flex justify-between items-center">
                       <div className="flex gap-2">
-                        {selectedOrder.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => updateOrderStatus(selectedOrder.id, 'in_production')}
-                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
-                            >
-                              Start Production
-                            </button>
-                            <button
-                              onClick={() => updateOrderStatus(selectedOrder.id, 'cancelled')}
-                              className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
-                            >
-                              Cancel Order
-                            </button>
-                          </>
-                        )}
-                        {selectedOrder.status === 'in_production' && (
+                        {selectedOrder.status !== 'completed' && (
                           <button
-                            onClick={() => updateOrderStatus(selectedOrder.id, 'shipped')}
-                            className="px-3 py-1.5 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700"
-                          >
-                            Mark Shipped
-                          </button>
-                        )}
-                        {selectedOrder.status === 'shipped' && (
-                          <button
-                            onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
+                            onClick={() => {
+                              // Pre-populate delivery items with remaining quantities
+                              setDeliveryItems(
+                                selectedOrder.items
+                                  .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
+                                  .map(item => ({ 
+                                    sku: item.sku, 
+                                    quantity: String(item.quantity - (item.receivedQuantity || 0))
+                                  }))
+                              );
+                              setShowDeliveryForm(true);
+                            }}
                             className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
                           >
-                            Mark Completed
+                            Log Delivery
+                          </button>
+                        )}
+                            Mark Complete (All Received)
                           </button>
                         )}
                       </div>
@@ -2255,6 +2350,59 @@ export default function Dashboard({ session }: DashboardProps) {
                         Close
                       </button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Log Delivery Modal */}
+            {showDeliveryForm && selectedOrder && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Log Delivery</h3>
+                    <p className="text-sm text-gray-500 mt-1">Enter quantities received for each SKU</p>
+                  </div>
+                  <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                    {deliveryItems.map((item, index) => {
+                      const orderItem = selectedOrder.items.find(i => i.sku === item.sku);
+                      const remaining = orderItem ? orderItem.quantity - (orderItem.receivedQuantity || 0) : 0;
+                      return (
+                        <div key={index} className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-gray-900 w-32">{item.sku}</span>
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const updated = [...deliveryItems];
+                              updated[index].quantity = e.target.value;
+                              setDeliveryItems(updated);
+                            }}
+                            min="0"
+                            max={remaining}
+                            className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                          <span className="text-sm text-gray-500">of {remaining} remaining</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                    <button
+                      onClick={() => {
+                        setShowDeliveryForm(false);
+                        setDeliveryItems([]);
+                      }}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => logDelivery(selectedOrder.id)}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                    >
+                      Confirm Delivery
+                    </button>
                   </div>
                 </div>
               </div>

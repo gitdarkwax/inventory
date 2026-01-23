@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { ProductionOrdersService, ProductionOrderItem } from '@/lib/production-orders';
+import { ProductionOrdersService } from '@/lib/production-orders';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +42,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { items, notes } = body as { items: ProductionOrderItem[]; notes: string };
+    const { items, notes, vendor, eta } = body as { 
+      items: { sku: string; quantity: number }[]; 
+      notes: string;
+      vendor?: string;
+      eta?: string;
+    };
 
     if (!items || items.length === 0) {
       return NextResponse.json(
@@ -65,7 +70,9 @@ export async function POST(request: NextRequest) {
       items,
       notes || '',
       session.user.name || 'Unknown',
-      session.user.email || 'unknown@example.com'
+      session.user.email || 'unknown@example.com',
+      vendor,
+      eta
     );
 
     return NextResponse.json({ order: newOrder }, { status: 201 });
@@ -79,7 +86,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH - Update production order
+// PATCH - Update production order or log delivery
 export async function PATCH(request: NextRequest) {
   try {
     const session = await auth();
@@ -88,11 +95,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { orderId, items, notes, status } = body as {
+    const { orderId, notes, vendor, eta, status, deliveries } = body as {
       orderId: string;
-      items?: ProductionOrderItem[];
       notes?: string;
-      status?: 'pending' | 'in_production' | 'shipped' | 'completed' | 'cancelled';
+      vendor?: string;
+      eta?: string;
+      status?: 'in_production' | 'partial' | 'completed';
+      deliveries?: { sku: string; quantity: number }[];
     };
 
     if (!orderId) {
@@ -102,9 +111,23 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // If deliveries are provided, log them
+    if (deliveries && deliveries.length > 0) {
+      const updatedOrder = await ProductionOrdersService.logDelivery(orderId, deliveries);
+      if (!updatedOrder) {
+        return NextResponse.json(
+          { error: 'Order not found' },
+          { status: 404 }
+        );
+      }
+      return NextResponse.json({ order: updatedOrder });
+    }
+
+    // Otherwise, update order fields
     const updatedOrder = await ProductionOrdersService.updateOrder(orderId, {
-      items,
       notes,
+      vendor,
+      eta,
       status,
     });
 
