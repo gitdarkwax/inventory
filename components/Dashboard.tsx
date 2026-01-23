@@ -36,7 +36,6 @@ interface InventorySummary {
   locations: string[];
   inventory: InventoryByLocation[];
   locationDetails: Record<string, LocationDetail[]>;
-  purchaseOrders?: PurchaseOrderItem[];
   lastUpdated: string;
 }
 
@@ -151,6 +150,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
+  const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null); // Which input field is showing suggestions
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -2023,40 +2023,77 @@ export default function Dashboard({ session }: DashboardProps) {
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
-                      {newOrderItems.map((item, index) => (
-                        <div key={index} className="flex gap-2 mb-2">
-                          <input
-                            type="text"
-                            placeholder="SKU"
-                            value={item.sku}
-                            onChange={(e) => {
-                              const updated = [...newOrderItems];
-                              updated[index].sku = e.target.value;
-                              setNewOrderItems(updated);
-                            }}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          />
-                          <input
-                            type="number"
-                            placeholder="Qty"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const updated = [...newOrderItems];
-                              updated[index].quantity = e.target.value;
-                              setNewOrderItems(updated);
-                            }}
-                            className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          />
-                          {newOrderItems.length > 1 && (
-                            <button
-                              onClick={() => setNewOrderItems(newOrderItems.filter((_, i) => i !== index))}
-                              className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      {newOrderItems.map((item, index) => {
+                        // Get SKU suggestions based on input
+                        const inputValue = item.sku.toUpperCase();
+                        const skuSuggestions = inputValue.length >= 2 && inventoryData
+                          ? inventoryData.inventory
+                              .filter(inv => inv.sku.toUpperCase().includes(inputValue))
+                              .slice(0, 8)
+                              .map(inv => inv.sku)
+                          : [];
+                        
+                        return (
+                          <div key={index} className="flex gap-2 mb-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                placeholder="SKU"
+                                value={item.sku}
+                                onChange={(e) => {
+                                  const updated = [...newOrderItems];
+                                  updated[index].sku = e.target.value.toUpperCase();
+                                  setNewOrderItems(updated);
+                                  setSkuSuggestionIndex(index);
+                                }}
+                                onFocus={() => setSkuSuggestionIndex(index)}
+                                onBlur={() => setTimeout(() => setSkuSuggestionIndex(null), 150)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              {/* SKU Suggestions Dropdown */}
+                              {skuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                  {skuSuggestions.map((sku) => (
+                                    <button
+                                      key={sku}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        const updated = [...newOrderItems];
+                                        updated[index].sku = sku;
+                                        setNewOrderItems(updated);
+                                        setSkuSuggestionIndex(null);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700"
+                                    >
+                                      {sku}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              placeholder="Qty"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const updated = [...newOrderItems];
+                                updated[index].quantity = e.target.value;
+                                setNewOrderItems(updated);
+                              }}
+                              className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            />
+                            {newOrderItems.length > 1 && (
+                              <button
+                                onClick={() => setNewOrderItems(newOrderItems.filter((_, i) => i !== index))}
+                                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                       <button
                         onClick={() => setNewOrderItems([...newOrderItems, { sku: '', quantity: '' }])}
                         className="text-sm text-blue-600 hover:text-blue-800"

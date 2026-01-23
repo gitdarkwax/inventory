@@ -74,11 +74,6 @@ export interface ForecastingData {
   daysOfStock?: number;
 }
 
-export interface PurchaseOrderData {
-  sku: string;
-  pendingQuantity: number; // Total quantity ordered but not yet fully received
-}
-
 export class ShopifyQLService {
   private shop: string;
   private accessToken: string;
@@ -348,112 +343,5 @@ export class ShopifyQLService {
 
     console.log(`✅ Built forecasting data for ${forecastingData.length} SKUs`);
     return forecastingData;
-  }
-
-  /**
-   * Execute a raw GraphQL query (not ShopifyQL)
-   */
-  private async executeGraphQL(query: string, variables: Record<string, unknown> = {}): Promise<unknown> {
-    const response = await fetch(this.apiUrl, {
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': this.accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query, variables }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`GraphQL API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-
-    if (data.errors) {
-      throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-    }
-
-    return data.data;
-  }
-
-  /**
-   * Get Purchase Order data - pending quantities by SKU
-   * Fetches all POs that are not fully received and aggregates quantities by SKU
-   */
-  async getPurchaseOrderData(): Promise<PurchaseOrderData[]> {
-    console.log('📦 Fetching purchase order data from Shopify...');
-
-    const query = `
-      query($cursor: String) {
-        purchaseOrders(first: 100, after: $cursor, query: "status:open OR status:partial") {
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            node {
-              id
-              name
-              status
-              lineItems(first: 100) {
-                edges {
-                  node {
-                    sku
-                    quantity
-                    receivedQuantity
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    `;
-
-    // Aggregate pending quantities by SKU
-    const skuQuantities = new Map<string, number>();
-    let cursor: string | null = null;
-    let hasNextPage = true;
-    let totalPOs = 0;
-
-    while (hasNextPage) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: any = await this.executeGraphQL(query, { cursor });
-      const purchaseOrders = data?.purchaseOrders;
-
-      if (!purchaseOrders) {
-        console.log('⚠️ No purchase orders data returned');
-        break;
-      }
-
-      for (const edge of purchaseOrders.edges) {
-        const po = edge.node;
-        totalPOs++;
-
-        for (const lineEdge of po.lineItems.edges) {
-          const line = lineEdge.node;
-          const sku = line.sku;
-          if (!sku) continue;
-
-          // Pending = ordered - received
-          const pending = Math.max(0, (line.quantity || 0) - (line.receivedQuantity || 0));
-          if (pending > 0) {
-            skuQuantities.set(sku, (skuQuantities.get(sku) || 0) + pending);
-          }
-        }
-      }
-
-      hasNextPage = purchaseOrders.pageInfo.hasNextPage;
-      cursor = purchaseOrders.pageInfo.endCursor;
-    }
-
-    // Convert to array
-    const result: PurchaseOrderData[] = [];
-    for (const [sku, pendingQuantity] of skuQuantities) {
-      result.push({ sku, pendingQuantity });
-    }
-
-    console.log(`✅ Found ${result.length} SKUs with pending PO quantities from ${totalPOs} purchase orders`);
-    return result;
   }
 }

@@ -23,10 +23,9 @@ export async function GET() {
       );
     }
 
-    // Return cached inventory data with metadata (include PO data for Planning tab)
+    // Return cached inventory data with metadata
     return NextResponse.json({
       ...cachedData.inventory,
-      purchaseOrders: cachedData.purchaseOrders?.purchaseOrders || [],
       lastUpdated: cachedData.lastUpdated,
       cache: {
         lastUpdated: cachedData.lastUpdated,
