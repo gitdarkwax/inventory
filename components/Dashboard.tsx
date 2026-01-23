@@ -5,7 +5,7 @@
  * Displays inventory levels and forecasting data
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { signOut } from 'next-auth/react';
 import { PRODUCT_CATEGORIES, findProductCategory } from '@/lib/constants';
 
@@ -2088,7 +2088,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         const skuList = order.items.map(i => i.sku).join(', ');
                         const skuPreview = skuList.length > 20 ? skuList.slice(0, 17) + '...' : skuList;
                         return (
-                          <React.Fragment key={order.id}>
+                          <Fragment key={order.id}>
                             <tr 
                               className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                               onClick={() => setSelectedOrder(isExpanded ? null : order)}
@@ -2284,7 +2284,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </td>
                               </tr>
                             )}
-                          </React.Fragment>
+                          </Fragment>
                         );
                       })}
                     {productionOrders.filter(order => {
