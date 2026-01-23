@@ -147,7 +147,7 @@ export default function Dashboard({ session }: DashboardProps) {
   // Planning state
   const [planningSearchTerm, setPlanningSearchTerm] = useState('');
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
-  const [planningFilterCategory, setPlanningFilterCategory] = useState<string>('all');
+  const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'laRunway' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -1727,16 +1727,17 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                     <div className="flex gap-3 flex-wrap items-end">
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-400 mb-1">Category</span>
+                        <span className="text-[10px] text-gray-400 mb-1">Ship Type</span>
                         <select 
-                          value={planningFilterCategory} 
-                          onChange={(e) => setPlanningFilterCategory(e.target.value)}
+                          value={planningFilterShipType} 
+                          onChange={(e) => setPlanningFilterShipType(e.target.value)}
                           className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          <option value="all">All Categories</option>
-                          {PRODUCT_CATEGORIES.map(cat => (
-                            <option key={cat.name} value={cat.name}>{cat.name}</option>
-                          ))}
+                          <option value="all">All Ship Types</option>
+                          <option value="Sea">Sea</option>
+                          <option value="Slow Air">Slow Air</option>
+                          <option value="Express">Express</option>
+                          <option value="Order More">Order More</option>
                         </select>
                       </div>
                       {/* List/Grouped Toggle */}
@@ -1910,20 +1911,8 @@ export default function Dashboard({ session }: DashboardProps) {
                     'No Action': 5,
                   };
                   
-                  // Build planning items
-                  const planningItems = inventoryData.inventory
-                    .filter(inv => {
-                      // Filter by search term
-                      const matchesSearch = !planningSearchTerm || 
-                        inv.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
-                        inv.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
-                      // Filter by category
-                      if (planningFilterCategory !== 'all') {
-                        const category = findProductCategory(inv.sku, inv.productTitle);
-                        if (!category || category.name !== planningFilterCategory) return false;
-                      }
-                      return matchesSearch;
-                    })
+                  // Build all planning items (for metrics calculation)
+                  const allPlanningItems = inventoryData.inventory
                     .map(inv => {
                       const laInventory = getLAInventory(inv.sku);
                       const incoming = getLAIncoming(inv.sku);
@@ -1967,6 +1956,26 @@ export default function Dashboard({ session }: DashboardProps) {
                         runway,
                         prodStatus,
                       };
+                    });
+                  
+                  // Calculate metrics from all items (before filtering)
+                  const shipTypeMetrics = {
+                    sea: allPlanningItems.filter(item => item.shipType === 'Sea').length,
+                    slowAir: allPlanningItems.filter(item => item.shipType === 'Slow Air').length,
+                    express: allPlanningItems.filter(item => item.shipType === 'Express').length,
+                    orderMore: allPlanningItems.filter(item => item.shipType === 'Order More').length,
+                  };
+                  
+                  // Filter and sort planning items for display
+                  const planningItems = allPlanningItems
+                    .filter(item => {
+                      // Filter by search term
+                      const matchesSearch = !planningSearchTerm || 
+                        item.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
+                        item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
+                      // Filter by ship type
+                      const matchesShipType = planningFilterShipType === 'all' || item.shipType === planningFilterShipType;
+                      return matchesSearch && matchesShipType;
                     })
                     .sort((a, b) => {
                       let comparison = 0;
@@ -2101,6 +2110,38 @@ export default function Dashboard({ session }: DashboardProps) {
                   
                   return (
                     <>
+                      {/* Metrics Section */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                        <button 
+                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Sea' ? 'all' : 'Sea')}
+                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Sea' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white hover:border-green-300'}`}
+                        >
+                          <div className="text-2xl font-bold text-green-600">{shipTypeMetrics.sea}</div>
+                          <div className="text-xs text-gray-500">Sea</div>
+                        </button>
+                        <button 
+                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Slow Air' ? 'all' : 'Slow Air')}
+                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Slow Air' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-blue-300'}`}
+                        >
+                          <div className="text-2xl font-bold text-blue-600">{shipTypeMetrics.slowAir}</div>
+                          <div className="text-xs text-gray-500">Slow Air</div>
+                        </button>
+                        <button 
+                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Express' ? 'all' : 'Express')}
+                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Express' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 bg-white hover:border-orange-300'}`}
+                        >
+                          <div className="text-2xl font-bold text-orange-600">{shipTypeMetrics.express}</div>
+                          <div className="text-xs text-gray-500">Express</div>
+                        </button>
+                        <button 
+                          onClick={() => setPlanningFilterShipType(planningFilterShipType === 'Order More' ? 'all' : 'Order More')}
+                          className={`p-4 rounded-lg border-2 transition-all ${planningFilterShipType === 'Order More' ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white hover:border-red-300'}`}
+                        >
+                          <div className="text-2xl font-bold text-red-600">{shipTypeMetrics.orderMore}</div>
+                          <div className="text-xs text-gray-500">Order More</div>
+                        </button>
+                      </div>
+
                       {/* List View */}
                       {planningListMode === 'list' && (
                         <div className="bg-white shadow rounded-lg overflow-hidden">
