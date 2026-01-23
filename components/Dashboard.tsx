@@ -190,6 +190,67 @@ export default function Dashboard({ session }: DashboardProps) {
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Phase out state
+  const [showPhaseOutModal, setShowPhaseOutModal] = useState(false);
+  const [phaseOutSkus, setPhaseOutSkus] = useState<string[]>([]);
+  const [newPhaseOutSku, setNewPhaseOutSku] = useState('');
+  const [isAddingPhaseOut, setIsAddingPhaseOut] = useState(false);
+  const [isRemovingPhaseOut, setIsRemovingPhaseOut] = useState<string | null>(null);
+
+  // Load phase out SKUs
+  const loadPhaseOutSkus = async () => {
+    try {
+      const response = await fetch('/api/phase-out');
+      if (response.ok) {
+        const data = await response.json();
+        setPhaseOutSkus(data.skus?.map((s: { sku: string }) => s.sku) || []);
+      }
+    } catch (error) {
+      console.error('Error loading phase out SKUs:', error);
+    }
+  };
+
+  // Add SKU to phase out list
+  const addPhaseOutSku = async () => {
+    if (!newPhaseOutSku.trim() || isAddingPhaseOut) return;
+    setIsAddingPhaseOut(true);
+    try {
+      const response = await fetch('/api/phase-out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sku: newPhaseOutSku.trim() }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPhaseOutSkus(data.skus?.map((s: { sku: string }) => s.sku) || []);
+        setNewPhaseOutSku('');
+      }
+    } catch (error) {
+      console.error('Error adding phase out SKU:', error);
+    } finally {
+      setIsAddingPhaseOut(false);
+    }
+  };
+
+  // Remove SKU from phase out list
+  const removePhaseOutSku = async (sku: string) => {
+    if (isRemovingPhaseOut) return;
+    setIsRemovingPhaseOut(sku);
+    try {
+      const response = await fetch(`/api/phase-out?sku=${encodeURIComponent(sku)}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setPhaseOutSkus(data.skus?.map((s: { sku: string }) => s.sku) || []);
+      }
+    } catch (error) {
+      console.error('Error removing phase out SKU:', error);
+    } finally {
+      setIsRemovingPhaseOut(null);
+    }
+  };
+
   // Load cached inventory data
   const loadInventoryFromCache = async () => {
     setInventoryLoading(true);
@@ -476,6 +537,7 @@ export default function Dashboard({ session }: DashboardProps) {
   useEffect(() => {
     loadInventoryFromCache();
     loadProductionOrders(); // Also load PO data for Planning tab
+    loadPhaseOutSkus(); // Load phase out list
   }, []);
 
   // Close location dropdown when clicking outside
@@ -1101,13 +1163,21 @@ export default function Dashboard({ session }: DashboardProps) {
                 🏭 Production
               </button>
             </div>
-            <button 
-              onClick={refreshAllData} 
-              disabled={isRefreshing}
-              className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-            >
-              {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={() => setShowPhaseOutModal(true)}
+                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+              >
+                Manage Phase Outs
+              </button>
+              <button 
+                onClick={refreshAllData} 
+                disabled={isRefreshing}
+                className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+              >
+                {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1835,6 +1905,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       case 'Sea': return 'bg-blue-100 text-blue-800';
                       case 'No CN Inv': return 'bg-purple-100 text-purple-800';
                       case 'No Action': return 'bg-green-100 text-green-800';
+                      case 'Phase Out': return 'bg-gray-200 text-gray-500';
                       default: return 'bg-gray-100 text-gray-800';
                     }
                   };
@@ -1847,26 +1918,29 @@ export default function Dashboard({ session }: DashboardProps) {
                       case 'Get Prod Status': return 'bg-yellow-100 text-yellow-800';
                       case 'More in Prod': return 'bg-purple-100 text-purple-800';
                       case 'No Action': return 'bg-green-100 text-green-800';
+                      case 'Phase Out': return 'bg-gray-200 text-gray-500';
                       default: return 'bg-gray-100 text-gray-800';
                     }
                   };
                   
-                  // Ship type sort order (most urgent first)
+                  // Ship type sort order (most urgent first, Phase Out last)
                   const shipTypePriority: Record<string, number> = {
                     'Express': 1,
                     'No CN Inv': 2,
                     'Slow Air': 3,
                     'Sea': 4,
                     'No Action': 5,
+                    'Phase Out': 99,
                   };
                   
-                  // Prod status sort order (most urgent first)
+                  // Prod status sort order (most urgent first, Phase Out last)
                   const prodStatusPriority: Record<string, number> = {
                     'Push Vendor': 1,
                     'Order More': 2,
                     'Get Prod Status': 3,
                     'More in Prod': 4,
                     'No Action': 5,
+                    'Phase Out': 99,
                   };
                   
                   // Build all planning items (for metrics calculation)
@@ -1881,7 +1955,17 @@ export default function Dashboard({ session }: DashboardProps) {
                       const chinaInventory = getChinaInventory(inv.sku);
                       const poQty = getPOQuantity(inv.sku);
                       const unitsPerDay = getUnitsPerDay(inv.sku);
-                      const shipType = getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
+                      
+                      // Check if SKU is in phase out list
+                      const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === inv.sku.toLowerCase());
+                      
+                      // If phase out with no LA inventory, mark for filtering
+                      if (isPhaseOut && laInventory <= 0) {
+                        return null; // Will be filtered out
+                      }
+                      
+                      // For phase out SKUs, override ship type and prod status
+                      const shipType = isPhaseOut ? 'Phase Out' : getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
                       
                       // Calculate Runway Air (days of LA + Inbound Air only)
                       const runwayAir = unitsPerDay > 0 ? Math.round((laInventory + inboundAir) / unitsPerDay) : 999;
@@ -1892,15 +1976,19 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Calculate LA Need: units needed to cover target days minus (LA qty - committed)
                       const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory - laCommitted)));
                       
-                      // Determine prod status based on runway and PO
-                      const hasPO = poQty > 0;
+                      // Determine prod status based on runway and PO (or Phase Out if applicable)
                       let prodStatus: string;
-                      if (runway > 90) {
-                        prodStatus = hasPO ? 'More in Prod' : 'No Action';
-                      } else if (runway > 60) {
-                        prodStatus = hasPO ? 'Get Prod Status' : 'No Action';
+                      if (isPhaseOut) {
+                        prodStatus = 'Phase Out';
                       } else {
-                        prodStatus = hasPO ? 'Push Vendor' : 'Order More';
+                        const hasPO = poQty > 0;
+                        if (runway > 90) {
+                          prodStatus = hasPO ? 'More in Prod' : 'No Action';
+                        } else if (runway > 60) {
+                          prodStatus = hasPO ? 'Get Prod Status' : 'No Action';
+                        } else {
+                          prodStatus = hasPO ? 'Push Vendor' : 'Order More';
+                        }
                       }
                       
                       return {
@@ -1919,7 +2007,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         runway,
                         prodStatus,
                       };
-                    });
+                    })
+                    .filter((item): item is NonNullable<typeof item> => item !== null);
                   
                   // Calculate metrics from all items (before filtering)
                   const planningMetrics = {
@@ -3140,6 +3229,74 @@ export default function Dashboard({ session }: DashboardProps) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Phase Out Modal */}
+        {showPhaseOutModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Phase Out SKUs</h3>
+                <p className="text-sm text-gray-500 mt-1">SKUs being phased out won&apos;t require production planning</p>
+              </div>
+              <div className="px-6 py-4 flex-1 overflow-y-auto">
+                {/* Add new SKU */}
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newPhaseOutSku}
+                    onChange={(e) => setNewPhaseOutSku(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && addPhaseOutSku()}
+                    placeholder="Enter SKU..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button
+                    onClick={addPhaseOutSku}
+                    disabled={isAddingPhaseOut || !newPhaseOutSku.trim()}
+                    className={`px-4 py-2 text-sm font-medium rounded-md ${
+                      isAddingPhaseOut || !newPhaseOutSku.trim()
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {isAddingPhaseOut ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
+
+                {/* List of phase out SKUs */}
+                {phaseOutSkus.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No SKUs in phase out list</p>
+                ) : (
+                  <div className="space-y-2">
+                    {phaseOutSkus.map((sku) => (
+                      <div key={sku} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md">
+                        <span className="text-sm font-medium text-gray-900">{sku}</span>
+                        <button
+                          onClick={() => removePhaseOutSku(sku)}
+                          disabled={isRemovingPhaseOut === sku}
+                          className={`text-xs ${
+                            isRemovingPhaseOut === sku
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-red-600 hover:text-red-800 hover:underline'
+                          }`}
+                        >
+                          {isRemovingPhaseOut === sku ? 'Removing...' : 'Remove'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => setShowPhaseOutModal(false)}
+                  className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
