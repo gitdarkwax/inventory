@@ -10,6 +10,14 @@ export interface ProductionOrderItem {
   receivedQuantity: number; // Track how much has been received
 }
 
+export interface ActivityLogEntry {
+  timestamp: string;
+  action: string;
+  changedBy: string;
+  changedByEmail: string;
+  details?: string;
+}
+
 export interface ProductionOrder {
   id: string;
   items: ProductionOrderItem[];
@@ -23,6 +31,7 @@ export interface ProductionOrder {
   updatedAt: string;
   completedAt?: string;
   cancelledAt?: string;
+  activityLog?: ActivityLogEntry[];
 }
 
 export interface ProductionOrdersCache {
@@ -263,6 +272,9 @@ export class ProductionOrdersService {
       receivedQuantity: 0,
     }));
     
+    const now = new Date().toISOString();
+    const itemsSummary = orderItems.map(i => `${i.sku} x${i.quantity}`).join(', ');
+    
     const newOrder: ProductionOrder = {
       id: orderId,
       items: orderItems,
@@ -272,8 +284,15 @@ export class ProductionOrdersService {
       status: 'in_production',
       createdBy,
       createdByEmail,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+      activityLog: [{
+        timestamp: now,
+        action: 'PO Created',
+        changedBy: createdBy,
+        changedByEmail: createdByEmail,
+        details: itemsSummary,
+      }],
     };
 
     cache.orders.unshift(newOrder); // Add to beginning
@@ -291,7 +310,9 @@ export class ProductionOrdersService {
     orderId: string,
     updates: Partial<Pick<ProductionOrder, 'notes' | 'vendor' | 'eta' | 'status'>> & {
       items?: { sku: string; quantity: number }[];
-    }
+    },
+    changedBy?: string,
+    changedByEmail?: string
   ): Promise<ProductionOrder | null> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -299,9 +320,21 @@ export class ProductionOrdersService {
     if (orderIndex === -1) return null;
 
     const order = cache.orders[orderIndex];
+    const now = new Date().toISOString();
+    const changes: string[] = [];
+    
+    // Initialize activity log if missing
+    if (!order.activityLog) {
+      order.activityLog = [];
+    }
     
     // Update items if provided (preserve receivedQuantity for existing SKUs)
     if (updates.items) {
+      const oldItems = order.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+      const newItems = updates.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+      if (oldItems !== newItems) {
+        changes.push(`Items: ${newItems}`);
+      }
       order.items = updates.items.map(newItem => {
         const existingItem = order.items.find(i => i.sku === newItem.sku);
         return {
@@ -312,21 +345,49 @@ export class ProductionOrdersService {
       });
     }
     
-    if (updates.notes !== undefined) order.notes = updates.notes;
-    if (updates.vendor !== undefined) order.vendor = updates.vendor;
-    if (updates.eta !== undefined) order.eta = updates.eta;
-    if (updates.status) {
+    if (updates.notes !== undefined && updates.notes !== order.notes) {
+      changes.push('Notes updated');
+      order.notes = updates.notes;
+    }
+    if (updates.vendor !== undefined && updates.vendor !== order.vendor) {
+      changes.push(`Vendor: ${updates.vendor || 'cleared'}`);
+      order.vendor = updates.vendor;
+    }
+    if (updates.eta !== undefined && updates.eta !== order.eta) {
+      changes.push(`ETA: ${updates.eta ? new Date(updates.eta).toLocaleDateString() : 'cleared'}`);
+      order.eta = updates.eta;
+    }
+    if (updates.status && updates.status !== order.status) {
+      const statusLabels: Record<string, string> = {
+        'in_production': 'In Production',
+        'partial': 'Partial Delivery',
+        'completed': 'Completed',
+        'cancelled': 'Cancelled',
+      };
+      changes.push(`Status: ${statusLabels[updates.status]}`);
       order.status = updates.status;
       if (updates.status === 'completed') {
-        order.completedAt = new Date().toISOString();
+        order.completedAt = now;
       }
       if (updates.status === 'cancelled') {
-        order.cancelledAt = new Date().toISOString();
+        order.cancelledAt = now;
       }
     }
-    order.updatedAt = new Date().toISOString();
+    
+    // Add activity log entry if there were changes
+    if (changes.length > 0 && changedBy && changedByEmail) {
+      order.activityLog.push({
+        timestamp: now,
+        action: 'Order Updated',
+        changedBy,
+        changedByEmail,
+        details: changes.join('; '),
+      });
+    }
+    
+    order.updatedAt = now;
 
-    cache.lastUpdated = new Date().toISOString();
+    cache.lastUpdated = now;
     await ProductionOrdersService.saveOrders(cache);
     
     return order;
@@ -361,7 +422,9 @@ export class ProductionOrdersService {
    */
   static async logDelivery(
     orderId: string,
-    deliveries: { sku: string; quantity: number }[]
+    deliveries: { sku: string; quantity: number }[],
+    changedBy?: string,
+    changedByEmail?: string
   ): Promise<ProductionOrder | null> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -369,16 +432,24 @@ export class ProductionOrdersService {
     if (orderIndex === -1) return null;
 
     const order = cache.orders[orderIndex];
+    const now = new Date().toISOString();
+    
+    // Initialize activity log if missing
+    if (!order.activityLog) {
+      order.activityLog = [];
+    }
     
     // Update received quantities
+    const deliveryDetails: string[] = [];
     for (const delivery of deliveries) {
       const item = order.items.find(i => i.sku === delivery.sku);
-      if (item) {
+      if (item && delivery.quantity > 0) {
         item.receivedQuantity = (item.receivedQuantity || 0) + delivery.quantity;
         // Cap at ordered quantity
         if (item.receivedQuantity > item.quantity) {
           item.receivedQuantity = item.quantity;
         }
+        deliveryDetails.push(`${item.sku} x${delivery.quantity}`);
       }
     }
 
@@ -392,15 +463,31 @@ export class ProductionOrdersService {
     );
 
     // Update status based on delivery state
+    const oldStatus = order.status;
     if (allReceived) {
       order.status = 'completed';
-      order.completedAt = new Date().toISOString();
+      order.completedAt = now;
     } else if (anyReceived) {
       order.status = 'partial';
     }
 
-    order.updatedAt = new Date().toISOString();
-    cache.lastUpdated = new Date().toISOString();
+    // Add activity log entry
+    if (deliveryDetails.length > 0 && changedBy && changedByEmail) {
+      let action = 'Delivery Logged';
+      if (allReceived && oldStatus !== 'completed') {
+        action = 'Delivery Logged (Order Completed)';
+      }
+      order.activityLog.push({
+        timestamp: now,
+        action,
+        changedBy,
+        changedByEmail,
+        details: deliveryDetails.join(', '),
+      });
+    }
+
+    order.updatedAt = now;
+    cache.lastUpdated = now;
     
     await ProductionOrdersService.saveOrders(cache);
     

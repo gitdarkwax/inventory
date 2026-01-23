@@ -81,6 +81,14 @@ interface ProductionOrderItem {
   receivedQuantity: number;
 }
 
+interface ActivityLogEntry {
+  timestamp: string;
+  action: string;
+  changedBy: string;
+  changedByEmail: string;
+  details?: string;
+}
+
 interface ProductionOrder {
   id: string;
   items: ProductionOrderItem[];
@@ -94,6 +102,7 @@ interface ProductionOrder {
   updatedAt: string;
   completedAt?: string;
   cancelledAt?: string;
+  activityLog?: ActivityLogEntry[];
 }
 
 type TabType = 'inventory' | 'forecasting' | 'planning' | 'production';
@@ -2227,6 +2236,35 @@ export default function Dashboard({ session }: DashboardProps) {
                                       <div>
                                         <h4 className="text-sm font-medium text-gray-700 mb-2">Notes</h4>
                                         <p className="text-sm text-gray-600 bg-white p-3 rounded-md border border-gray-200">{order.notes}</p>
+                                      </div>
+                                    )}
+                                    {/* Activity Log */}
+                                    {order.activityLog && order.activityLog.length > 0 && (
+                                      <div>
+                                        <details className="group">
+                                          <summary className="text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700 flex items-center gap-1">
+                                            <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                            </svg>
+                                            Activity Log ({order.activityLog.length})
+                                          </summary>
+                                          <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                                            {[...order.activityLog].reverse().map((entry, idx) => (
+                                              <div key={idx} className="text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
+                                                <div className="flex justify-between items-start gap-2">
+                                                  <span className="font-medium text-gray-700">{entry.action}</span>
+                                                  <span className="text-gray-400 whitespace-nowrap">
+                                                    {new Date(entry.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {new Date(entry.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                  </span>
+                                                </div>
+                                                {entry.details && (
+                                                  <div className="text-gray-500 mt-0.5">{entry.details}</div>
+                                                )}
+                                                <div className="text-gray-400 mt-0.5">by {entry.changedBy}</div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </details>
                                       </div>
                                     )}
                                     {/* Actions */}

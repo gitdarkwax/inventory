@@ -112,9 +112,17 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const userName = session.user.name || 'Unknown';
+    const userEmail = session.user.email || 'unknown@example.com';
+
     // If deliveries are provided, log them
     if (deliveries && deliveries.length > 0) {
-      const updatedOrder = await ProductionOrdersService.logDelivery(orderId, deliveries);
+      const updatedOrder = await ProductionOrdersService.logDelivery(
+        orderId, 
+        deliveries,
+        userName,
+        userEmail
+      );
       if (!updatedOrder) {
         return NextResponse.json(
           { error: 'Order not found' },
@@ -125,13 +133,18 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Otherwise, update order fields
-    const updatedOrder = await ProductionOrdersService.updateOrder(orderId, {
-      items,
-      notes,
-      vendor,
-      eta,
-      status,
-    });
+    const updatedOrder = await ProductionOrdersService.updateOrder(
+      orderId, 
+      {
+        items,
+        notes,
+        vendor,
+        eta,
+        status,
+      },
+      userName,
+      userEmail
+    );
 
     if (!updatedOrder) {
       return NextResponse.json(
