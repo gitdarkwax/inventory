@@ -627,6 +627,16 @@ export default function Dashboard({ session }: DashboardProps) {
         comparison = a.sku.localeCompare(b.sku);
       } else if (sortBy === 'total') {
         comparison = a.totalAvailable - b.totalAvailable;
+      } else if (sortBy === 'inTransit') {
+        // Sort by total in transit
+        const getInTransit = (sku: string) => {
+          return inventoryData?.locations.reduce((sum, loc) => {
+            const locDetails = inventoryData.locationDetails?.[loc];
+            const detail = locDetails?.find(d => d.sku === sku);
+            return sum + (detail?.inboundAir || 0) + (detail?.inboundSea || 0);
+          }, 0) || 0;
+        };
+        comparison = getInTransit(a.sku) - getInTransit(b.sku);
       } else {
         // Sort by location quantity
         const aQty = a.locations[sortBy] || 0;
@@ -1366,6 +1376,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                     {location} <SortIcon active={sortBy === location} order={sortOrder} />
                                   </th>
                                 ))}
+                                <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('inTransit')}>
+                                  In Transit <SortIcon active={sortBy === 'inTransit'} order={sortOrder} />
+                                </th>
                                 <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
                                   Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
                                 </th>
@@ -1405,23 +1418,34 @@ export default function Dashboard({ session }: DashboardProps) {
                             ))
                           ) : (
                             // All Locations View
-                            filteredInventory.map((item, index) => (
-                              <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
-                                  title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
-                                {inventoryData.locations.map(location => {
-                                  const qty = item.locations?.[location] ?? 0;
-                                  return (
-                                    <td key={location} className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                      {qty.toLocaleString()}
-                                    </td>
-                                  );
-                                })}
-                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                  {item.totalAvailable.toLocaleString()}
-                                </td>
-                              </tr>
-                            ))
+                            filteredInventory.map((item, index) => {
+                              // Calculate total in transit for this SKU across all locations
+                              const inTransit = inventoryData.locations.reduce((sum, loc) => {
+                                const locDetails = inventoryData.locationDetails?.[loc];
+                                const detail = locDetails?.find(d => d.sku === item.sku);
+                                return sum + (detail?.inboundAir || 0) + (detail?.inboundSea || 0);
+                              }, 0);
+                              return (
+                                <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
+                                    title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                  {inventoryData.locations.map(location => {
+                                    const qty = item.locations?.[location] ?? 0;
+                                    return (
+                                      <td key={location} className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                        {qty.toLocaleString()}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                                    {inTransit > 0 ? inTransit.toLocaleString() : '—'}
+                                  </td>
+                                  <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                    {item.totalAvailable.toLocaleString()}
+                                  </td>
+                                </tr>
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
@@ -1549,29 +1573,43 @@ export default function Dashboard({ session }: DashboardProps) {
                                           {location} <SortIcon active={sortBy === location} order={sortOrder} />
                                         </th>
                                       ))}
+                                      <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('inTransit')}>
+                                        In Transit <SortIcon active={sortBy === 'inTransit'} order={sortOrder} />
+                                      </th>
                                       <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
                                         Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
                                       </th>
                                     </tr>
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
-                                    {items.map((item, index) => (
-                                      <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
-                                          title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
-                                        {inventoryData.locations.map(location => {
-                                          const qty = item.locations?.[location] ?? 0;
-                                          return (
-                                            <td key={location} className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                              {qty.toLocaleString()}
-                                            </td>
-                                          );
-                                        })}
-                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                          {item.totalAvailable.toLocaleString()}
-                                        </td>
-                                      </tr>
-                                    ))}
+                                    {items.map((item, index) => {
+                                      // Calculate total in transit for this SKU across all locations
+                                      const inTransit = inventoryData.locations.reduce((sum, loc) => {
+                                        const locDetails = inventoryData.locationDetails?.[loc];
+                                        const detail = locDetails?.find(d => d.sku === item.sku);
+                                        return sum + (detail?.inboundAir || 0) + (detail?.inboundSea || 0);
+                                      }, 0);
+                                      return (
+                                        <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
+                                            title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                          {inventoryData.locations.map(location => {
+                                            const qty = item.locations?.[location] ?? 0;
+                                            return (
+                                              <td key={location} className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                                {qty.toLocaleString()}
+                                              </td>
+                                            );
+                                          })}
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                                            {inTransit > 0 ? inTransit.toLocaleString() : '—'}
+                                          </td>
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                            {item.totalAvailable.toLocaleString()}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
                                   </tbody>
                                 </table>
                               </div>
