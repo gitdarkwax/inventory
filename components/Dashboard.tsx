@@ -155,7 +155,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderVendor, setNewOrderVendor] = useState('');
   const [newOrderEta, setNewOrderEta] = useState('');
-  const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
+  const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'open' | 'completed'>('open');
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
@@ -2037,17 +2037,18 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="flex items-center gap-4">
                 <select
                   value={productionFilterStatus}
-                  onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
+                  onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
                   className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
                 >
-                  <option value="active">Active Orders</option>
-                  <option value="completed">Completed</option>
                   <option value="all">All Orders</option>
+                  <option value="open">Open Orders</option>
+                  <option value="completed">Completed</option>
                 </select>
               </div>
               <button
+                type="button"
                 onClick={() => setShowNewOrderForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
               >
                 + New Production Order
               </button>
@@ -2075,7 +2076,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {productionOrders
                       .filter(order => {
-                        if (productionFilterStatus === 'active') return ['in_production', 'partial'].includes(order.status);
+                        if (productionFilterStatus === 'open') return ['in_production', 'partial'].includes(order.status);
                         if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
                         return true;
                       })
@@ -2111,8 +2112,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             </td>
                             <td className="px-4 py-3">
                               <button
+                                type="button"
                                 onClick={() => setSelectedOrder(order)}
-                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                className="text-blue-600 hover:text-blue-800 active:text-blue-900 text-sm font-medium"
                               >
                                 View Details
                               </button>
@@ -2121,7 +2123,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         );
                       })}
                     {productionOrders.filter(order => {
-                      if (productionFilterStatus === 'active') return ['in_production', 'partial'].includes(order.status);
+                      if (productionFilterStatus === 'open') return ['in_production', 'partial'].includes(order.status);
                       if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
                       return true;
                     }).length === 0 && (
@@ -2261,6 +2263,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                   <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                     <button
+                      type="button"
                       onClick={() => {
                         setShowNewOrderForm(false);
                         setNewOrderItems([{ sku: '', quantity: '' }]);
@@ -2268,13 +2271,14 @@ export default function Dashboard({ session }: DashboardProps) {
                         setNewOrderVendor('');
                         setNewOrderEta('');
                       }}
-                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                     >
                       Cancel
                     </button>
                     <button
+                      type="button"
                       onClick={createProductionOrder}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       Create Order
                     </button>
@@ -2391,9 +2395,10 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 border-t border-gray-200">
                     <div className="flex justify-between items-center">
                       <div className="flex gap-2">
-                        {!['completed', 'cancelled'].includes(selectedOrder.status) && (
+                        {!['completed', 'cancelled'].includes(selectedOrder.status) ? (
                           <>
                             <button
+                              type="button"
                               onClick={() => {
                                 // Pre-populate delivery items with remaining quantities
                                 setDeliveryItems(
@@ -2406,11 +2411,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                 );
                                 setShowDeliveryForm(true);
                               }}
-                              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
                             >
                               Log Delivery
                             </button>
                             <button
+                              type="button"
                               onClick={() => {
                                 // Pre-populate edit form with current values
                                 setEditOrderItems(selectedOrder.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
@@ -2419,28 +2425,47 @@ export default function Dashboard({ session }: DashboardProps) {
                                 setEditOrderNotes(selectedOrder.notes || '');
                                 setShowEditForm(true);
                               }}
-                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                             >
                               Edit
                             </button>
                             <button
+                              type="button"
                               onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
-                              className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
+                              className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                             >
                               Mark Complete
                             </button>
                             <button
+                              type="button"
                               onClick={() => setShowCancelConfirm(true)}
-                              className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-md text-sm font-medium"
+                              className="px-3 py-1.5 text-red-600 hover:bg-red-50 active:bg-red-100 rounded-md text-sm font-medium"
                             >
                               Cancel Order
                             </button>
                           </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Duplicate: pre-populate new order form with this order's data (except ETA)
+                              setNewOrderItems(selectedOrder.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                              setNewOrderVendor(selectedOrder.vendor || '');
+                              setNewOrderEta(''); // Clear ETA for new order
+                              setNewOrderNotes(selectedOrder.notes || '');
+                              setSelectedOrder(null);
+                              setShowNewOrderForm(true);
+                            }}
+                            className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                          >
+                            Duplicate Order
+                          </button>
                         )}
                       </div>
                       <button
+                        type="button"
                         onClick={() => setSelectedOrder(null)}
-                        className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                        className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                       >
                         Close
                       </button>
@@ -2484,17 +2509,19 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                   <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                     <button
+                      type="button"
                       onClick={() => {
                         setShowDeliveryForm(false);
                         setDeliveryItems([]);
                       }}
-                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                     >
                       Cancel
                     </button>
                     <button
+                      type="button"
                       onClick={() => logDelivery(selectedOrder.id)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
                     >
                       Confirm Delivery
                     </button>
@@ -2589,14 +2616,16 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                   <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                     <button
+                      type="button"
                       onClick={() => setShowEditForm(false)}
-                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                     >
                       Cancel
                     </button>
                     <button
+                      type="button"
                       onClick={() => saveEditOrder(selectedOrder.id)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       Save Changes
                     </button>
@@ -2620,14 +2649,16 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                   <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                     <button
+                      type="button"
                       onClick={() => setShowCancelConfirm(false)}
-                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                     >
                       Keep Order
                     </button>
                     <button
+                      type="button"
                       onClick={() => cancelOrder(selectedOrder.id)}
-                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                      className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 active:bg-red-800"
                     >
                       Yes, Cancel Order
                     </button>
