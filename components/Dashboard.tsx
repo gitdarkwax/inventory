@@ -1507,27 +1507,28 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Build planning data by combining inventory and forecasting
                   const inventoriedSkus = new Set(inventoryData.inventory.map(item => item.sku));
                   
-                  // Get LA inventory (LA Office + DTLA WH available, minus LA Office committed)
+                  // Get LA inventory (LA Office + DTLA WH available)
                   const getLAInventory = (sku: string): number => {
                     const inv = inventoryData.inventory.find(i => i.sku === sku);
                     if (!inv) return 0;
-                    const laOffice = inv.locations['LA Office']?.available || 0;
-                    const dtlaWH = inv.locations['DTLA WH']?.available || 0;
+                    const laOffice = inv.locations['LA Office'] || 0;
+                    const dtlaWH = inv.locations['DTLA WH'] || 0;
                     return laOffice + dtlaWH;
                   };
                   
-                  // Get incoming to LA Office
+                  // Get incoming to LA Office (from locationDetails)
                   const getLAIncoming = (sku: string): number => {
-                    const inv = inventoryData.inventory.find(i => i.sku === sku);
-                    if (!inv) return 0;
-                    return inv.locations['LA Office']?.incoming || 0;
+                    const laDetails = inventoryData.locationDetails?.['LA Office'];
+                    if (!laDetails) return 0;
+                    const detail = laDetails.find(d => d.sku === sku);
+                    return detail?.incoming || 0;
                   };
                   
                   // Get China WH inventory
                   const getChinaInventory = (sku: string): number => {
                     const inv = inventoryData.inventory.find(i => i.sku === sku);
                     if (!inv) return 0;
-                    return inv.locations['China WH']?.available || 0;
+                    return inv.locations['China WH'] || 0;
                   };
                   
                   // Get units per day based on selected burn period
