@@ -1554,9 +1554,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       if (daysOfStock <= 90) return 'Sea';
                       return 'No Action';
                     } else {
-                      // No China inventory
-                      const laDaysOfStock = unitsPerDay > 0 ? laInventory / unitsPerDay : 999;
-                      if (laDaysOfStock < 60) return 'PO Needed';
+                      // No China inventory - check LA + Incoming
+                      if (daysOfStock < 60) return 'No CN Inv';
                       return 'No Action';
                     }
                   };
@@ -1567,7 +1566,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       case 'Express': return 'bg-red-100 text-red-800';
                       case 'Slow Air': return 'bg-orange-100 text-orange-800';
                       case 'Sea': return 'bg-blue-100 text-blue-800';
-                      case 'PO Needed': return 'bg-purple-100 text-purple-800';
+                      case 'No CN Inv': return 'bg-purple-100 text-purple-800';
                       case 'No Action': return 'bg-green-100 text-green-800';
                       default: return 'bg-gray-100 text-gray-800';
                     }
@@ -1576,7 +1575,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Ship type sort order (most urgent first)
                   const shipTypePriority: Record<string, number> = {
                     'Express': 1,
-                    'PO Needed': 2,
+                    'No CN Inv': 2,
                     'Slow Air': 3,
                     'Sea': 4,
                     'No Action': 5,
