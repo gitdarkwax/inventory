@@ -1857,12 +1857,33 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
+                  // Get prod status color
+                  const getProdStatusColor = (prodStatus: string): string => {
+                    switch (prodStatus) {
+                      case 'Push Vendor': return 'bg-red-100 text-red-800';
+                      case 'Order More': return 'bg-orange-100 text-orange-800';
+                      case 'Get Prod Status': return 'bg-yellow-100 text-yellow-800';
+                      case 'More in Prod': return 'bg-purple-100 text-purple-800';
+                      case 'No Action': return 'bg-green-100 text-green-800';
+                      default: return 'bg-gray-100 text-gray-800';
+                    }
+                  };
+                  
                   // Ship type sort order (most urgent first)
                   const shipTypePriority: Record<string, number> = {
                     'Express': 1,
                     'No CN Inv': 2,
                     'Slow Air': 3,
                     'Sea': 4,
+                    'No Action': 5,
+                  };
+                  
+                  // Prod status sort order (most urgent first)
+                  const prodStatusPriority: Record<string, number> = {
+                    'Push Vendor': 1,
+                    'Order More': 2,
+                    'Get Prod Status': 3,
+                    'More in Prod': 4,
                     'No Action': 5,
                   };
                   
@@ -1888,6 +1909,21 @@ export default function Dashboard({ session }: DashboardProps) {
                       const unitsPerDay = getUnitsPerDay(inv.sku);
                       const shipType = getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
                       
+                      // Calculate runway (days of inventory)
+                      const totalInventory = laInventory + incoming + chinaInventory;
+                      const runway = unitsPerDay > 0 ? totalInventory / unitsPerDay : 999;
+                      
+                      // Determine prod status based on runway and PO
+                      const hasPO = poQty > 0;
+                      let prodStatus: string;
+                      if (runway > 90) {
+                        prodStatus = hasPO ? 'More in Prod' : 'No Action';
+                      } else if (runway > 60) {
+                        prodStatus = hasPO ? 'Get Prod Status' : 'No Action';
+                      } else {
+                        prodStatus = hasPO ? 'Push Vendor' : 'Order More';
+                      }
+                      
                       return {
                         sku: inv.sku,
                         productTitle: inv.productTitle,
@@ -1897,6 +1933,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         poQty,
                         unitsPerDay,
                         shipType,
+                        runway,
+                        prodStatus,
                       };
                     })
                     .sort((a, b) => {
@@ -1909,6 +1947,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         case 'poQty': comparison = a.poQty - b.poQty; break;
                         case 'unitsPerDay': comparison = a.unitsPerDay - b.unitsPerDay; break;
                         case 'shipType': comparison = (shipTypePriority[a.shipType] || 99) - (shipTypePriority[b.shipType] || 99); break;
+                        case 'prodStatus': comparison = (prodStatusPriority[a.prodStatus] || 99) - (prodStatusPriority[b.prodStatus] || 99); break;
                       }
                       return planningSortOrder === 'asc' ? comparison : -comparison;
                     });
@@ -1953,14 +1992,17 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
                               China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
-                              PO Qty <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
+                              In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
                               Ship Type <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
+                              Prod Status <SortIcon active={planningSortBy === 'prodStatus'} order={planningSortOrder} />
                             </th>
                           </tr>
                         </thead>
@@ -1972,11 +2014,16 @@ export default function Dashboard({ session }: DashboardProps) {
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
                                 {item.shipType}
+                              </span>
+                            </td>
+                            <td className="w-28 px-3 sm:px-4 py-3 text-sm text-center">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProdStatusColor(item.prodStatus)}`}>
+                                {item.prodStatus}
                               </span>
                             </td>
                           </tr>
@@ -2028,9 +2075,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">PO Qty</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -2040,11 +2088,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
                                               {item.shipType}
+                                            </span>
+                                          </td>
+                                          <td className="w-28 px-3 sm:px-4 py-2 text-sm text-center">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProdStatusColor(item.prodStatus)}`}>
+                                              {item.prodStatus}
                                             </span>
                                           </td>
                                         </tr>
