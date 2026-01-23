@@ -2066,11 +2066,11 @@ export default function Dashboard({ session }: DashboardProps) {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -2083,43 +2083,208 @@ export default function Dashboard({ session }: DashboardProps) {
                       .map((order) => {
                         const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
                         const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
+                        const isExpanded = selectedOrder?.id === order.id;
+                        // Create SKU preview (up to 20 chars)
+                        const skuList = order.items.map(i => i.sku).join(', ');
+                        const skuPreview = skuList.length > 20 ? skuList.slice(0, 17) + '...' : skuList;
                         return (
-                          <tr key={order.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.id.split('-').slice(0, 2).join('-')}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {order.items.length} SKU{order.items.length !== 1 ? 's' : ''} 
-                              <span className="text-gray-400 ml-1">
-                                ({totalReceived.toLocaleString()}/{totalOrdered.toLocaleString()})
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">
-                              {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
-                                order.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                                order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {order.status === 'in_production' ? 'In Production' : 
-                                 order.status === 'partial' ? 'Partial Delivery' : 
-                                 order.status === 'cancelled' ? 'Cancelled' :
-                                 'Completed'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedOrder(order)}
-                                className="text-blue-600 hover:text-blue-800 active:text-blue-900 text-sm font-medium"
-                              >
-                                View Details
-                              </button>
-                            </td>
-                          </tr>
+                          <React.Fragment key={order.id}>
+                            <tr 
+                              className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                              onClick={() => setSelectedOrder(isExpanded ? null : order)}
+                            >
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                                <span className="flex items-center gap-2">
+                                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                  {order.id.split('-').slice(0, 2).join('-')}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {order.items.length} SKU{order.items.length !== 1 ? 's' : ''} 
+                                <span className="text-gray-400 ml-1">
+                                  ({totalReceived.toLocaleString()}/{totalOrdered.toLocaleString()})
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
+                                  order.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                                  order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                  order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {order.status === 'in_production' ? 'In Production' : 
+                                   order.status === 'partial' ? 'Partial Delivery' : 
+                                   order.status === 'cancelled' ? 'Cancelled' :
+                                   'Completed'}
+                                </span>
+                              </td>
+                            </tr>
+                            {/* Expanded Details Row */}
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={6} className="bg-gray-50 px-4 py-4">
+                                  <div className="space-y-4">
+                                    {/* Meta info */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                      <div>
+                                        <span className="text-gray-500">Created by:</span>
+                                        <span className="ml-2 text-gray-900">{order.createdBy}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Vendor:</span>
+                                        <span className="ml-2 text-gray-900">{order.vendor || '—'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Created:</span>
+                                        <span className="ml-2 text-gray-900">
+                                          {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Last updated:</span>
+                                        <span className="ml-2 text-gray-900">
+                                          {new Date(order.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {/* Items Table */}
+                                    <div>
+                                      <h4 className="text-sm font-medium text-gray-700 mb-2">Items ({order.items.length})</h4>
+                                      <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                          <thead className="bg-gray-100">
+                                            <tr>
+                                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
+                                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-gray-200">
+                                            {order.items.map((item, index) => {
+                                              const pending = item.quantity - (item.receivedQuantity || 0);
+                                              return (
+                                                <tr key={index}>
+                                                  <td className="px-4 py-2 text-sm text-gray-900 font-mono">{item.sku}</td>
+                                                  <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
+                                                  <td className="px-4 py-2 text-sm text-green-600 text-right">{(item.receivedQuantity || 0).toLocaleString()}</td>
+                                                  <td className={`px-4 py-2 text-sm text-right ${pending > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                                                    {pending.toLocaleString()}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                            <tr className="bg-gray-100">
+                                              <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
+                                              <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
+                                                {order.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm font-medium text-green-600 text-right">
+                                                {order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0).toLocaleString()}
+                                              </td>
+                                              <td className="px-4 py-2 text-sm font-medium text-orange-600 text-right">
+                                                {order.items.reduce((sum, i) => sum + (i.quantity - (i.receivedQuantity || 0)), 0).toLocaleString()}
+                                              </td>
+                                            </tr>
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                    {/* Notes */}
+                                    {order.notes && (
+                                      <div>
+                                        <h4 className="text-sm font-medium text-gray-700 mb-2">Notes</h4>
+                                        <p className="text-sm text-gray-600 bg-white p-3 rounded-md border border-gray-200">{order.notes}</p>
+                                      </div>
+                                    )}
+                                    {/* Actions */}
+                                    <div className="flex gap-2 pt-2">
+                                      {!['completed', 'cancelled'].includes(order.status) ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeliveryItems(
+                                                order.items
+                                                  .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
+                                                  .map(item => ({ 
+                                                    sku: item.sku, 
+                                                    quantity: String(item.quantity - (item.receivedQuantity || 0))
+                                                  }))
+                                              );
+                                              setShowDeliveryForm(true);
+                                            }}
+                                            className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                                          >
+                                            Log Delivery
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                              setEditOrderVendor(order.vendor || '');
+                                              setEditOrderEta(order.eta || '');
+                                              setEditOrderNotes(order.notes || '');
+                                              setShowEditForm(true);
+                                            }}
+                                            className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              updateOrderStatus(order.id, 'completed');
+                                            }}
+                                            className="px-3 py-1.5 text-gray-600 hover:bg-gray-200 active:bg-gray-300 rounded-md text-sm font-medium"
+                                          >
+                                            Mark Complete
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setShowCancelConfirm(true);
+                                            }}
+                                            className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
+                                          >
+                                            Cancel Order
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                            setNewOrderVendor(order.vendor || '');
+                                            setNewOrderEta('');
+                                            setNewOrderNotes(order.notes || '');
+                                            setSelectedOrder(null);
+                                            setShowNewOrderForm(true);
+                                          }}
+                                          className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                                        >
+                                          Duplicate Order
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     {productionOrders.filter(order => {
@@ -2282,194 +2447,6 @@ export default function Dashboard({ session }: DashboardProps) {
                     >
                       Create Order
                     </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Order Details Modal */}
-            {selectedOrder && !showDeliveryForm && !showEditForm && !showCancelConfirm && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-lg font-semibold text-gray-900">{selectedOrder.id}</h3>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      selectedOrder.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
-                      selectedOrder.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                      selectedOrder.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {selectedOrder.status === 'in_production' ? 'In Production' : 
-                       selectedOrder.status === 'partial' ? 'Partial Delivery' : 
-                       selectedOrder.status === 'cancelled' ? 'Cancelled' :
-                       'Completed'}
-                    </span>
-                  </div>
-                  <div className="px-6 py-4 space-y-4">
-                    {/* Meta info */}
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-500">Order ID:</span>
-                        <span className="ml-2 text-gray-900">{selectedOrder.id}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Created by:</span>
-                        <span className="ml-2 text-gray-900">{selectedOrder.createdBy}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Vendor:</span>
-                        <span className="ml-2 text-gray-900">{selectedOrder.vendor || '—'}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">ETA:</span>
-                        <span className="ml-2 text-gray-900">
-                          {selectedOrder.eta ? new Date(selectedOrder.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Created:</span>
-                        <span className="ml-2 text-gray-900">
-                          {new Date(selectedOrder.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Last updated:</span>
-                        <span className="ml-2 text-gray-900">
-                          {new Date(selectedOrder.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Items */}
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Items ({selectedOrder.items.length})</h4>
-                      <div className="bg-gray-50 rounded-md overflow-hidden">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead>
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
-                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200">
-                            {selectedOrder.items.map((item, index) => {
-                              const pending = item.quantity - (item.receivedQuantity || 0);
-                              return (
-                                <tr key={index}>
-                                  <td className="px-4 py-2 text-sm text-gray-900">{item.sku}</td>
-                                  <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
-                                  <td className="px-4 py-2 text-sm text-green-600 text-right">{(item.receivedQuantity || 0).toLocaleString()}</td>
-                                  <td className={`px-4 py-2 text-sm text-right ${pending > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
-                                    {pending.toLocaleString()}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                            <tr className="bg-gray-100">
-                              <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
-                              <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
-                                {selectedOrder.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
-                              </td>
-                              <td className="px-4 py-2 text-sm font-medium text-green-600 text-right">
-                                {selectedOrder.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0).toLocaleString()}
-                              </td>
-                              <td className="px-4 py-2 text-sm font-medium text-orange-600 text-right">
-                                {selectedOrder.items.reduce((sum, i) => sum + (i.quantity - (i.receivedQuantity || 0)), 0).toLocaleString()}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    {/* Notes */}
-                    {selectedOrder.notes && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Notes</h4>
-                        <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">{selectedOrder.notes}</p>
-                      </div>
-                    )}
-                  </div>
-                  {/* Actions */}
-                  <div className="px-6 py-4 border-t border-gray-200">
-                    <div className="flex justify-between items-center">
-                      <div className="flex gap-2">
-                        {!['completed', 'cancelled'].includes(selectedOrder.status) ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // Pre-populate delivery items with remaining quantities
-                                setDeliveryItems(
-                                  selectedOrder.items
-                                    .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
-                                    .map(item => ({ 
-                                      sku: item.sku, 
-                                      quantity: String(item.quantity - (item.receivedQuantity || 0))
-                                    }))
-                                );
-                                setShowDeliveryForm(true);
-                              }}
-                              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
-                            >
-                              Log Delivery
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                // Pre-populate edit form with current values
-                                setEditOrderItems(selectedOrder.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
-                                setEditOrderVendor(selectedOrder.vendor || '');
-                                setEditOrderEta(selectedOrder.eta || '');
-                                setEditOrderNotes(selectedOrder.notes || '');
-                                setShowEditForm(true);
-                              }}
-                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
-                              className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
-                            >
-                              Mark Complete
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowCancelConfirm(true)}
-                              className="px-3 py-1.5 text-red-600 hover:bg-red-50 active:bg-red-100 rounded-md text-sm font-medium"
-                            >
-                              Cancel Order
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Duplicate: pre-populate new order form with this order's data (except ETA)
-                              setNewOrderItems(selectedOrder.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
-                              setNewOrderVendor(selectedOrder.vendor || '');
-                              setNewOrderEta(''); // Clear ETA for new order
-                              setNewOrderNotes(selectedOrder.notes || '');
-                              setSelectedOrder(null);
-                              setShowNewOrderForm(true);
-                            }}
-                            className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                          >
-                            Duplicate Order
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOrder(null)}
-                        className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
-                      >
-                        Close
-                      </button>
-                    </div>
                   </div>
                 </div>
               </div>
