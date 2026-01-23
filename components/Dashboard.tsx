@@ -2339,6 +2339,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             Log Delivery
                           </button>
                         )}
+                        {selectedOrder.status !== 'completed' && (
+                          <button
+                            onClick={() => updateOrderStatus(selectedOrder.id, 'completed')}
+                            className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-md text-sm font-medium"
+                          >
                             Mark Complete (All Received)
                           </button>
                         )}
