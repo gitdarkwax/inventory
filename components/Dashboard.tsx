@@ -65,7 +65,7 @@ interface DashboardProps {
   };
 }
 
-type TabType = 'inventory' | 'forecasting';
+type TabType = 'inventory' | 'forecasting' | 'planning';
 
 export default function Dashboard({ session }: DashboardProps) {
   // Tab state
@@ -103,6 +103,14 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastLocations, setForecastLocations] = useState<string[]>(['all']);
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const locationDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Planning state
+  const [planningSearchTerm, setPlanningSearchTerm] = useState('');
+  const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
+  const [planningFilterCategory, setPlanningFilterCategory] = useState<string>('all');
+  const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('list');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'incoming' | 'china' | 'unitsPerDay' | 'shipType'>('shipType');
+  const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -182,6 +190,10 @@ export default function Dashboard({ session }: DashboardProps) {
       loadInventoryFromCache();
     } else if (activeTab === 'forecasting' && !forecastingData && !forecastingLoading) {
       loadForecastingFromCache();
+    } else if (activeTab === 'planning') {
+      // Planning tab needs both inventory and forecasting data
+      if (!inventoryData && !inventoryLoading) loadInventoryFromCache();
+      if (!forecastingData && !forecastingLoading) loadForecastingFromCache();
     }
   }, [activeTab]);
 
@@ -795,6 +807,14 @@ export default function Dashboard({ session }: DashboardProps) {
             >
               📈 Forecasting
             </button>
+            <button
+              onClick={() => setActiveTab('planning')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+              }`}
+            >
+              📋 Planning
+            </button>
           </div>
         </div>
 
@@ -1395,6 +1415,357 @@ export default function Dashboard({ session }: DashboardProps) {
                     })}
                   </div>
                 )}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Planning Tab */}
+        {activeTab === 'planning' && (
+          <>
+            {(inventoryLoading || forecastingLoading) && (
+              <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading planning data...</p>
+              </div>
+            )}
+
+            {(inventoryError || forecastingError) && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
+                <p className="text-sm text-yellow-800 mb-4">{inventoryError || forecastingError}</p>
+                <button onClick={refreshAllData} disabled={isRefreshing}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                </button>
+              </div>
+            )}
+
+            {!inventoryLoading && !forecastingLoading && inventoryData && forecastingData && (
+              <div className="space-y-6">
+                <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                    <div className="flex gap-2 flex-wrap items-center">
+                      <select 
+                        value={planningFilterCategory} 
+                        onChange={(e) => setPlanningFilterCategory(e.target.value)}
+                        className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All Categories</option>
+                        {PRODUCT_CATEGORIES.map(cat => (
+                          <option key={cat.name} value={cat.name}>{cat.name}</option>
+                        ))}
+                      </select>
+                      {/* List/Grouped Toggle */}
+                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button onClick={() => setPlanningListMode('list')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                          List
+                        </button>
+                        <button onClick={() => setPlanningListMode('grouped')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                          Grouped
+                        </button>
+                      </div>
+                      {/* Burn Rate Period Toggle */}
+                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button
+                          onClick={() => setPlanningBurnPeriod('7d')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            planningBurnPeriod === '7d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          7 Days
+                        </button>
+                        <button
+                          onClick={() => setPlanningBurnPeriod('21d')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            planningBurnPeriod === '21d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          21 Days
+                        </button>
+                        <button
+                          onClick={() => setPlanningBurnPeriod('90d')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                            planningBurnPeriod === '90d' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                          }`}
+                        >
+                          90 Days
+                        </button>
+                      </div>
+                      <button onClick={refreshAllData} disabled={isRefreshing}
+                        className={`px-3 py-2 text-xs font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+                      </button>
+                    </div>
+                    <input type="text" placeholder="Search by SKU or product..." value={planningSearchTerm} onChange={(e) => setPlanningSearchTerm(e.target.value)}
+                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+
+                {(() => {
+                  // Build planning data by combining inventory and forecasting
+                  const inventoriedSkus = new Set(inventoryData.inventory.map(item => item.sku));
+                  
+                  // Get LA inventory (LA Office + DTLA WH available, minus LA Office committed)
+                  const getLAInventory = (sku: string): number => {
+                    const inv = inventoryData.inventory.find(i => i.sku === sku);
+                    if (!inv) return 0;
+                    const laOffice = inv.locations['LA Office']?.available || 0;
+                    const dtlaWH = inv.locations['DTLA WH']?.available || 0;
+                    return laOffice + dtlaWH;
+                  };
+                  
+                  // Get incoming to LA Office
+                  const getLAIncoming = (sku: string): number => {
+                    const inv = inventoryData.inventory.find(i => i.sku === sku);
+                    if (!inv) return 0;
+                    return inv.locations['LA Office']?.incoming || 0;
+                  };
+                  
+                  // Get China WH inventory
+                  const getChinaInventory = (sku: string): number => {
+                    const inv = inventoryData.inventory.find(i => i.sku === sku);
+                    if (!inv) return 0;
+                    return inv.locations['China WH']?.available || 0;
+                  };
+                  
+                  // Get units per day based on selected burn period
+                  const getUnitsPerDay = (sku: string): number => {
+                    const forecast = forecastingData.forecasting.find(f => f.sku === sku);
+                    if (!forecast) return 0;
+                    switch (planningBurnPeriod) {
+                      case '7d': return forecast.avgDaily7d;
+                      case '21d': return forecast.avgDaily21d;
+                      case '90d': return forecast.avgDaily90d;
+                      default: return forecast.avgDaily21d;
+                    }
+                  };
+                  
+                  // Calculate ship type
+                  const getShipType = (laInventory: number, incoming: number, chinaInventory: number, unitsPerDay: number): string => {
+                    const laTotal = laInventory + incoming;
+                    const daysOfStock = unitsPerDay > 0 ? laTotal / unitsPerDay : 999;
+                    
+                    if (chinaInventory > 0) {
+                      if (daysOfStock <= 15) return 'Express';
+                      if (daysOfStock <= 60) return 'Slow Air';
+                      if (daysOfStock <= 90) return 'Sea';
+                      return 'No Action';
+                    } else {
+                      // No China inventory
+                      const laDaysOfStock = unitsPerDay > 0 ? laInventory / unitsPerDay : 999;
+                      if (laDaysOfStock < 60) return 'PO Needed';
+                      return 'No Action';
+                    }
+                  };
+                  
+                  // Get ship type color
+                  const getShipTypeColor = (shipType: string): string => {
+                    switch (shipType) {
+                      case 'Express': return 'bg-red-100 text-red-800';
+                      case 'Slow Air': return 'bg-orange-100 text-orange-800';
+                      case 'Sea': return 'bg-blue-100 text-blue-800';
+                      case 'PO Needed': return 'bg-purple-100 text-purple-800';
+                      case 'No Action': return 'bg-green-100 text-green-800';
+                      default: return 'bg-gray-100 text-gray-800';
+                    }
+                  };
+                  
+                  // Ship type sort order (most urgent first)
+                  const shipTypePriority: Record<string, number> = {
+                    'Express': 1,
+                    'PO Needed': 2,
+                    'Slow Air': 3,
+                    'Sea': 4,
+                    'No Action': 5,
+                  };
+                  
+                  // Build planning items
+                  const planningItems = inventoryData.inventory
+                    .filter(inv => {
+                      // Filter by search term
+                      const matchesSearch = !planningSearchTerm || 
+                        inv.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
+                        inv.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
+                      // Filter by category
+                      if (planningFilterCategory !== 'all') {
+                        const category = findProductCategory(inv.sku, inv.productTitle);
+                        if (!category || category.name !== planningFilterCategory) return false;
+                      }
+                      return matchesSearch;
+                    })
+                    .map(inv => {
+                      const laInventory = getLAInventory(inv.sku);
+                      const incoming = getLAIncoming(inv.sku);
+                      const chinaInventory = getChinaInventory(inv.sku);
+                      const unitsPerDay = getUnitsPerDay(inv.sku);
+                      const shipType = getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
+                      
+                      return {
+                        sku: inv.sku,
+                        productTitle: inv.productTitle,
+                        la: laInventory,
+                        incoming,
+                        china: chinaInventory,
+                        unitsPerDay,
+                        shipType,
+                      };
+                    })
+                    .sort((a, b) => {
+                      let comparison = 0;
+                      switch (planningSortBy) {
+                        case 'sku': comparison = a.sku.localeCompare(b.sku); break;
+                        case 'la': comparison = a.la - b.la; break;
+                        case 'incoming': comparison = a.incoming - b.incoming; break;
+                        case 'china': comparison = a.china - b.china; break;
+                        case 'unitsPerDay': comparison = a.unitsPerDay - b.unitsPerDay; break;
+                        case 'shipType': comparison = (shipTypePriority[a.shipType] || 99) - (shipTypePriority[b.shipType] || 99); break;
+                      }
+                      return planningSortOrder === 'asc' ? comparison : -comparison;
+                    });
+                  
+                  // Group by product model if in grouped mode
+                  const groupedPlanning = planningListMode === 'grouped' 
+                    ? planningItems.reduce((groups, item) => {
+                        const model = extractProductModel(item.productTitle, item.sku);
+                        if (!groups[model]) groups[model] = [];
+                        groups[model].push(item);
+                        return groups;
+                      }, {} as Record<string, typeof planningItems>)
+                    : { 'All SKUs': planningItems };
+                  
+                  const sortedPlanningGroupNames = Object.keys(groupedPlanning).sort((a, b) => {
+                    return getModelPriority(b) - getModelPriority(a);
+                  });
+                  
+                  const handlePlanningSort = (column: typeof planningSortBy) => {
+                    if (planningSortBy === column) {
+                      setPlanningSortOrder(planningSortOrder === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setPlanningSortBy(column);
+                      setPlanningSortOrder(column === 'shipType' ? 'asc' : 'desc');
+                    }
+                  };
+                  
+                  const PlanningTable = ({ items, showHeader = true }: { items: typeof planningItems; showHeader?: boolean }) => (
+                    <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                      {showHeader && (
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
+                              SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
+                              LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('incoming')}>
+                              Incoming <SortIcon active={planningSortBy === 'incoming'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
+                              China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
+                              Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
+                              Ship Type <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
+                            </th>
+                          </tr>
+                        </thead>
+                      )}
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {items.map((item, index) => (
+                          <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                            <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                            <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
+                                {item.shipType}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                  
+                  return (
+                    <>
+                      {/* List View */}
+                      {planningListMode === 'list' && (
+                        <div className="bg-white shadow rounded-lg overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <PlanningTable items={planningItems} />
+                          </div>
+                          {planningItems.length === 0 && <div className="p-8 text-center text-gray-500">No planning data available.</div>}
+                        </div>
+                      )}
+                      
+                      {/* Grouped View */}
+                      {planningListMode === 'grouped' && (
+                        <div className="space-y-4">
+                          {sortedPlanningGroupNames.length === 0 && (
+                            <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No planning data available.</div>
+                          )}
+                          {sortedPlanningGroupNames.map(groupName => {
+                            const items = groupedPlanning[groupName];
+                            // Sort items within group - reverse for protectors
+                            const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
+                            const sortedItems = [...items].sort((a, b) => 
+                              shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
+                            );
+                            return (
+                              <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
+                                <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                  <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-semibold text-gray-900">{groupName}</h3>
+                                    <div className="flex gap-4 text-xs text-gray-500">
+                                      <span>{items.length} SKUs</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Incoming</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {sortedItems.map((item, index) => (
+                                        <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
+                                              {item.shipType}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </>
