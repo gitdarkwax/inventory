@@ -165,6 +165,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newOrderVendor, setNewOrderVendor] = useState('');
   const [newOrderEta, setNewOrderEta] = useState('');
   const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'open' | 'completed'>('open');
+  const [skuSearchQuery, setSkuSearchQuery] = useState('');
+  const [skuSearchDateFrom, setSkuSearchDateFrom] = useState('');
+  const [skuSearchDateTo, setSkuSearchDateTo] = useState('');
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
@@ -2066,25 +2069,73 @@ export default function Dashboard({ session }: DashboardProps) {
         {activeTab === 'production' && (
           <div className="space-y-4">
             {/* Header with New Order button */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <select
-                  value={productionFilterStatus}
-                  onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+            <div className="flex flex-col gap-4">
+              {/* Top Row: Status Filter + New Order Button */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <select
+                    value={productionFilterStatus}
+                    onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+                  >
+                    <option value="all">All Orders</option>
+                    <option value="open">Open Orders</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowNewOrderForm(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                 >
-                  <option value="all">All Orders</option>
-                  <option value="open">Open Orders</option>
-                  <option value="completed">Completed</option>
-                </select>
+                  + New Production Order
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowNewOrderForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-              >
-                + New Production Order
-              </button>
+              
+              {/* SKU Search Row */}
+              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
+                  <input
+                    type="text"
+                    value={skuSearchQuery}
+                    onChange={(e) => setSkuSearchQuery(e.target.value.toUpperCase())}
+                    placeholder="e.g. EC-IP17PM"
+                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-36 font-mono"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 whitespace-nowrap">From:</label>
+                  <input
+                    type="date"
+                    value={skuSearchDateFrom}
+                    onChange={(e) => setSkuSearchDateFrom(e.target.value)}
+                    className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600 whitespace-nowrap">To:</label>
+                  <input
+                    type="date"
+                    value={skuSearchDateTo}
+                    onChange={(e) => setSkuSearchDateTo(e.target.value)}
+                    className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                  />
+                </div>
+                {(skuSearchQuery || skuSearchDateFrom || skuSearchDateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSkuSearchQuery('');
+                      setSkuSearchDateFrom('');
+                      setSkuSearchDateTo('');
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Orders List */}
@@ -2093,29 +2144,108 @@ export default function Dashboard({ session }: DashboardProps) {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-2 text-gray-600">Loading orders...</p>
               </div>
-            ) : (
-              <div className="bg-white shadow rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {productionOrders
-                      .filter(order => {
-                        if (productionFilterStatus === 'open') return ['in_production', 'partial'].includes(order.status);
-                        if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
-                        return true;
-                      })
-                      .map((order) => {
-                        const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
-                        const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
+            ) : (() => {
+              // Apply all filters
+              const filteredOrders = productionOrders.filter(order => {
+                // Status filter
+                if (productionFilterStatus === 'open' && !['in_production', 'partial'].includes(order.status)) return false;
+                if (productionFilterStatus === 'completed' && !['completed', 'cancelled'].includes(order.status)) return false;
+                
+                // SKU search filter
+                if (skuSearchQuery) {
+                  const hasMatchingSku = order.items.some(item => 
+                    item.sku.toUpperCase().includes(skuSearchQuery.toUpperCase())
+                  );
+                  if (!hasMatchingSku) return false;
+                }
+                
+                // Date range filter (based on createdAt)
+                if (skuSearchDateFrom) {
+                  const orderDate = new Date(order.createdAt);
+                  const fromDate = new Date(skuSearchDateFrom);
+                  fromDate.setHours(0, 0, 0, 0);
+                  if (orderDate < fromDate) return false;
+                }
+                if (skuSearchDateTo) {
+                  const orderDate = new Date(order.createdAt);
+                  const toDate = new Date(skuSearchDateTo);
+                  toDate.setHours(23, 59, 59, 999);
+                  if (orderDate > toDate) return false;
+                }
+                
+                return true;
+              });
+
+              // Calculate SKU-specific stats when searching
+              let skuStats: { totalOrdered: number; totalReceived: number; poCount: number } | null = null;
+              if (skuSearchQuery) {
+                const searchTerm = skuSearchQuery.toUpperCase();
+                let totalOrdered = 0;
+                let totalReceived = 0;
+                const poSet = new Set<string>();
+                
+                filteredOrders.forEach(order => {
+                  order.items.forEach(item => {
+                    if (item.sku.toUpperCase().includes(searchTerm)) {
+                      totalOrdered += item.quantity;
+                      totalReceived += item.receivedQuantity || 0;
+                      poSet.add(order.id);
+                    }
+                  });
+                });
+                
+                skuStats = { totalOrdered, totalReceived, poCount: poSet.size };
+              }
+
+              return (
+                <>
+                  {/* SKU Search Summary */}
+                  {skuStats && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-6">
+                          <div>
+                            <span className="text-sm text-blue-600">SKU Search:</span>
+                            <span className="ml-2 font-mono font-medium text-blue-900">{skuSearchQuery}</span>
+                          </div>
+                          <div className="h-8 w-px bg-blue-200"></div>
+                          <div className="text-sm">
+                            <span className="text-blue-600">POs Found:</span>
+                            <span className="ml-2 font-semibold text-blue-900">{skuStats.poCount}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-blue-600">Total Ordered:</span>
+                            <span className="ml-2 font-semibold text-blue-900">{skuStats.totalOrdered.toLocaleString()}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-blue-600">Total Delivered:</span>
+                            <span className="ml-2 font-semibold text-green-700">{skuStats.totalReceived.toLocaleString()}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-blue-600">Pending:</span>
+                            <span className="ml-2 font-semibold text-orange-600">{(skuStats.totalOrdered - skuStats.totalReceived).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredOrders.map((order) => {
+                          const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
+                          const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
                         const isExpanded = selectedOrder?.id === order.id;
                         // Create SKU preview (up to 20 chars)
                         const skuList = order.items.map(i => i.sku).join(', ');
@@ -2339,21 +2469,21 @@ export default function Dashboard({ session }: DashboardProps) {
                           </Fragment>
                         );
                       })}
-                    {productionOrders.filter(order => {
-                      if (productionFilterStatus === 'open') return ['in_production', 'partial'].includes(order.status);
-                      if (productionFilterStatus === 'completed') return ['completed', 'cancelled'].includes(order.status);
-                      return true;
-                    }).length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
-                          No orders found. Click "New Production Order" to create one.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                        {filteredOrders.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                              {skuSearchQuery || skuSearchDateFrom || skuSearchDateTo
+                                ? 'No orders match your search criteria.'
+                                : 'No orders found. Click "New Production Order" to create one.'}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              );
+            })()}
 
             {/* New Order Modal */}
             {showNewOrderForm && (
