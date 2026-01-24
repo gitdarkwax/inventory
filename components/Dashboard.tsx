@@ -1341,7 +1341,7 @@ export default function Dashboard({ session }: DashboardProps) {
               </button>
             </div>
             <button 
-              onClick={refreshAllData} 
+              onClick={() => refreshAllData()} 
               disabled={isRefreshing}
               className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
             >
@@ -1363,7 +1363,7 @@ export default function Dashboard({ session }: DashboardProps) {
             {inventoryError && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{inventoryError}</p>
-                <button onClick={refreshAllData} disabled={isRefreshing}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing}
                   className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
                   {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
                 </button>
@@ -1756,7 +1756,7 @@ export default function Dashboard({ session }: DashboardProps) {
             {forecastingError && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{forecastingError}</p>
-                <button onClick={refreshAllData} disabled={isRefreshing}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing}
                   className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
                   {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
                 </button>
@@ -2148,7 +2148,7 @@ export default function Dashboard({ session }: DashboardProps) {
             {(inventoryError || forecastingError) && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{inventoryError || forecastingError}</p>
-                <button onClick={refreshAllData} disabled={isRefreshing}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing}
                   className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
                   {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
                 </button>
