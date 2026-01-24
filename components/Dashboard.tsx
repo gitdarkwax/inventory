@@ -974,6 +974,43 @@ export default function Dashboard({ session }: DashboardProps) {
     return <span className="ml-1">{order === 'asc' ? '↑' : '↓'}</span>;
   };
 
+  // Info tooltip component for column descriptions
+  const InfoTooltip = ({ content }: { content: string }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const tooltipRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+          setIsOpen(false);
+        }
+      };
+      if (isOpen) {
+        document.addEventListener('mousedown', handleClickOutside);
+      }
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    return (
+      <span className="relative inline-block ml-1" ref={tooltipRef}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+          className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-medium text-gray-400 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-600 transition-colors"
+          aria-label="More info"
+        >
+          i
+        </button>
+        {isOpen && (
+          <div className="absolute z-50 left-1/2 -translate-x-1/2 mt-2 w-64 p-3 text-xs font-normal normal-case text-left text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg">
+            <div className="whitespace-pre-line leading-relaxed">{content}</div>
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-l border-t border-gray-200 rotate-45"></div>
+          </div>
+        )}
+      </span>
+    );
+  };
+
   // Location Detail View
   if (selectedLocation && inventoryData) {
     const locationData = filteredLocationDetail;
@@ -2383,39 +2420,51 @@ export default function Dashboard({ session }: DashboardProps) {
                           <tr>
                             <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
                               SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
+                              <InfoTooltip content="Product SKU" />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
                               LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                              <InfoTooltip content="Total available inventory across LA Office and DTLA WH locations" />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundAir')}>
                               In Air <SortIcon active={planningSortBy === 'inboundAir'} order={planningSortOrder} />
+                              <InfoTooltip content="Units in transit via air freight (from Shopify transfers tagged &quot;air&quot;)" />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundSea')}>
                               In Sea <SortIcon active={planningSortBy === 'inboundSea'} order={planningSortOrder} />
+                              <InfoTooltip content="Units in transit via sea freight (from Shopify transfers tagged &quot;sea&quot;)" />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
                               China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
+                              <InfoTooltip content="Available inventory at China warehouse" />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
                               In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
+                              <InfoTooltip content="Pending quantity from production orders (Open POs)" />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
+                              <InfoTooltip content="Average daily sales velocity (selectable: 7d, 21d, or 90d)" />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
                               LA Need <SortIcon active={planningSortBy === 'laNeed'} order={planningSortOrder} />
+                              <InfoTooltip content={`For LA, units needed to cover target days (14d, 30d, 60d, 120d, or 180d) minus available LA inventory.\n\n(LA Office + LA WH) - committed`} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
                               Ship Type <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
+                              <InfoTooltip content={`Recommended shipping method based on urgency and China inventory.\n\nDays of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → "Express"\n• ≤60 days & China > 0 → "Slow Air"\n• ≤90 days & China > 0 → "Sea"\n• >90 days & China > 0 → "No Action"\n• <60 days & China = 0 → "No CN Inv"\n• Phase out list → "Phase Out"`} />
                             </th>
                             <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
                               Prod Status <SortIcon active={planningSortBy === 'prodStatus'} order={planningSortOrder} />
+                              <InfoTooltip content={`Production action based on TOTAL runway.\n\nRunway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → "More in Prod"\n• >90 days, no PO → "No Action"\n• 60-90 days + active PO → "Get Prod Status"\n• 60-90 days, no PO → "No Action"\n• ≤60 days + active PO → "Push Vendor"\n• ≤60 days, no PO → "Order More"\n• Phase out list → "Phase Out"`} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
                               Runway Air <SortIcon active={planningSortBy === 'runwayAir'} order={planningSortOrder} />
+                              <InfoTooltip content={`Days of stock considering only LA inventory + air freight in transit.\n\n(LA Office + LA WH + In Air) / unitsPerDay`} />
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runway')}>
                               Runway <SortIcon active={planningSortBy === 'runway'} order={planningSortOrder} />
+                              <InfoTooltip content={`Days of stock considering LA inventory + all in-transit inventory.\n\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay`} />
                             </th>
                           </tr>
                         </thead>
@@ -2621,18 +2670,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <table className="min-w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Need</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway</th>
+                                        <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU <InfoTooltip content="Product SKU" /></th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA <InfoTooltip content="Total available inventory across LA Office and DTLA WH locations" /></th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air <InfoTooltip content="Units in transit via air freight (from Shopify transfers tagged &quot;air&quot;)" /></th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea <InfoTooltip content="Units in transit via sea freight (from Shopify transfers tagged &quot;sea&quot;)" /></th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China <InfoTooltip content="Available inventory at China warehouse" /></th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod <InfoTooltip content="Pending quantity from production orders (Open POs)" /></th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day <InfoTooltip content="Average daily sales velocity (selectable: 7d, 21d, or 90d)" /></th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Need <InfoTooltip content={`For LA, units needed to cover target days (14d, 30d, 60d, 120d, or 180d) minus available LA inventory.\n\n(LA Office + LA WH) - committed`} /></th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type <InfoTooltip content={`Recommended shipping method based on urgency and China inventory.\n\nDays of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → "Express"\n• ≤60 days & China > 0 → "Slow Air"\n• ≤90 days & China > 0 → "Sea"\n• >90 days & China > 0 → "No Action"\n• <60 days & China = 0 → "No CN Inv"\n• Phase out list → "Phase Out"`} /></th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status <InfoTooltip content={`Production action based on TOTAL runway.\n\nRunway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → "More in Prod"\n• >90 days, no PO → "No Action"\n• 60-90 days + active PO → "Get Prod Status"\n• 60-90 days, no PO → "No Action"\n• ≤60 days + active PO → "Push Vendor"\n• ≤60 days, no PO → "Order More"\n• Phase out list → "Phase Out"`} /></th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air <InfoTooltip content={`Days of stock considering only LA inventory + air freight in transit.\n\n(LA Office + LA WH + In Air) / unitsPerDay`} /></th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway <InfoTooltip content={`Days of stock considering LA inventory + all in-transit inventory.\n\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay`} /></th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
