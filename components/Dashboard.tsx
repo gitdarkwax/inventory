@@ -3077,10 +3077,10 @@ export default function Dashboard({ session }: DashboardProps) {
                         <tr>
                           <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
                           <th className="w-[18%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
-                          <th className="w-[10%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
-                          <th className="w-[10%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
-                          <th className="w-[10%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
-                          <th className="w-[14%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                          <th className="w-[10%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                          <th className="w-[10%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Received</th>
+                          <th className="w-[10%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase pr-8">Pending</th>
+                          <th className="w-[14%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase pl-8">Vendor</th>
                           <th className="w-[12%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
                           <th className="w-[16%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         </tr>
@@ -3108,12 +3108,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </span>
                               </td>
                               <td className="w-[18%] px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
-                              <td className="w-[10%] px-4 py-3 text-sm text-gray-600 text-right">{totalOrdered.toLocaleString()}</td>
-                              <td className="w-[10%] px-4 py-3 text-sm text-green-600 text-right">{totalReceived.toLocaleString()}</td>
-                              <td className={`w-[10%] px-4 py-3 text-sm text-right ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                              <td className="w-[10%] px-4 py-3 text-sm text-gray-600 text-center">{totalOrdered.toLocaleString()}</td>
+                              <td className="w-[10%] px-4 py-3 text-sm text-green-600 text-center">{totalReceived.toLocaleString()}</td>
+                              <td className={`w-[10%] px-4 py-3 text-sm text-center pr-8 ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                 {(totalOrdered - totalReceived).toLocaleString()}
                               </td>
-                              <td className="w-[14%] px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
+                              <td className="w-[14%] px-4 py-3 text-sm text-gray-600 pl-8">{order.vendor || '—'}</td>
                               <td className="w-[12%] px-4 py-3 text-sm text-gray-600">
                                 {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
                               </td>
