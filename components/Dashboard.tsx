@@ -52,6 +52,7 @@ interface InventorySummary {
   inventory: InventoryByLocation[];
   locationDetails: Record<string, LocationDetail[]>;
   lastUpdated: string;
+  refreshedBy?: string;
 }
 
 interface ForecastingItem {
@@ -528,18 +529,25 @@ export default function Dashboard({ session }: DashboardProps) {
   };
 
   // Refresh all data from Shopify (called when user clicks Refresh button)
-  const refreshAllData = async () => {
+  const refreshAllData = async (isAutoRefresh = false) => {
     setIsRefreshing(true);
     setInventoryError(null);
     setForecastingError(null);
     try {
-      const response = await fetch('/api/refresh');
+      const headers: HeadersInit = {};
+      if (isAutoRefresh) {
+        headers['x-auto-refresh'] = 'true';
+      }
+      const response = await fetch('/api/refresh', { headers });
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Refresh failed');
       }
       // Reload both caches after successful refresh
       await Promise.all([loadInventoryFromCache(), loadForecastingFromCache()]);
+      if (isAutoRefresh) {
+        console.log('🔄 Hourly auto-refresh completed at', new Date().toLocaleTimeString());
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Refresh failed';
       setInventoryError(errorMsg);
@@ -548,6 +556,26 @@ export default function Dashboard({ session }: DashboardProps) {
       setIsRefreshing(false);
     }
   };
+
+  // Automatic hourly refresh on the hour
+  useEffect(() => {
+    const checkAndRefresh = () => {
+      const now = new Date();
+      // Refresh if we're within the first minute of the hour
+      if (now.getMinutes() === 0 && now.getSeconds() < 60) {
+        console.log('🕐 Triggering hourly auto-refresh...');
+        refreshAllData(true);
+      }
+    };
+
+    // Check every minute
+    const intervalId = setInterval(checkAndRefresh, 60000);
+
+    // Also check immediately in case we loaded right at the top of the hour
+    checkAndRefresh();
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Load data when tab changes
   useEffect(() => {
@@ -1250,7 +1278,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     minute: '2-digit',
                     second: '2-digit',
                     hour12: true
-                  })}
+                  })}{inventoryData.refreshedBy && ` by ${inventoryData.refreshedBy}`}
                 </p>
               )}
             </div>

@@ -75,6 +75,7 @@ export interface CachedInventoryData {
     purchaseOrders: PurchaseOrderItem[];
   };
   lastUpdated: string;
+  refreshedBy?: string; // User name or "hourly auto refresh"
 }
 
 export class InventoryCacheService {
@@ -102,10 +103,11 @@ export class InventoryCacheService {
   /**
    * Save inventory data to cache
    */
-  async saveCache(data: Omit<CachedInventoryData, 'lastUpdated'>): Promise<void> {
+  async saveCache(data: Omit<CachedInventoryData, 'lastUpdated' | 'refreshedBy'>, refreshedBy?: string): Promise<void> {
     const cacheData: CachedInventoryData = {
       ...data,
       lastUpdated: new Date().toISOString(),
+      refreshedBy: refreshedBy || 'unknown',
     };
 
     const isProduction = process.env.NODE_ENV === 'production';

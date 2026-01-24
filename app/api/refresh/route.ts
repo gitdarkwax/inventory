@@ -25,14 +25,25 @@ const locationOrder = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify authorization
+    // Check if this is an auto-refresh (via cron or internal call)
+    const isAutoRefresh = request.headers.get('x-auto-refresh') === 'true';
+    
+    // Verify authorization (skip for auto-refresh with valid cron secret)
+    const cronSecret = request.headers.get('x-cron-secret');
+    const isValidCron = cronSecret === process.env.CRON_SECRET;
+    
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user && !isValidCron) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Determine who triggered the refresh
+    const refreshedBy = isAutoRefresh || isValidCron 
+      ? 'hourly auto refresh' 
+      : session?.user?.name || 'unknown';
+
     const startTime = Date.now();
-    console.log('🔄 Starting inventory refresh...');
+    console.log(`🔄 Starting inventory refresh (by: ${refreshedBy})...`);
 
     // Fetch inventory data
     const inventoryData = await fetchInventoryData();
@@ -59,7 +70,7 @@ export async function GET(request: NextRequest) {
     await cache.saveCache({
       inventory: inventoryData,
       forecasting: { forecasting: forecastingData },
-    });
+    }, refreshedBy);
 
     const duration = Date.now() - startTime;
     console.log(`✅ Refresh complete in ${duration}ms`);
