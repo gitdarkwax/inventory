@@ -27,8 +27,10 @@ export async function GET() {
     return NextResponse.json({
       ...cachedData.inventory,
       lastUpdated: cachedData.lastUpdated,
+      refreshedBy: cachedData.refreshedBy,
       cache: {
         lastUpdated: cachedData.lastUpdated,
+        refreshedBy: cachedData.refreshedBy,
         age: `${Math.floor((Date.now() - new Date(cachedData.lastUpdated).getTime()) / 1000 / 60)} minutes`,
       },
     });
