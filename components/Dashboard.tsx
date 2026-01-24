@@ -3899,14 +3899,14 @@ export default function Dashboard({ session }: DashboardProps) {
 
             {/* Duplicate PO Error Modal */}
             {duplicatePoError && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-                <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <div className="fixed inset-0 flex items-center justify-center z-[60] pointer-events-none">
+                <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 border border-gray-200 pointer-events-auto">
                   <div className="px-6 py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900">Duplicate PO Number</h3>
                   </div>
                   <div className="px-6 py-4">
                     <p className="text-sm text-red-600">
-                      This PO Number ({duplicatePoError}) already exists. Please double check to make sure it is not a duplicate order and that it is the matching PO from Shopify.
+                      This PO Number ({duplicatePoError}) already exists. Please double check to make sure it is not already in the tracker and that it is the matching PO Number from Shopify.
                     </p>
                   </div>
                   <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
