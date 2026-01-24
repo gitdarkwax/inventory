@@ -246,6 +246,11 @@ export class ShopifyGraphQLTransferService {
                                    lineNode.received || 
                                    0;
           
+          // Log first few items to debug
+          if (lineItems.length < 3) {
+            console.log(`📦 Line item: sku="${sku}", qty=${quantity}, shipped=${receivedQuantity}, title="${lineNode.title}"`);
+          }
+          
           if (sku) {
             lineItems.push({
               sku,
@@ -303,11 +308,22 @@ export class ShopifyGraphQLTransferService {
       const numericId = transfer.id.split('/').pop() || '';
       const transferId = numericId ? `T${numericId}` : transfer.id;
 
+      // Log first transfer's line items for debugging
+      if (skuMap.size === 0 && transfer.lineItems.length > 0) {
+        console.log(`📦 Aggregation debug - Transfer "${transfer.name}" status: ${transfer.status}`);
+        const sample = transfer.lineItems.slice(0, 3);
+        for (const li of sample) {
+          const remaining = li.quantity - li.receivedQuantity;
+          console.log(`📦   SKU: ${li.sku}, qty: ${li.quantity}, shipped: ${li.receivedQuantity}, remaining: ${remaining}`);
+        }
+      }
+
       for (const lineItem of transfer.lineItems) {
         const sku = lineItem.sku;
         if (!sku) continue;
 
-        // Calculate remaining quantity (ordered - received)
+        // Calculate remaining quantity (total - shipped)
+        // For in-progress transfers, this is the quantity still in transit
         const remainingQty = lineItem.quantity - lineItem.receivedQuantity;
         if (remainingQty <= 0) continue;
 
