@@ -628,15 +628,8 @@ export default function Dashboard({ session }: DashboardProps) {
       } else if (sortBy === 'total') {
         comparison = a.totalAvailable - b.totalAvailable;
       } else if (sortBy === 'inTransit') {
-        // Sort by total in transit
-        const getInTransit = (sku: string) => {
-          return inventoryData?.locations.reduce((sum, loc) => {
-            const locDetails = inventoryData.locationDetails?.[loc];
-            const detail = locDetails?.find(d => d.sku === sku);
-            return sum + (detail?.inboundAir || 0) + (detail?.inboundSea || 0);
-          }, 0) || 0;
-        };
-        comparison = getInTransit(a.sku) - getInTransit(b.sku);
+        // Sort by total in transit (from GraphQL transfer data)
+        comparison = ((a as any).inTransit || 0) - ((b as any).inTransit || 0);
       } else {
         // Sort by location quantity
         const aQty = a.locations[sortBy] || 0;
@@ -1419,12 +1412,8 @@ export default function Dashboard({ session }: DashboardProps) {
                           ) : (
                             // All Locations View
                             filteredInventory.map((item, index) => {
-                              // Calculate total in transit for this SKU across all locations
-                              const inTransit = inventoryData.locations.reduce((sum, loc) => {
-                                const locDetails = inventoryData.locationDetails?.[loc];
-                                const detail = locDetails?.find(d => d.sku === item.sku);
-                                return sum + (detail?.inboundAir || 0) + (detail?.inboundSea || 0);
-                              }, 0);
+                              // Get total in transit for this SKU (from GraphQL transfer data)
+                              const inTransit = (item as any).inTransit || 0;
                               return (
                                 <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                   <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
@@ -1583,12 +1572,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
                                     {items.map((item, index) => {
-                                      // Calculate total in transit for this SKU across all locations
-                                      const inTransit = inventoryData.locations.reduce((sum, loc) => {
-                                        const locDetails = inventoryData.locationDetails?.[loc];
-                                        const detail = locDetails?.find(d => d.sku === item.sku);
-                                        return sum + (detail?.inboundAir || 0) + (detail?.inboundSea || 0);
-                                      }, 0);
+                                      // Get total in transit for this SKU (from GraphQL transfer data)
+                                      const inTransit = (item as any).inTransit || 0;
                                       return (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                           <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
