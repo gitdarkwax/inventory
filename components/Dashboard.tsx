@@ -1869,7 +1869,10 @@ export default function Dashboard({ session }: DashboardProps) {
                       const link = document.createElement('a');
                       const url = URL.createObjectURL(blob);
                       link.setAttribute('href', url);
-                      link.setAttribute('download', `inventory-export-${new Date().toISOString().split('T')[0]}.csv`);
+                      const now = new Date();
+                      const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+                      const locationSuffix = inventoryLocationFilter ? `-${inventoryLocationFilter.replace(/\s+/g, '-')}` : '';
+                      link.setAttribute('download', `inventory-export-${timestamp}${locationSuffix}.csv`);
                       link.style.visibility = 'hidden';
                       document.body.appendChild(link);
                       link.click();
@@ -2309,7 +2312,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       const link = document.createElement('a');
                       const url = URL.createObjectURL(blob);
                       link.setAttribute('href', url);
-                      link.setAttribute('download', `forecasting-export-${new Date().toISOString().split('T')[0]}.csv`);
+                      const now = new Date();
+                      const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+                      link.setAttribute('download', `forecasting-export-${timestamp}.csv`);
                       link.style.visibility = 'hidden';
                       document.body.appendChild(link);
                       link.click();
@@ -3120,7 +3125,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             const link = document.createElement('a');
                             const url = URL.createObjectURL(blob);
                             link.setAttribute('href', url);
-                            link.setAttribute('download', `planning-export-${new Date().toISOString().split('T')[0]}.csv`);
+                            const now = new Date();
+                            const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+                            link.setAttribute('download', `planning-export-${timestamp}.csv`);
                             link.style.visibility = 'hidden';
                             document.body.appendChild(link);
                             link.click();
@@ -3640,7 +3647,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         const link = document.createElement('a');
                         const url = URL.createObjectURL(blob);
                         link.setAttribute('href', url);
-                        link.setAttribute('download', `po-tracker-export-${new Date().toISOString().split('T')[0]}.csv`);
+                        const now = new Date();
+                        const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+                        link.setAttribute('download', `po-tracker-export-${timestamp}.csv`);
                         link.style.visibility = 'hidden';
                         document.body.appendChild(link);
                         link.click();
