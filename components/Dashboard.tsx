@@ -1821,6 +1821,48 @@ export default function Dashboard({ session }: DashboardProps) {
                     )}
                   </div>
                 )}
+                
+                {/* Export Button */}
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => {
+                      // Build CSV content for Inventory
+                      const headers = ['SKU', 'Product', ...inventoryData.locations, 'In Transit', 'In Prod', 'Total Available'];
+                      const dataToExport = inventoryLocationFilter ? filteredLocationDetail : filteredInventory;
+                      const rows = dataToExport.map(item => {
+                        const inTransit = (item as any).inTransit || 0;
+                        const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
+                        const locationQtys = inventoryData.locations.map(loc => item.locations?.[loc] ?? 0);
+                        return [
+                          item.sku,
+                          `"${item.productTitle.replace(/"/g, '""')}"`,
+                          ...locationQtys,
+                          inTransit,
+                          poQty,
+                          item.totalAvailable
+                        ];
+                      });
+                      
+                      const csvContent = [
+                        headers.join(','),
+                        ...rows.map(row => row.join(','))
+                      ].join('\n');
+                      
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement('a');
+                      const url = URL.createObjectURL(blob);
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', `inventory-export-${new Date().toISOString().split('T')[0]}.csv`);
+                      link.style.visibility = 'hidden';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                  >
+                    <span>📥</span> Export to Excel
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -2213,6 +2255,54 @@ export default function Dashboard({ session }: DashboardProps) {
                     })}
                   </div>
                 )}
+                
+                {/* Export Button */}
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={() => {
+                      // Build CSV content for Forecasting
+                      const headers = ['SKU', 'Product', 'Inventory', 'Avg Daily (7d)', 'Days (7d)', 'Avg Daily (21d)', 'Days (21d)', 'Avg Daily (90d)', 'Days (90d)', 'Avg Daily (LY 30d)', 'Days (LY 30d)'];
+                      const rows = filteredForecasting.map(item => {
+                        const inventory = item.totalInventory || 0;
+                        const days7d = item.avgDaily7d > 0 ? Math.round(inventory / item.avgDaily7d) : 999;
+                        const days21d = item.avgDaily21d > 0 ? Math.round(inventory / item.avgDaily21d) : 999;
+                        const days90d = item.avgDaily90d > 0 ? Math.round(inventory / item.avgDaily90d) : 999;
+                        const daysLY30d = item.avgDailyLastYear30d > 0 ? Math.round(inventory / item.avgDailyLastYear30d) : 999;
+                        return [
+                          item.sku,
+                          `"${item.productName.replace(/"/g, '""')}"`,
+                          inventory,
+                          item.avgDaily7d.toFixed(1),
+                          days7d >= 999 ? 'N/A' : days7d,
+                          item.avgDaily21d.toFixed(1),
+                          days21d >= 999 ? 'N/A' : days21d,
+                          item.avgDaily90d.toFixed(1),
+                          days90d >= 999 ? 'N/A' : days90d,
+                          item.avgDailyLastYear30d.toFixed(1),
+                          daysLY30d >= 999 ? 'N/A' : daysLY30d
+                        ];
+                      });
+                      
+                      const csvContent = [
+                        headers.join(','),
+                        ...rows.map(row => row.join(','))
+                      ].join('\n');
+                      
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement('a');
+                      const url = URL.createObjectURL(blob);
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', `forecasting-export-${new Date().toISOString().split('T')[0]}.csv`);
+                      link.style.visibility = 'hidden';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                  >
+                    <span>📥</span> Export to Excel
+                  </button>
+                </div>
               </div>
             )}
           </>
@@ -3499,6 +3589,50 @@ export default function Dashboard({ session }: DashboardProps) {
                         )}
                       </tbody>
                     </table>
+                  </div>
+                  {/* Export Button */}
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      onClick={() => {
+                        // Build CSV content for PO Tracker
+                        const headers = ['PO#', 'PO Date', 'SKUs', 'Ordered', 'Received', 'Pending', 'Vendor', 'ETA', 'Status', 'Notes'];
+                        const rows = filteredOrders.map(order => {
+                          const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
+                          const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
+                          const skuList = order.items.map(i => `${i.sku} (${i.quantity})`).join('; ');
+                          return [
+                            order.poNumber || order.id.split('-').slice(0, 2).join('-'),
+                            new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
+                            `"${skuList.replace(/"/g, '""')}"`,
+                            totalOrdered,
+                            totalReceived,
+                            totalOrdered - totalReceived,
+                            order.vendor || '',
+                            order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '',
+                            order.status === 'in_production' ? 'In Production' : order.status === 'partial' ? 'Partial Delivery' : order.status === 'cancelled' ? 'Cancelled' : 'Completed',
+                            `"${(order.notes || '').replace(/"/g, '""')}"`
+                          ];
+                        });
+                        
+                        const csvContent = [
+                          headers.join(','),
+                          ...rows.map(row => row.join(','))
+                        ].join('\n');
+                        
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const link = document.createElement('a');
+                        const url = URL.createObjectURL(blob);
+                        link.setAttribute('href', url);
+                        link.setAttribute('download', `po-tracker-export-${new Date().toISOString().split('T')[0]}.csv`);
+                        link.style.visibility = 'hidden';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                    >
+                      <span>📥</span> Export to Excel
+                    </button>
                   </div>
                 </>
               );
