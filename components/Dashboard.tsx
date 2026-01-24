@@ -3338,8 +3338,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 space-y-4">
                     {/* PO Number */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">PO# <span className="text-red-500">*</span></label>
-                      <p className="text-xs text-gray-400 mb-2">PO# from Shopify</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# <span className="text-xs text-gray-400 font-normal">(from Shopify)</span></label>
                       <input
                         type="text"
                         value={newOrderPoNumber}
@@ -3572,8 +3571,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 space-y-4">
                     {/* PO Number */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">PO#</label>
-                      <p className="text-xs text-gray-400 mb-2">PO# from Shopify</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# <span className="text-xs text-gray-400 font-normal">(from Shopify)</span></label>
                       <input
                         type="text"
                         value={editOrderPoNumber}
