@@ -166,6 +166,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [showColumnDefinitions, setShowColumnDefinitions] = useState(false);
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
+  const [planningFilterProduct, setPlanningFilterProduct] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningRunwayDisplay, setPlanningRunwayDisplay] = useState<'days' | 'dates'>('days');
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'runway'>('shipType');
@@ -980,16 +981,16 @@ export default function Dashboard({ session }: DashboardProps) {
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
     { name: 'In Stock', description: 'Total available inventory across LA Office and DTLA WH locations' },
+    { name: 'BR', description: 'Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)' },
     { name: 'In Air', description: 'Units in transit via air freight (from Shopify transfers tagged "air")' },
     { name: 'In Sea', description: 'Units in transit via sea freight (from Shopify transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
-    { name: 'BR', description: 'Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)' },
     { name: 'Need', description: 'Units needed to cover target days minus available LA inventory: (LA Office + LA WH) - committed' },
     { name: 'Ship Type', description: 'Recommended shipping method based on days of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list → Phase Out' },
     { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → More in Prod\n• >90 days, no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days, no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days, no PO → Order More' },
-    { name: 'Runway Air', description: 'Days of stock with LA + air freight only:\n(LA Office + LA WH + In Air) / unitsPerDay' },
-    { name: 'Runway', description: 'Days of stock with LA + all in-transit:\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay' },
+    { name: 'Runway Air', description: 'Days of stock with LA + air freight only:\n(LA Office + LA WH + In Air) / unitsPerDay\n\nColor: Red if < 60 days' },
+    { name: 'Runway', description: 'Days of stock with LA + all in-transit:\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay\n\nColor: Red if < 90 days' },
   ];
 
   // Location Detail View
@@ -2337,11 +2338,14 @@ export default function Dashboard({ session }: DashboardProps) {
                       const matchesSearch = !planningSearchTerm || 
                         item.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
                         item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
-                      // Filter by ship type
+                      // Filter by product group
+                      const itemProductGroup = extractProductModel(item.productTitle, item.sku);
+                      const matchesProduct = planningFilterProduct === 'all' || itemProductGroup === planningFilterProduct;
+                      // Filter by ship type (from metric buttons)
                       const matchesShipType = planningFilterShipType === 'all' || item.shipType === planningFilterShipType;
                       // Filter by prod status
                       const matchesProdStatus = planningFilterProdStatus === 'all' || item.prodStatus === planningFilterProdStatus;
-                      return matchesSearch && matchesShipType && matchesProdStatus;
+                      return matchesSearch && matchesProduct && matchesShipType && matchesProdStatus;
                     })
                     .sort((a, b) => {
                       let comparison = 0;
@@ -2417,6 +2421,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
                               In Stock <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
                             </th>
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
+                              BR <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
+                            </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundAir')}>
                               In Air <SortIcon active={planningSortBy === 'inboundAir'} order={planningSortOrder} />
                             </th>
@@ -2428,9 +2435,6 @@ export default function Dashboard({ session }: DashboardProps) {
                             </th>
                             <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
                               In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
-                            </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
-                              BR <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
                               Need <SortIcon active={planningSortBy === 'laNeed'} order={planningSortOrder} />
@@ -2454,7 +2458,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         {items.map((item, index) => (
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                            <td className="w-20 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                             <td 
                               className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
                               title={formatTransferTooltip(item.airTransfers)}
@@ -2469,8 +2474,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             </td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
                             <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                            <td className="w-20 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{Math.ceil(item.unitsPerDay)}</td>
-                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                               {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                             </td>
                             <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
@@ -2490,7 +2494,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               {formatRunway(item.runwayAir)}
                             </td>
                             <td 
-                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                               title={`Runs out: ${getRunoutDate(item.runway)}`}
                             >
                               {formatRunway(item.runway)}
@@ -2508,6 +2512,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
+                            setPlanningFilterProduct('all');
                             setPlanningFilterShipType(planningFilterShipType === 'Sea' ? 'all' : 'Sea');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-green-300 ${planningFilterShipType === 'Sea' ? 'border-green-500' : 'border-transparent'}`}
@@ -2518,6 +2523,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
+                            setPlanningFilterProduct('all');
                             setPlanningFilterShipType(planningFilterShipType === 'Slow Air' ? 'all' : 'Slow Air');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-blue-300 ${planningFilterShipType === 'Slow Air' ? 'border-blue-500' : 'border-transparent'}`}
@@ -2528,6 +2534,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
+                            setPlanningFilterProduct('all');
                             setPlanningFilterShipType(planningFilterShipType === 'Express' ? 'all' : 'Express');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-orange-300 ${planningFilterShipType === 'Express' ? 'border-orange-500' : 'border-transparent'}`}
@@ -2538,6 +2545,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterShipType('all');
+                            setPlanningFilterProduct('all');
                             setPlanningFilterProdStatus(planningFilterProdStatus === 'Order More' ? 'all' : 'Order More');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-red-300 ${planningFilterProdStatus === 'Order More' ? 'border-red-500' : 'border-transparent'}`}
@@ -2552,17 +2560,16 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                           <div className="flex gap-3 flex-wrap items-end">
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-gray-400 mb-1">Ship Type</span>
+                              <span className="text-[10px] text-gray-400 mb-1">Product</span>
                               <select 
-                                value={planningFilterShipType} 
-                                onChange={(e) => setPlanningFilterShipType(e.target.value)}
+                                value={planningFilterProduct} 
+                                onChange={(e) => setPlanningFilterProduct(e.target.value)}
                                 className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                               >
-                                <option value="all">All Ship Types</option>
-                                <option value="Sea">Sea</option>
-                                <option value="Slow Air">Slow Air</option>
-                                <option value="Express">Express</option>
-                                <option value="Order More">Order More</option>
+                                <option value="all">All Products</option>
+                                {sortedPlanningGroupNames.map(group => (
+                                  <option key={group} value={group}>{group}</option>
+                                ))}
                               </select>
                             </div>
                             {/* List/Grouped Toggle */}
@@ -2710,11 +2717,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                       <tr>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Stock</th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">BR</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">BR</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Need</th>
                                         <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
@@ -2726,7 +2733,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                       {sortedItems.map((item, index) => (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                           <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                          <td className="w-20 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                                           <td 
                                             className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
                                             title={formatTransferTooltip(item.airTransfers)}
@@ -2741,8 +2749,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           </td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                                          <td className="w-20 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{Math.ceil(item.unitsPerDay)}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                             {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                                           </td>
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
@@ -2762,7 +2769,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                             {formatRunway(item.runwayAir)}
                                           </td>
                                           <td 
-                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                                             title={`Runs out: ${getRunoutDate(item.runway)}`}
                                           >
                                             {formatRunway(item.runway)}
@@ -2783,16 +2790,16 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'In Stock', 'In Air', 'In Sea', 'China', 'In Prod', 'BR', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'In Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
                               item.la,
+                              item.unitsPerDay.toFixed(1),
                               item.inboundAir,
                               item.inboundSea,
                               item.china,
                               item.poQty,
-                              Math.ceil(item.unitsPerDay),
                               item.laNeed,
                               item.shipType,
                               item.prodStatus,
