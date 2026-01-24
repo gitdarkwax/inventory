@@ -2347,6 +2347,11 @@ export default function Dashboard({ session }: DashboardProps) {
                   };
                   
                   // Filter and sort planning items for display
+                  // Get all product groups from unfiltered data for the dropdown
+                  const allProductGroups = [...new Set(allPlanningItems.map(item => extractProductModel(item.productTitle, item.sku)))].sort((a, b) => {
+                    return getModelPriority(b) - getModelPriority(a);
+                  });
+
                   const planningItems = allPlanningItems
                     .filter(item => {
                       // Filter by search term
@@ -2503,7 +2508,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               </span>
                             </td>
                             <td 
-                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                               title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                             >
                               {formatRunway(item.runwayAir)}
@@ -2601,7 +2606,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       Clear all
                                     </button>
                                   </div>
-                                  {sortedPlanningGroupNames.map(group => (
+                                  {allProductGroups.map(group => (
                                     <label
                                       key={group}
                                       className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
@@ -2815,7 +2820,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                             </span>
                                           </td>
                                           <td 
-                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                                             title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                                           >
                                             {formatRunway(item.runwayAir)}
