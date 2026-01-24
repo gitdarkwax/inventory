@@ -557,26 +557,6 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
-  // Automatic hourly refresh on the hour
-  useEffect(() => {
-    const checkAndRefresh = () => {
-      const now = new Date();
-      // Refresh if we're within the first minute of the hour
-      if (now.getMinutes() === 0 && now.getSeconds() < 60) {
-        console.log('🕐 Triggering hourly auto-refresh...');
-        refreshAllData(true);
-      }
-    };
-
-    // Check every minute
-    const intervalId = setInterval(checkAndRefresh, 60000);
-
-    // Also check immediately in case we loaded right at the top of the hour
-    checkAndRefresh();
-
-    return () => clearInterval(intervalId);
-  }, []);
-
   // Load data when tab changes
   useEffect(() => {
     if (activeTab === 'inventory' && !inventoryData && !inventoryLoading) {

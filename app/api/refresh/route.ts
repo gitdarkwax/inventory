@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
 /**
  * Fetch inventory data from Shopify
  */
-async function fetchInventoryData() {
+export async function fetchInventoryData() {
   const shopify = new ShopifyClient();
   
   // Fetch all locations
@@ -410,7 +410,7 @@ async function fetchInventoryData() {
 /**
  * Fetch forecasting data from Shopify
  */
-async function fetchForecastingData() {
+export async function fetchForecastingData() {
   const shopifyQL = new ShopifyQLService();
   return await shopifyQL.getForecastingData();
 }
