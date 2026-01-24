@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { ShopifyClient } from '@/lib/shopify';
 import { ShopifyQLService } from '@/lib/shopifyql';
+import { ShopifyGraphQLTransferService } from '@/lib/shopify-graphql-transfers';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
@@ -90,7 +91,6 @@ export async function POST(request: NextRequest) {
  */
 async function fetchInventoryData() {
   const shopify = new ShopifyClient();
-  const shopifyQL = new ShopifyQLService();
   
   // Fetch all locations
   const locations = await shopify.fetchLocations();
@@ -122,49 +122,51 @@ async function fetchInventoryData() {
   
   console.log(`📦 Found ${variantMap.size} variants from products tagged "inventoried"`);
   
-  // Fetch transfers for inbound air/sea tracking using ShopifyQL
-  const transfers = await shopifyQL.getTransferData();
-  console.log(`📦 Fetched ${transfers.length} pending transfer line items`);
+  // Fetch transfers via GraphQL Admin API (2026-01)
+  // This is separate from ShopifyQL queries
+  const graphqlTransferService = new ShopifyGraphQLTransferService();
+  const transferDataBySku = await graphqlTransferService.getTransferDataBySku();
+  console.log(`📦 Fetched transfer data for ${transferDataBySku.size} SKUs via GraphQL`);
   
   // Build transfer data by SKU (for LA Office destination)
   interface TransferInfo {
     transferName: string;
-    note: string;
+    note: string | null;
     quantity: number;
     type: 'air' | 'sea' | 'unknown';
   }
   
   const skuTransfers = new Map<string, TransferInfo[]>();
   
-  for (const transfer of transfers) {
-    // Map destination name to display name
-    const destName = locationDisplayNames[transfer.destinationName] || transfer.destinationName;
-    
-    // Only track transfers to LA Office
-    if (destName !== 'LA Office') continue;
-    
-    // Determine transfer type from tags (tags is a comma-separated string)
-    const tagsLower = transfer.tags.toLowerCase();
-    let transferType: 'air' | 'sea' | 'unknown' = 'unknown';
-    if (tagsLower.includes('air')) {
-      transferType = 'air';
-    } else if (tagsLower.includes('sea')) {
-      transferType = 'sea';
+  // Process GraphQL transfer data
+  for (const [sku, transferData] of transferDataBySku) {
+    for (const transfer of transferData.transfers) {
+      // Map destination name to display name
+      const destName = locationDisplayNames[transfer.destinationLocationName] || transfer.destinationLocationName;
+      
+      // Only track transfers to LA Office
+      if (destName !== 'LA Office') continue;
+      
+      // Determine transfer type from tags (tags is an array from GraphQL)
+      const tagsLower = transfer.tags.join(',').toLowerCase();
+      let transferType: 'air' | 'sea' | 'unknown' = 'unknown';
+      if (tagsLower.includes('air')) {
+        transferType = 'air';
+      } else if (tagsLower.includes('sea')) {
+        transferType = 'sea';
+      }
+      
+      if (!skuTransfers.has(sku)) {
+        skuTransfers.set(sku, []);
+      }
+      
+      skuTransfers.get(sku)!.push({
+        transferName: transfer.transferName,
+        note: transfer.note,
+        quantity: transfer.quantity,
+        type: transferType,
+      });
     }
-    
-    const sku = transfer.sku;
-    if (!sku) continue;
-    
-    if (!skuTransfers.has(sku)) {
-      skuTransfers.set(sku, []);
-    }
-    
-    skuTransfers.get(sku)!.push({
-      transferName: transfer.transferName,
-      note: transfer.note,
-      quantity: transfer.orderedQuantity,
-      type: transferType,
-    });
   }
   
   // Fetch detailed inventory levels for each location
@@ -197,6 +199,7 @@ async function fetchInventoryData() {
     variantTitle: string;
     locations: Record<string, number>;
     totalAvailable: number;
+    inTransit: number;
   }>();
   
   // Also build detailed location data
@@ -226,12 +229,17 @@ async function fetchInventoryData() {
     // Main view data
     let skuData = skuMap.get(variantInfo.sku);
     if (!skuData) {
+      // Get total in-transit for this SKU from GraphQL transfer data
+      const transferData = transferDataBySku.get(variantInfo.sku);
+      const inTransit = transferData?.totalInTransit || 0;
+      
       skuData = {
         sku: variantInfo.sku,
         productTitle: variantInfo.productTitle,
         variantTitle: variantInfo.variantTitle,
         locations: {},
         totalAvailable: 0,
+        inTransit,
       };
       skuMap.set(variantInfo.sku, skuData);
     }
