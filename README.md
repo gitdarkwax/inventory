@@ -109,3 +109,4 @@ Make sure to set all environment variables in your Vercel project settings.
 ## License
 
 Private - Internal use only
+
