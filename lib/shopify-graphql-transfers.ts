@@ -92,77 +92,90 @@ export class ShopifyGraphQLTransferService {
 
   /**
    * Fetch all in-progress inventory transfers via GraphQL
-   * Uses the exact query format confirmed working in Shopify
+   * Uses introspection to discover available fields, then builds a compatible query
    */
   async getInProgressTransfers(): Promise<GraphQLTransfer[]> {
     console.log('📦 Fetching in-progress transfers via GraphQL...');
 
-    const query = `
+    // First, introspect to discover what fields are available
+    const introspectionQuery = `
       {
-        inventoryTransfers(first: 50, query: "status:IN_PROGRESS OR status:READY_TO_SHIP") {
-          edges {
-            node {
-              id
-              name
-              status
-              originLocation {
-                name
-              }
-              destinationLocation {
-                name
-              }
-              createdAt
-              updatedAt
-              expectedArrivalAt
-              confirmedAt
-              transferredAt
-              canceledAt
-              referenceNumber
-              note
-              tags
-              lineItems(first: 100) {
-                edges {
-                  node {
-                    id
-                    quantity
-                    receivedQuantity
-                    inventoryItem {
-                      id
-                      variant {
-                        id
-                        sku
-                        title
-                        displayName
-                        barcode
-                        inventoryQuantity
-                        product {
-                          title
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-              shipments(first: 50) {
-                edges {
-                  node {
-                    id
-                    status
-                    trackingNumber
-                    carrier
-                    shippedAt
-                    receivedAt
-                    expectedDeliveryAt
-                  }
-                }
-              }
-            }
-          }
+        transfer: __type(name: "InventoryTransfer") {
+          fields { name }
+        }
+        lineItem: __type(name: "InventoryTransferLineItem") {
+          fields { name }
         }
       }
     `;
 
     try {
+      const schemaResult = await this.executeGraphQL(introspectionQuery);
+      const transferFields = new Set<string>(
+        (schemaResult?.transfer?.fields || []).map((f: { name: string }) => f.name)
+      );
+      const lineItemFields = new Set<string>(
+        (schemaResult?.lineItem?.fields || []).map((f: { name: string }) => f.name)
+      );
+
+      console.log(`📋 Available InventoryTransfer fields: ${Array.from(transferFields).join(', ')}`);
+      console.log(`📋 Available LineItem fields: ${Array.from(lineItemFields).join(', ')}`);
+
+      // Build query dynamically based on available fields
+      const hasLineItems = transferFields.has('lineItems');
+      if (!hasLineItems) {
+        console.warn('⚠️ lineItems field not available on InventoryTransfer');
+        return [];
+      }
+
+      // Find quantity field (could be quantity, expectedQuantity, requestedQuantity, etc.)
+      const quantityField = ['quantity', 'expectedQuantity', 'requestedQuantity', 'orderedQuantity']
+        .find(f => lineItemFields.has(f));
+      const receivedField = ['receivedQuantity', 'received'].find(f => lineItemFields.has(f));
+
+      if (!quantityField) {
+        console.warn('⚠️ No quantity field found on InventoryTransferLineItem');
+        return [];
+      }
+
+      // Build line item selection
+      const lineItemSelections = [
+        'id',
+        quantityField,
+        receivedField,
+        lineItemFields.has('inventoryItem') ? 'inventoryItem { id sku variant { sku product { title } } }' : '',
+        lineItemFields.has('sku') ? 'sku' : '',
+      ].filter(Boolean).join('\n');
+
+      // Build transfer selection
+      const transferSelections = [
+        'id',
+        transferFields.has('name') ? 'name' : '',
+        transferFields.has('status') ? 'status' : '',
+        transferFields.has('note') ? 'note' : '',
+        transferFields.has('tags') ? 'tags' : '',
+        transferFields.has('origin') ? 'origin { name }' : '',
+        transferFields.has('destination') ? 'destination { name }' : '',
+        transferFields.has('originLocation') ? 'originLocation { name }' : '',
+        transferFields.has('destinationLocation') ? 'destinationLocation { name }' : '',
+        transferFields.has('createdAt') ? 'createdAt' : '',
+        transferFields.has('expectedArrivalAt') ? 'expectedArrivalAt' : '',
+        `lineItems(first: 100) { edges { node { ${lineItemSelections} } } }`,
+      ].filter(Boolean).join('\n');
+
+      const query = `
+        {
+          inventoryTransfers(first: 50, query: "status:IN_PROGRESS OR status:READY_TO_SHIP") {
+            edges {
+              node {
+                ${transferSelections}
+              }
+            }
+          }
+        }
+      `;
+
+      console.log('📝 Built dynamic query based on schema');
       const result = await this.executeGraphQL(query);
 
       if (!result?.inventoryTransfers?.edges) {
@@ -181,25 +194,49 @@ export class ShopifyGraphQLTransferService {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const lineEdge of node.lineItems?.edges || []) {
           const lineNode = lineEdge.node;
-          const variant = lineNode.inventoryItem?.variant;
           
-          if (variant?.sku) {
+          // Try to get SKU from various possible locations
+          const sku = lineNode.sku || 
+                      lineNode.inventoryItem?.sku || 
+                      lineNode.inventoryItem?.variant?.sku || 
+                      '';
+          
+          // Get quantity from whatever field is available
+          const quantity = lineNode.quantity || 
+                          lineNode.expectedQuantity || 
+                          lineNode.requestedQuantity || 
+                          lineNode.orderedQuantity || 
+                          0;
+          
+          const receivedQuantity = lineNode.receivedQuantity || 
+                                   lineNode.received || 
+                                   0;
+          
+          if (sku) {
             lineItems.push({
-              sku: variant.sku,
-              quantity: lineNode.quantity || 0,
-              receivedQuantity: lineNode.receivedQuantity || 0,
-              productTitle: variant.product?.title || '',
-              variantTitle: variant.title || '',
+              sku,
+              quantity,
+              receivedQuantity,
+              productTitle: lineNode.inventoryItem?.variant?.product?.title || '',
+              variantTitle: '',
             });
           }
         }
+
+        // Get origin/destination from various possible field names
+        const originLocationName = node.originLocation?.name || 
+                                   node.origin?.name || 
+                                   '';
+        const destinationLocationName = node.destinationLocation?.name || 
+                                        node.destination?.name || 
+                                        '';
 
         transfers.push({
           id: node.id,
           name: node.name || '',
           status: node.status || '',
-          originLocationName: node.originLocation?.name || '',
-          destinationLocationName: node.destinationLocation?.name || '',
+          originLocationName,
+          destinationLocationName,
           createdAt: node.createdAt || '',
           expectedArrivalAt: node.expectedArrivalAt || null,
           note: node.note || null,
