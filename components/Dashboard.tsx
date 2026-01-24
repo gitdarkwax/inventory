@@ -368,6 +368,14 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Check if PO number already exists
+    const poNumberTrimmed = newOrderPoNumber.trim().toUpperCase();
+    const existingPO = productionOrders.find(order => order.poNumber?.toUpperCase() === poNumberTrimmed);
+    if (existingPO) {
+      alert(`PO# ${newOrderPoNumber.trim()} already exists`);
+      return;
+    }
+
     setIsCreatingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
@@ -471,6 +479,18 @@ export default function Dashboard({ session }: DashboardProps) {
     if (validItems.length === 0) {
       alert('Please add at least one item with a valid SKU and quantity');
       return;
+    }
+
+    // Check if PO number already exists (excluding current order)
+    if (editOrderPoNumber && editOrderPoNumber.trim()) {
+      const poNumberTrimmed = editOrderPoNumber.trim().toUpperCase();
+      const existingPO = productionOrders.find(order => 
+        order.id !== orderId && order.poNumber?.toUpperCase() === poNumberTrimmed
+      );
+      if (existingPO) {
+        alert(`PO# ${editOrderPoNumber.trim()} already exists`);
+        return;
+      }
     }
 
     setIsSavingOrder(true);
