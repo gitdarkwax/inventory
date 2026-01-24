@@ -39,8 +39,20 @@ export async function GET(request: NextRequest) {
     console.log(`✅ Inventory data fetched: ${inventoryData.totalSKUs} SKUs`);
 
     // Fetch forecasting data
-    const forecastingData = await fetchForecastingData();
-    console.log(`✅ Forecasting data fetched: ${forecastingData.length} SKUs`);
+    const rawForecastingData = await fetchForecastingData();
+    console.log(`✅ Forecasting data fetched: ${rawForecastingData.length} SKUs`);
+
+    // Build SKU to product name map from inventory data
+    const skuToProductName = new Map<string, string>();
+    for (const item of inventoryData.inventory) {
+      skuToProductName.set(item.sku, item.productTitle);
+    }
+
+    // Enrich forecasting data with product names from inventory
+    const forecastingData = rawForecastingData.map(item => ({
+      ...item,
+      productName: item.productName || skuToProductName.get(item.sku) || '',
+    }));
 
     // Save to cache (PO data is managed separately via Production Orders)
     const cache = new InventoryCacheService();

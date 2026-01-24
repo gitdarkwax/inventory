@@ -263,12 +263,13 @@ export class ShopifyQLService {
 
   /**
    * Get SKU-level sales data for a specific time range
+   * Groups by SKU only to aggregate sales across all product listings with the same SKU
    */
   private async getSKUSalesData(timeClause: string): Promise<SKUSalesData[]> {
     const query = `
       FROM sales
-        SHOW product_variant_sku, product_title, net_items_sold
-        GROUP BY product_variant_sku, product_title
+        SHOW product_variant_sku, net_items_sold
+        GROUP BY product_variant_sku
         ${timeClause}
         ORDER BY net_items_sold DESC
     `;
@@ -286,7 +287,7 @@ export class ShopifyQLService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return result.tableData.rows.map((row: any) => ({
       sku: row.product_variant_sku || '',
-      productName: row.product_title || '',
+      productName: '', // Product name will be filled from inventory data
       quantity: parseInt(row.net_items_sold || '0', 10),
     }));
   }
