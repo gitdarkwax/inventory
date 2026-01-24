@@ -106,6 +106,7 @@ interface ActivityLogEntry {
 
 interface ProductionOrder {
   id: string;
+  poNumber?: string;
   items: ProductionOrderItem[];
   notes: string;
   vendor?: string;
