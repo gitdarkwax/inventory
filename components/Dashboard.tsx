@@ -1827,21 +1827,38 @@ export default function Dashboard({ session }: DashboardProps) {
                   <button
                     onClick={() => {
                       // Build CSV content for Inventory
-                      const headers = ['SKU', 'Product', ...inventoryData.locations, 'In Transit', 'In Prod', 'Total Available'];
-                      const dataToExport = inventoryLocationFilter ? filteredLocationDetail : filteredInventory;
-                      const rows = dataToExport.map(item => {
-                        const inTransit = (item as any).inTransit || 0;
-                        const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
-                        const locationQtys = inventoryData.locations.map(loc => item.locations?.[loc] ?? 0);
-                        return [
+                      let headers: string[];
+                      let rows: (string | number)[][];
+                      
+                      if (inventoryLocationFilter) {
+                        // Location detail view - single location
+                        headers = ['SKU', 'Product', 'On Hand', 'Available', 'Committed', 'In Air', 'In Sea'];
+                        rows = filteredLocationDetail.map(item => [
                           item.sku,
                           `"${item.productTitle.replace(/"/g, '""')}"`,
-                          ...locationQtys,
-                          inTransit,
-                          poQty,
-                          item.totalAvailable
-                        ];
-                      });
+                          item.onHand,
+                          item.available,
+                          item.committed,
+                          item.inboundAir || 0,
+                          item.inboundSea || 0
+                        ]);
+                      } else {
+                        // All locations view
+                        headers = ['SKU', 'Product', ...inventoryData.locations, 'In Transit', 'In Prod', 'Total Available'];
+                        rows = filteredInventory.map(item => {
+                          const inTransit = (item as any).inTransit || 0;
+                          const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
+                          const locationQtys = inventoryData.locations.map(loc => item.locations?.[loc] ?? 0);
+                          return [
+                            item.sku,
+                            `"${item.productTitle.replace(/"/g, '""')}"`,
+                            ...locationQtys,
+                            inTransit,
+                            poQty,
+                            item.totalAvailable
+                          ];
+                        });
+                      }
                       
                       const csvContent = [
                         headers.join(','),
