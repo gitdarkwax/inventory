@@ -97,10 +97,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { orderId, items, notes, vendor, eta, status, deliveries } = body as {
+    const { orderId, items, notes, poNumber, vendor, eta, status, deliveries } = body as {
       orderId: string;
       items?: { sku: string; quantity: number }[];
       notes?: string;
+      poNumber?: string;
       vendor?: string;
       eta?: string;
       status?: 'in_production' | 'partial' | 'completed' | 'cancelled';
@@ -140,6 +141,7 @@ export async function PATCH(request: NextRequest) {
       {
         items,
         notes,
+        poNumber,
         vendor,
         eta,
         status,

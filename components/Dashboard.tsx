@@ -198,6 +198,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editOrderItems, setEditOrderItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [editOrderPoNumber, setEditOrderPoNumber] = useState('');
   const [editOrderVendor, setEditOrderVendor] = useState('');
   const [editOrderEta, setEditOrderEta] = useState('');
   const [editOrderNotes, setEditOrderNotes] = useState('');
@@ -474,6 +475,7 @@ export default function Dashboard({ session }: DashboardProps) {
         body: JSON.stringify({
           orderId,
           items: validItems,
+          poNumber: editOrderPoNumber || undefined,
           vendor: editOrderVendor || undefined,
           eta: editOrderEta || undefined,
           notes: editOrderNotes,
@@ -3073,14 +3075,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     <table className="min-w-full divide-y divide-gray-200 table-fixed">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
-                          <th className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
-                          <th className="w-24 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
-                          <th className="w-24 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
-                          <th className="w-24 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
-                          <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                          <th className="w-28 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
-                          <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
+                          <th className="w-[18%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
+                          <th className="w-[10%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                          <th className="w-[10%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
+                          <th className="w-[10%] px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
+                          <th className="w-[14%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                          <th className="w-[12%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
+                          <th className="w-[16%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -3097,7 +3099,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                               onClick={() => setSelectedOrder(isExpanded ? null : order)}
                             >
-                              <td className="w-24 px-4 py-3 text-sm font-medium text-gray-900">
+                              <td className="w-[10%] px-4 py-3 text-sm font-medium text-gray-900">
                                 <span className="flex items-center gap-2">
                                   <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -3105,17 +3107,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                   {order.poNumber || order.id.split('-').slice(0, 2).join('-')}
                                 </span>
                               </td>
-                              <td className="w-40 px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
-                              <td className="w-24 px-4 py-3 text-sm text-gray-600 text-right">{totalOrdered.toLocaleString()}</td>
-                              <td className="w-24 px-4 py-3 text-sm text-green-600 text-right">{totalReceived.toLocaleString()}</td>
-                              <td className={`w-24 px-4 py-3 text-sm text-right ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                              <td className="w-[18%] px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
+                              <td className="w-[10%] px-4 py-3 text-sm text-gray-600 text-right">{totalOrdered.toLocaleString()}</td>
+                              <td className="w-[10%] px-4 py-3 text-sm text-green-600 text-right">{totalReceived.toLocaleString()}</td>
+                              <td className={`w-[10%] px-4 py-3 text-sm text-right ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                 {(totalOrdered - totalReceived).toLocaleString()}
                               </td>
-                              <td className="w-28 px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
-                              <td className="w-28 px-4 py-3 text-sm text-gray-600">
+                              <td className="w-[14%] px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
+                              <td className="w-[12%] px-4 py-3 text-sm text-gray-600">
                                 {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
                               </td>
-                              <td className="w-32 px-4 py-3">
+                              <td className="w-[16%] px-4 py-3">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
                                   order.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
@@ -3264,6 +3266,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                              setEditOrderPoNumber(order.poNumber || '');
                                               setEditOrderVendor(order.vendor || '');
                                               setEditOrderEta(order.eta || '');
                                               setEditOrderNotes(order.notes || '');
@@ -3335,7 +3338,8 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 space-y-4">
                     {/* PO Number */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">PO# <span className="text-red-500">*</span></label>
+                      <p className="text-xs text-gray-400 mb-2">PO# from Shopify</p>
                       <input
                         type="text"
                         value={newOrderPoNumber}
@@ -3563,9 +3567,21 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.id}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.poNumber || selectedOrder.id}</h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
+                    {/* PO Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">PO#</label>
+                      <p className="text-xs text-gray-400 mb-2">PO# from Shopify</p>
+                      <input
+                        type="text"
+                        value={editOrderPoNumber}
+                        onChange={(e) => setEditOrderPoNumber(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="PO12345"
+                      />
+                    </div>
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>

@@ -311,7 +311,7 @@ export class ProductionOrdersService {
    */
   static async updateOrder(
     orderId: string,
-    updates: Partial<Pick<ProductionOrder, 'notes' | 'vendor' | 'eta' | 'status'>> & {
+    updates: Partial<Pick<ProductionOrder, 'notes' | 'poNumber' | 'vendor' | 'eta' | 'status'>> & {
       items?: { sku: string; quantity: number }[];
     },
     changedBy?: string,
@@ -351,6 +351,10 @@ export class ProductionOrdersService {
     if (updates.notes !== undefined && updates.notes !== order.notes) {
       changes.push('Notes updated');
       order.notes = updates.notes;
+    }
+    if (updates.poNumber !== undefined && updates.poNumber !== order.poNumber) {
+      changes.push(`PO#: ${updates.poNumber || 'cleared'}`);
+      order.poNumber = updates.poNumber;
     }
     if (updates.vendor !== undefined && updates.vendor !== order.vendor) {
       changes.push(`Vendor: ${updates.vendor || 'cleared'}`);
