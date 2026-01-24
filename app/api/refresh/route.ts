@@ -192,6 +192,17 @@ async function fetchInventoryData() {
     })));
   }
   
+  // Transfer info for hover tooltip
+  interface TransferInfo {
+    id: string;
+    name: string;
+    quantity: number;
+    tags: string[];
+    note: string | null;
+    createdAt: string;
+    expectedArrivalAt: string | null;
+  }
+
   // Group inventory by SKU
   const skuMap = new Map<string, {
     sku: string;
@@ -200,6 +211,7 @@ async function fetchInventoryData() {
     locations: Record<string, number>;
     totalAvailable: number;
     inTransit: number;
+    transferDetails: TransferInfo[];
   }>();
   
   // Also build detailed location data
@@ -232,6 +244,15 @@ async function fetchInventoryData() {
       // Get total in-transit for this SKU from GraphQL transfer data
       const transferData = transferDataBySku.get(variantInfo.sku);
       const inTransit = transferData?.totalInTransit || 0;
+      const transferDetails: TransferInfo[] = (transferData?.transfers || []).map(t => ({
+        id: t.transferId,
+        name: t.transferName,
+        quantity: t.quantity,
+        tags: t.tags,
+        note: t.note,
+        createdAt: t.createdAt,
+        expectedArrivalAt: t.expectedArrivalAt,
+      }));
       
       skuData = {
         sku: variantInfo.sku,
@@ -240,6 +261,7 @@ async function fetchInventoryData() {
         locations: {},
         totalAvailable: 0,
         inTransit,
+        transferDetails,
       };
       skuMap.set(variantInfo.sku, skuData);
     }

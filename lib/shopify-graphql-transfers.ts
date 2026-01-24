@@ -36,6 +36,8 @@ export interface TransferDataBySku {
     quantity: number;
     tags: string[];
     note: string | null;
+    createdAt: string;
+    expectedArrivalAt: string | null;
     originLocationName: string;
     destinationLocationName: string;
   }>;
@@ -334,6 +336,8 @@ export class ShopifyGraphQLTransferService {
           quantity: inTransitQty,
           tags: transfer.tags,
           note: transfer.note,
+          createdAt: transfer.createdAt,
+          expectedArrivalAt: transfer.expectedArrivalAt,
           originLocationName: transfer.originLocationName,
           destinationLocationName: transfer.destinationLocationName,
         });

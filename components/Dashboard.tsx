@@ -1414,6 +1414,27 @@ export default function Dashboard({ session }: DashboardProps) {
                             filteredInventory.map((item, index) => {
                               // Get total in transit for this SKU (from GraphQL transfer data)
                               const inTransit = (item as any).inTransit || 0;
+                              const transferDetails = (item as any).transferDetails || [];
+                              
+                              // Build tooltip for transfers
+                              const transferTooltip = transferDetails.length > 0 
+                                ? transferDetails.map((t: any) => {
+                                    const lines = [];
+                                    lines.push(`${t.id} - ${t.name}`);
+                                    const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '';
+                                    const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
+                                    lines.push(`Created: ${createdDate}${tagsStr ? ` - ${tagsStr}` : ''}`);
+                                    if (t.expectedArrivalAt) {
+                                      lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString()}`);
+                                    }
+                                    if (t.note) {
+                                      lines.push(t.note);
+                                    }
+                                    lines.push(`Qty: ${t.quantity}`);
+                                    return lines.join('\n');
+                                  }).join('\n\n')
+                                : undefined;
+                              
                               return (
                                 <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                   <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
@@ -1426,7 +1447,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                       </td>
                                     );
                                   })}
-                                  <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                                  <td 
+                                    className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                    title={transferTooltip}
+                                  >
                                     {inTransit > 0 ? inTransit.toLocaleString() : '—'}
                                   </td>
                                   <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
@@ -1574,6 +1598,27 @@ export default function Dashboard({ session }: DashboardProps) {
                                     {items.map((item, index) => {
                                       // Get total in transit for this SKU (from GraphQL transfer data)
                                       const inTransit = (item as any).inTransit || 0;
+                                      const transferDetails = (item as any).transferDetails || [];
+                                      
+                                      // Build tooltip for transfers
+                                      const transferTooltip = transferDetails.length > 0 
+                                        ? transferDetails.map((t: any) => {
+                                            const lines = [];
+                                            lines.push(`${t.id} - ${t.name}`);
+                                            const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '';
+                                            const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
+                                            lines.push(`Created: ${createdDate}${tagsStr ? ` - ${tagsStr}` : ''}`);
+                                            if (t.expectedArrivalAt) {
+                                              lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString()}`);
+                                            }
+                                            if (t.note) {
+                                              lines.push(t.note);
+                                            }
+                                            lines.push(`Qty: ${t.quantity}`);
+                                            return lines.join('\n');
+                                          }).join('\n\n')
+                                        : undefined;
+                                      
                                       return (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                           <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
@@ -1586,7 +1631,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                               </td>
                                             );
                                           })}
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                                          <td 
+                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                            title={transferTooltip}
+                                          >
                                             {inTransit > 0 ? inTransit.toLocaleString() : '—'}
                                           </td>
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
