@@ -744,17 +744,16 @@ export default function Dashboard({ session }: DashboardProps) {
     const dateOpts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
     return transfers.map(t => {
       const lines = [];
-      lines.push(`${t.id} - ${t.name}`);
       const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', dateOpts) : '';
-      const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
-      lines.push(`Created: ${createdDate}${tagsStr ? ` - ${tagsStr}` : ''}`);
+      lines.push(`${t.name} - Created: ${createdDate}`);
       if (t.expectedArrivalAt) {
         lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}`);
       }
       if (t.note) {
         lines.push(t.note);
       }
-      lines.push(`Qty: ${t.quantity}`);
+      const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
+      lines.push(`Qty: ${t.quantity}${tagsStr ? ` - ${tagsStr}` : ''}`);
       return lines.join('\n');
     }).join('\n\n');
   };
