@@ -128,10 +128,10 @@ export class ShopifyGraphQLTransferService {
         return [];
       }
 
-      // Find quantity field (could be quantity, expectedQuantity, requestedQuantity, etc.)
-      const quantityField = ['quantity', 'expectedQuantity', 'requestedQuantity', 'orderedQuantity']
+      // Find quantity field (could be totalQuantity, quantity, expectedQuantity, etc.)
+      const quantityField = ['totalQuantity', 'quantity', 'expectedQuantity', 'requestedQuantity', 'orderedQuantity']
         .find(f => lineItemFields.has(f));
-      const receivedField = ['receivedQuantity', 'received'].find(f => lineItemFields.has(f));
+      const receivedField = ['shippedQuantity', 'receivedQuantity', 'received'].find(f => lineItemFields.has(f));
 
       if (!quantityField) {
         console.warn('⚠️ No quantity field found on InventoryTransferLineItem');
@@ -158,7 +158,7 @@ export class ShopifyGraphQLTransferService {
         transferFields.has('destination') ? 'destination { name }' : '',
         transferFields.has('originLocation') ? 'originLocation { name }' : '',
         transferFields.has('destinationLocation') ? 'destinationLocation { name }' : '',
-        transferFields.has('createdAt') ? 'createdAt' : '',
+        transferFields.has('dateCreated') ? 'dateCreated' : (transferFields.has('createdAt') ? 'createdAt' : ''),
         transferFields.has('expectedArrivalAt') ? 'expectedArrivalAt' : '',
         `lineItems(first: 100) { edges { node { ${lineItemSelections} } } }`,
       ].filter(Boolean).join('\n');
@@ -202,13 +202,15 @@ export class ShopifyGraphQLTransferService {
                       '';
           
           // Get quantity from whatever field is available
-          const quantity = lineNode.quantity || 
+          const quantity = lineNode.totalQuantity ||
+                          lineNode.quantity || 
                           lineNode.expectedQuantity || 
                           lineNode.requestedQuantity || 
                           lineNode.orderedQuantity || 
                           0;
           
-          const receivedQuantity = lineNode.receivedQuantity || 
+          const receivedQuantity = lineNode.shippedQuantity ||
+                                   lineNode.receivedQuantity || 
                                    lineNode.received || 
                                    0;
           
@@ -237,7 +239,7 @@ export class ShopifyGraphQLTransferService {
           status: node.status || '',
           originLocationName,
           destinationLocationName,
-          createdAt: node.createdAt || '',
+          createdAt: node.dateCreated || node.createdAt || '',
           expectedArrivalAt: node.expectedArrivalAt || null,
           note: node.note || null,
           tags: Array.isArray(node.tags) ? node.tags : [],
