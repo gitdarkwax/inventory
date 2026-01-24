@@ -226,6 +226,8 @@ async function fetchInventoryData() {
     inboundAir: number;
     inboundSea: number;
     transferNotes: Array<{ id: string; note: string | null }>;
+    airTransfers: TransferDetailInfo[];
+    seaTransfers: TransferDetailInfo[];
   }>>();
   
   // Initialize location detail maps
@@ -272,11 +274,38 @@ async function fetchInventoryData() {
     // Location detail data
     const locDetailMap = locationDetailMap.get(level.displayName);
     if (locDetailMap) {
-      // Get transfer info for this SKU
-      const transfersForSku = skuTransfers.get(variantInfo.sku) || [];
-      const inboundAir = transfersForSku.filter(t => t.type === 'air').reduce((sum, t) => sum + t.quantity, 0);
-      const inboundSea = transfersForSku.filter(t => t.type === 'sea').reduce((sum, t) => sum + t.quantity, 0);
-      const transferNotes = transfersForSku.map(t => ({ id: t.transferName, note: t.note }));
+      // Get transfer info for this SKU from GraphQL data
+      const transferData = transferDataBySku.get(variantInfo.sku);
+      const allTransfers = transferData?.transfers || [];
+      
+      // Separate transfers by air/sea tag
+      const airTransfers: TransferDetailInfo[] = [];
+      const seaTransfers: TransferDetailInfo[] = [];
+      let inboundAir = 0;
+      let inboundSea = 0;
+      
+      for (const t of allTransfers) {
+        const tagsLower = (t.tags || []).map(tag => tag.toLowerCase());
+        const transferDetail: TransferDetailInfo = {
+          id: t.transferId,
+          name: t.transferName,
+          quantity: t.quantity,
+          tags: t.tags,
+          note: t.note,
+          createdAt: t.createdAt,
+          expectedArrivalAt: t.expectedArrivalAt,
+        };
+        
+        if (tagsLower.includes('air')) {
+          airTransfers.push(transferDetail);
+          inboundAir += t.quantity;
+        } else if (tagsLower.includes('sea')) {
+          seaTransfers.push(transferDetail);
+          inboundSea += t.quantity;
+        }
+      }
+      
+      const transferNotes = allTransfers.map(t => ({ id: t.transferName, note: t.note }));
       
       const existing = locDetailMap.get(variantInfo.sku);
       if (existing) {
@@ -289,6 +318,8 @@ async function fetchInventoryData() {
           existing.inboundAir = inboundAir;
           existing.inboundSea = inboundSea;
           existing.transferNotes = transferNotes;
+          existing.airTransfers = airTransfers;
+          existing.seaTransfers = seaTransfers;
         }
       } else {
         locDetailMap.set(variantInfo.sku, {
@@ -302,6 +333,8 @@ async function fetchInventoryData() {
           inboundAir: level.displayName === 'LA Office' ? inboundAir : 0,
           inboundSea: level.displayName === 'LA Office' ? inboundSea : 0,
           transferNotes: level.displayName === 'LA Office' ? transferNotes : [],
+          airTransfers: level.displayName === 'LA Office' ? airTransfers : [],
+          seaTransfers: level.displayName === 'LA Office' ? seaTransfers : [],
         });
       }
     }
@@ -326,6 +359,8 @@ async function fetchInventoryData() {
     inboundAir: number;
     inboundSea: number;
     transferNotes: Array<{ id: string; note: string | null }>;
+    airTransfers: TransferDetailInfo[];
+    seaTransfers: TransferDetailInfo[];
   }>> = {};
   
   for (const [locName, skuMapInner] of locationDetailMap) {

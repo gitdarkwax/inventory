@@ -18,6 +18,16 @@ interface InventoryByLocation {
   totalAvailable: number;
 }
 
+interface TransferDetail {
+  id: string;
+  name: string;
+  quantity: number;
+  tags: string[];
+  note: string | null;
+  createdAt: string;
+  expectedArrivalAt: string | null;
+}
+
 interface LocationDetail {
   sku: string;
   productTitle: string;
@@ -29,6 +39,8 @@ interface LocationDetail {
   inboundAir: number;
   inboundSea: number;
   transferNotes: Array<{ id: string; note: string | null }>;
+  airTransfers?: TransferDetail[];
+  seaTransfers?: TransferDetail[];
 }
 
 interface InventorySummary {
@@ -726,6 +738,27 @@ export default function Dashboard({ session }: DashboardProps) {
     return Math.round(days).toString();
   };
 
+  // Format transfer tooltip
+  const formatTransferTooltip = (transfers: TransferDetail[] | undefined): string | undefined => {
+    if (!transfers || transfers.length === 0) return undefined;
+    const dateOpts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return transfers.map(t => {
+      const lines = [];
+      lines.push(`${t.id} - ${t.name}`);
+      const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', dateOpts) : '';
+      const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
+      lines.push(`Created: ${createdDate}${tagsStr ? ` - ${tagsStr}` : ''}`);
+      if (t.expectedArrivalAt) {
+        lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}`);
+      }
+      if (t.note) {
+        lines.push(t.note);
+      }
+      lines.push(`Qty: ${t.quantity}`);
+      return lines.join('\n');
+    }).join('\n\n');
+  };
+
   // Calculate and format run out date
   const formatRunOutDate = (days: number): string => {
     if (days >= 999) return '—'; // Infinite/no sales
@@ -1060,13 +1093,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
                         <td 
                           className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
-                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                          title={formatTransferTooltip(item.airTransfers)}
                         >
                           {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                         </td>
                         <td 
                           className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
-                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                          title={formatTransferTooltip(item.seaTransfers)}
                         >
                           {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                         </td>
@@ -1397,13 +1430,13 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </td>
                                 <td 
                                   className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
-                                  title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                  title={formatTransferTooltip(item.airTransfers)}
                                 >
                                   {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                                 </td>
                                 <td 
                                   className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
-                                  title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                  title={formatTransferTooltip(item.seaTransfers)}
                                 >
                                   {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                 </td>
@@ -1415,25 +1448,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               // Get total in transit for this SKU (from GraphQL transfer data)
                               const inTransit = (item as any).inTransit || 0;
                               const transferDetails = (item as any).transferDetails || [];
-                              
-                              // Build tooltip for transfers
-                              const transferTooltip = transferDetails.length > 0 
-                                ? transferDetails.map((t: any) => {
-                                    const lines = [];
-                                    lines.push(`${t.id} - ${t.name}`);
-                                    const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '';
-                                    const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
-                                    lines.push(`Created: ${createdDate}${tagsStr ? ` - ${tagsStr}` : ''}`);
-                                    if (t.expectedArrivalAt) {
-                                      lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString()}`);
-                                    }
-                                    if (t.note) {
-                                      lines.push(t.note);
-                                    }
-                                    lines.push(`Qty: ${t.quantity}`);
-                                    return lines.join('\n');
-                                  }).join('\n\n')
-                                : undefined;
+                              const transferTooltip = formatTransferTooltip(transferDetails);
                               
                               return (
                                 <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -1531,13 +1546,13 @@ export default function Dashboard({ session }: DashboardProps) {
                                         </td>
                                         <td 
                                           className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
-                                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                          title={formatTransferTooltip(item.airTransfers)}
                                         >
                                           {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                                         </td>
                                         <td 
                                           className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
-                                          title={item.transferNotes?.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                          title={formatTransferTooltip(item.seaTransfers)}
                                         >
                                           {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                         </td>
@@ -1599,25 +1614,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       // Get total in transit for this SKU (from GraphQL transfer data)
                                       const inTransit = (item as any).inTransit || 0;
                                       const transferDetails = (item as any).transferDetails || [];
-                                      
-                                      // Build tooltip for transfers
-                                      const transferTooltip = transferDetails.length > 0 
-                                        ? transferDetails.map((t: any) => {
-                                            const lines = [];
-                                            lines.push(`${t.id} - ${t.name}`);
-                                            const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '';
-                                            const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
-                                            lines.push(`Created: ${createdDate}${tagsStr ? ` - ${tagsStr}` : ''}`);
-                                            if (t.expectedArrivalAt) {
-                                              lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString()}`);
-                                            }
-                                            if (t.note) {
-                                              lines.push(t.note);
-                                            }
-                                            lines.push(`Qty: ${t.quantity}`);
-                                            return lines.join('\n');
-                                          }).join('\n\n')
-                                        : undefined;
+                                      const transferTooltip = formatTransferTooltip(transferDetails);
                                       
                                       return (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -2114,6 +2111,22 @@ export default function Dashboard({ session }: DashboardProps) {
                     return detail?.transferNotes || [];
                   };
                   
+                  // Get air transfers for LA Office
+                  const getLAAirTransfers = (sku: string): TransferDetail[] => {
+                    const laDetails = inventoryData.locationDetails?.['LA Office'];
+                    if (!laDetails) return [];
+                    const detail = laDetails.find(d => d.sku === sku);
+                    return detail?.airTransfers || [];
+                  };
+                  
+                  // Get sea transfers for LA Office
+                  const getLASeaTransfers = (sku: string): TransferDetail[] => {
+                    const laDetails = inventoryData.locationDetails?.['LA Office'];
+                    if (!laDetails) return [];
+                    const detail = laDetails.find(d => d.sku === sku);
+                    return detail?.seaTransfers || [];
+                  };
+                  
                   // Get committed from LA (LA Office + DTLA WH)
                   const getLACommitted = (sku: string): number => {
                     const laOfficeDetails = inventoryData.locationDetails?.['LA Office'];
@@ -2227,6 +2240,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       const inboundSea = getLAInboundSea(inv.sku);
                       const incoming = inboundAir + inboundSea;
                       const transferNotes = getLATransferNotes(inv.sku);
+                      const airTransfers = getLAAirTransfers(inv.sku);
+                      const seaTransfers = getLASeaTransfers(inv.sku);
                       const chinaInventory = getChinaInventory(inv.sku);
                       const poQty = getPOQuantity(inv.sku);
                       const unitsPerDay = getUnitsPerDay(inv.sku);
@@ -2276,6 +2291,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         inboundAir,
                         inboundSea,
                         transferNotes,
+                        airTransfers,
+                        seaTransfers,
                         china: chinaInventory,
                         poQty,
                         unitsPerDay,
@@ -2411,13 +2428,13 @@ export default function Dashboard({ session }: DashboardProps) {
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                             <td 
                               className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
-                              title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                              title={formatTransferTooltip(item.airTransfers)}
                             >
                               {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                             </td>
                             <td 
                               className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
-                              title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                              title={formatTransferTooltip(item.seaTransfers)}
                             >
                               {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                             </td>
@@ -2626,13 +2643,13 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                                           <td 
                                             className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
-                                            title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                            title={formatTransferTooltip(item.airTransfers)}
                                           >
                                             {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                                           </td>
                                           <td 
                                             className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
-                                            title={item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('\n') || undefined}
+                                            title={formatTransferTooltip(item.seaTransfers)}
                                           >
                                             {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                           </td>
