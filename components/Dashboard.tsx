@@ -1077,7 +1077,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed in LA to cover the period selected under the "Units needed in LA" drop down menu.\nCurrent stock available in LA is factored into the calculation.\n(Target Days selected × Burn Rate) - (LA Inventory - committed)' },
-    { name: 'Ship Type', description: 'Recommended shipping method based on days of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list → Phase Out' },
+    { name: 'Ship Type', description: 'Recommended shipping method based on days of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list & China = 0 → Phase Out' },
     { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / Burn Rate:\n• >90 days & active PO → More in Prod\n• >90 days & no PO → No Action\n• 60-90 days & active PO → Get Prod Status\n• 60-90 days & no PO → No Action\n• ≤60 days & active PO → Push Vendor\n• ≤60 days & no PO → Order More' },
     { name: 'Runway Air', description: 'Days of stock based on LA + air shipments only:\n(LA Office + LA WH + In Air) / Burn Rate\nColor: Red if < 60 days' },
     { name: 'Runway', description: 'Days of stock based on LA + all air and sea shipments:\n(LA Office + LA WH + In Air + In Sea) / Burn Rate\nColor: Red if < 90 days' },
@@ -2537,8 +2537,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         return null; // Will be filtered out
                       }
                       
-                      // For phase out SKUs, override ship type and prod status
-                      const shipType = isPhaseOut ? 'Phase Out' : getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
+                      // For phase out SKUs: show "Phase Out" for ship type only if no China inventory
+                      // If there's China inventory, use normal ship type logic
+                      const shipType = (isPhaseOut && chinaInventory <= 0) ? 'Phase Out' : getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
                       
                       // Calculate Runway Air (days of LA + Inbound Air only)
                       const runwayAir = unitsPerDay > 0 ? Math.round((laInventory + inboundAir) / unitsPerDay) : 999;
