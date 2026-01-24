@@ -185,7 +185,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showNewOrderForm, setShowNewOrderForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
   const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
-  const [newOrderPoNumber, setNewOrderPoNumber] = useState('');
+  const [newOrderPoNumber, setNewOrderPoNumber] = useState('PO');
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderVendor, setNewOrderVendor] = useState('');
   const [newOrderEta, setNewOrderEta] = useState('');
@@ -355,6 +355,12 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Validate PO number (must be more than just "PO")
+    if (!newOrderPoNumber || newOrderPoNumber.trim() === 'PO') {
+      alert('Please enter a PO number');
+      return;
+    }
+
     setIsCreatingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
@@ -372,7 +378,7 @@ export default function Dashboard({ session }: DashboardProps) {
       if (response.ok) {
         setShowNewOrderForm(false);
         setNewOrderItems([{ sku: '', quantity: '' }]);
-        setNewOrderPoNumber('');
+        setNewOrderPoNumber('PO');
         setNewOrderNotes('');
         setNewOrderVendor('');
         setNewOrderEta('');
@@ -3067,9 +3073,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -3098,11 +3106,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">
-                                {order.items.length} SKU{order.items.length !== 1 ? 's' : ''} 
-                                <span className="text-gray-400 ml-1">
-                                  ({totalReceived.toLocaleString()}/{totalOrdered.toLocaleString()})
-                                </span>
+                              <td className="px-4 py-3 text-sm text-gray-600 text-right">{totalOrdered.toLocaleString()}</td>
+                              <td className="px-4 py-3 text-sm text-green-600 text-right">{totalReceived.toLocaleString()}</td>
+                              <td className={`px-4 py-3 text-sm text-right ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                                {(totalOrdered - totalReceived).toLocaleString()}
                               </td>
                               <td className="px-4 py-3 text-sm text-gray-600">{order.vendor || '—'}</td>
                               <td className="px-4 py-3 text-sm text-gray-600">
@@ -3126,7 +3133,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             {/* Expanded Details Row */}
                             {isExpanded && (
                               <tr>
-                                <td colSpan={6} className="bg-gray-50 px-4 py-4">
+                                <td colSpan={8} className="bg-gray-50 px-4 py-4">
                                   <div className="space-y-4">
                                     {/* Meta info */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -3304,7 +3311,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       })}
                         {filteredOrders.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                            <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                               {skuSearchQuery || skuSearchDateFrom || skuSearchDateTo
                                 ? 'No orders match your search criteria.'
                                 : 'No orders found. Click "New Production Order" to create one.'}
@@ -3328,13 +3335,21 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 space-y-4">
                     {/* PO Number */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# (optional)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# <span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={newOrderPoNumber}
-                        onChange={(e) => setNewOrderPoNumber(e.target.value)}
+                        onChange={(e) => {
+                          // Ensure it always starts with "PO"
+                          const value = e.target.value.toUpperCase();
+                          if (value.startsWith('PO')) {
+                            setNewOrderPoNumber(value);
+                          } else if (value === 'P' || value === '') {
+                            setNewOrderPoNumber('PO');
+                          }
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="e.g. PO-2026-001"
+                        placeholder="PO12345"
                       />
                     </div>
                     {/* Items */}
