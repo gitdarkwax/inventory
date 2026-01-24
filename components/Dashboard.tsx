@@ -166,7 +166,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [showColumnDefinitions, setShowColumnDefinitions] = useState(false);
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
-  const [planningFilterProduct, setPlanningFilterProduct] = useState<string>('all');
+  const [planningFilterProducts, setPlanningFilterProducts] = useState<string[]>([]);
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const productDropdownRef = useRef<HTMLDivElement>(null);
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningRunwayDisplay, setPlanningRunwayDisplay] = useState<'days' | 'dates'>('days');
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'runway'>('shipType');
@@ -568,6 +570,19 @@ export default function Dashboard({ session }: DashboardProps) {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showLocationDropdown]);
+
+  // Close product dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (productDropdownRef.current && !productDropdownRef.current.contains(event.target as Node)) {
+        setShowProductDropdown(false);
+      }
+    };
+    if (showProductDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showProductDropdown]);
 
   // Helper to calculate inventory for selected locations
   const getInventoryForLocations = (inventoryItem: InventoryByLocation | undefined, selectedLocations: string[]): number => {
@@ -2338,9 +2353,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       const matchesSearch = !planningSearchTerm || 
                         item.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
                         item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
-                      // Filter by product group
+                      // Filter by product group (multi-select)
                       const itemProductGroup = extractProductModel(item.productTitle, item.sku);
-                      const matchesProduct = planningFilterProduct === 'all' || itemProductGroup === planningFilterProduct;
+                      const matchesProduct = planningFilterProducts.length === 0 || planningFilterProducts.includes(itemProductGroup);
                       // Filter by ship type (from metric buttons)
                       const matchesShipType = planningFilterShipType === 'all' || item.shipType === planningFilterShipType;
                       // Filter by prod status
@@ -2512,7 +2527,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
-                            setPlanningFilterProduct('all');
+                            setPlanningFilterProducts([]);
                             setPlanningFilterShipType(planningFilterShipType === 'Sea' ? 'all' : 'Sea');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-green-300 ${planningFilterShipType === 'Sea' ? 'border-green-500' : 'border-transparent'}`}
@@ -2523,7 +2538,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
-                            setPlanningFilterProduct('all');
+                            setPlanningFilterProducts([]);
                             setPlanningFilterShipType(planningFilterShipType === 'Slow Air' ? 'all' : 'Slow Air');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-blue-300 ${planningFilterShipType === 'Slow Air' ? 'border-blue-500' : 'border-transparent'}`}
@@ -2534,7 +2549,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
-                            setPlanningFilterProduct('all');
+                            setPlanningFilterProducts([]);
                             setPlanningFilterShipType(planningFilterShipType === 'Express' ? 'all' : 'Express');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-orange-300 ${planningFilterShipType === 'Express' ? 'border-orange-500' : 'border-transparent'}`}
@@ -2545,7 +2560,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterShipType('all');
-                            setPlanningFilterProduct('all');
+                            setPlanningFilterProducts([]);
                             setPlanningFilterProdStatus(planningFilterProdStatus === 'Order More' ? 'all' : 'Order More');
                           }}
                           className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-red-300 ${planningFilterProdStatus === 'Order More' ? 'border-red-500' : 'border-transparent'}`}
@@ -2559,18 +2574,55 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                         <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                           <div className="flex gap-3 flex-wrap items-end">
-                            <div className="flex flex-col">
+                            <div className="flex flex-col relative" ref={productDropdownRef}>
                               <span className="text-[10px] text-gray-400 mb-1">Product</span>
-                              <select 
-                                value={planningFilterProduct} 
-                                onChange={(e) => setPlanningFilterProduct(e.target.value)}
-                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              <button
+                                onClick={() => setShowProductDropdown(!showProductDropdown)}
+                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left flex items-center justify-between min-w-[140px]"
                               >
-                                <option value="all">All Products</option>
-                                {sortedPlanningGroupNames.map(group => (
-                                  <option key={group} value={group}>{group}</option>
-                                ))}
-                              </select>
+                                <span className="truncate">
+                                  {planningFilterProducts.length === 0 
+                                    ? 'All Products' 
+                                    : planningFilterProducts.length === 1 
+                                      ? planningFilterProducts[0]
+                                      : `${planningFilterProducts.length} selected`}
+                                </span>
+                                <svg className="w-4 h-4 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              {showProductDropdown && (
+                                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                                  <div className="p-2 border-b border-gray-200">
+                                    <button
+                                      onClick={() => setPlanningFilterProducts([])}
+                                      className="text-xs text-blue-600 hover:text-blue-800"
+                                    >
+                                      Clear all
+                                    </button>
+                                  </div>
+                                  {sortedPlanningGroupNames.map(group => (
+                                    <label
+                                      key={group}
+                                      className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={planningFilterProducts.includes(group)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setPlanningFilterProducts([...planningFilterProducts, group]);
+                                          } else {
+                                            setPlanningFilterProducts(planningFilterProducts.filter(p => p !== group));
+                                          }
+                                        }}
+                                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                      />
+                                      <span className="ml-2 text-xs text-gray-700">{group}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             {/* List/Grouped Toggle */}
                             <div className="flex flex-col">
