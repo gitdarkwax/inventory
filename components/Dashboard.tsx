@@ -138,6 +138,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [filterOutOfStock, setFilterOutOfStock] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [inventoryFilterProducts, setInventoryFilterProducts] = useState<string[]>([]);
+  const [showInventoryProductDropdown, setShowInventoryProductDropdown] = useState(false);
+  const inventoryProductDropdownRef = useRef<HTMLDivElement>(null);
   const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'grouped'>('grouped');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [inventoryLocationFilter, setInventoryLocationFilter] = useState<string | null>(null);
@@ -619,6 +622,19 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showSkuSearchSuggestions]);
 
+  // Close inventory product dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (inventoryProductDropdownRef.current && !inventoryProductDropdownRef.current.contains(event.target as Node)) {
+        setShowInventoryProductDropdown(false);
+      }
+    };
+    if (showInventoryProductDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showInventoryProductDropdown]);
+
   // Helper to calculate inventory for selected locations
   const getInventoryForLocations = (inventoryItem: InventoryByLocation | undefined, selectedLocations: string[]): number => {
     if (!inventoryItem) return 0;
@@ -675,9 +691,10 @@ export default function Dashboard({ session }: DashboardProps) {
         item.productTitle.toLowerCase().includes(searchTerm.toLowerCase());
       if (filterOutOfStock && item.totalAvailable > 0) return false;
       if (filterLowStock && (item.totalAvailable <= 0 || item.totalAvailable > 10)) return false;
-      if (filterCategory !== 'all') {
-        const category = findProductCategory(item.sku, item.productTitle);
-        if (!category || category.name !== filterCategory) return false;
+      // Filter by product group (multi-select)
+      if (inventoryFilterProducts.length > 0) {
+        const itemProductGroup = extractProductModel(item.productTitle, item.sku);
+        if (!inventoryFilterProducts.includes(itemProductGroup)) return false;
       }
       // Filter by location if a location filter is set
       if (inventoryLocationFilter) {
@@ -720,9 +737,10 @@ export default function Dashboard({ session }: DashboardProps) {
             item.productTitle.toLowerCase().includes(activeSearchTerm.toLowerCase());
           if (filterOutOfStock && item.available > 0) return false;
           if (filterLowStock && (item.available <= 0 || item.available > 10)) return false;
-          if (filterCategory !== 'all') {
-            const category = findProductCategory(item.sku, item.productTitle);
-            if (!category || category.name !== filterCategory) return false;
+          // Filter by product group (multi-select)
+          if (inventoryFilterProducts.length > 0) {
+            const itemProductGroup = extractProductModel(item.productTitle, item.sku);
+            if (!inventoryFilterProducts.includes(itemProductGroup)) return false;
           }
           return matchesSearch;
         })
@@ -1090,35 +1108,40 @@ export default function Dashboard({ session }: DashboardProps) {
 
           <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-              <div className="flex gap-2 flex-wrap items-center">
-                <select 
-                  value={filterCategory} 
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">All Categories</option>
-                  {PRODUCT_CATEGORIES.map(cat => (
-                    <option key={cat.name} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                  <button onClick={() => setLocationViewMode('list')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${locationViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-                    List
-                  </button>
-                  <button onClick={() => setLocationViewMode('grouped')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${locationViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
-                    Grouped
+              <div className="flex gap-3 flex-wrap items-end">
+                {/* Product Filter */}
+                <div className="flex flex-col relative">
+                  <span className="text-[10px] text-gray-400 mb-1">Product</span>
+                  <button
+                    onClick={() => setShowInventoryProductDropdown(!showInventoryProductDropdown)}
+                    className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left flex items-center justify-between min-w-[140px]"
+                  >
+                    <span className="truncate">
+                      {inventoryFilterProducts.length === 0 
+                        ? 'All Products' 
+                        : inventoryFilterProducts.length === 1 
+                          ? inventoryFilterProducts[0]
+                          : `${inventoryFilterProducts.length} selected`}
+                    </span>
+                    <svg className="w-4 h-4 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </button>
                 </div>
-                <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
-                  className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                  Low Stock
-                </button>
-                <button onClick={() => { setFilterOutOfStock(!filterOutOfStock); setFilterLowStock(false); }}
-                  className={`px-3 py-2 text-xs font-medium rounded-md ${filterOutOfStock ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                  Out of Stock
-                </button>
+                {/* View Mode Toggle */}
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-gray-400 mb-1">View</span>
+                  <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
+                    <button onClick={() => setLocationViewMode('list')}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${locationViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                      List
+                    </button>
+                    <button onClick={() => setLocationViewMode('grouped')}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${locationViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                      Grouped
+                    </button>
+                  </div>
+                </div>
               </div>
               <input type="text" placeholder="Search by SKU or product..." value={locationSearchTerm} onChange={(e) => setLocationSearchTerm(e.target.value)}
                 className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -1393,44 +1416,80 @@ export default function Dashboard({ session }: DashboardProps) {
 
                 <div className="bg-white shadow rounded-lg p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                    <div className="flex gap-2 flex-wrap items-center">
-                      <select 
-                        value={filterCategory} 
-                        onChange={(e) => setFilterCategory(e.target.value)}
-                        className="px-3 py-2 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="all">All Categories</option>
-                        {PRODUCT_CATEGORIES.map(cat => (
-                          <option key={cat.name} value={cat.name}>{cat.name}</option>
-                        ))}
-                      </select>
-                      {/* View Mode Toggle */}
-                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <div className="flex gap-3 flex-wrap items-end">
+                      {/* Product Filter */}
+                      <div className="flex flex-col relative" ref={inventoryProductDropdownRef}>
+                        <span className="text-[10px] text-gray-400 mb-1">Product</span>
                         <button
-                          onClick={() => setInventoryViewMode('list')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            inventoryViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                          }`}
+                          onClick={() => setShowInventoryProductDropdown(!showInventoryProductDropdown)}
+                          className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left flex items-center justify-between min-w-[140px]"
                         >
-                          List
+                          <span className="truncate">
+                            {inventoryFilterProducts.length === 0 
+                              ? 'All Products' 
+                              : inventoryFilterProducts.length === 1 
+                                ? inventoryFilterProducts[0]
+                                : `${inventoryFilterProducts.length} selected`}
+                          </span>
+                          <svg className="w-4 h-4 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
                         </button>
-                        <button
-                          onClick={() => setInventoryViewMode('grouped')}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                            inventoryViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                          }`}
-                        >
-                          Grouped
-                        </button>
+                        {showInventoryProductDropdown && (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                            <div className="p-2 border-b border-gray-200">
+                              <button
+                                onClick={() => setInventoryFilterProducts([])}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                              >
+                                Clear all
+                              </button>
+                            </div>
+                            {sortedGroupNames.map(group => (
+                              <label
+                                key={group}
+                                className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={inventoryFilterProducts.includes(group)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setInventoryFilterProducts([...inventoryFilterProducts, group]);
+                                    } else {
+                                      setInventoryFilterProducts(inventoryFilterProducts.filter(p => p !== group));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                />
+                                <span className="ml-2 text-xs text-gray-700">{group}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <button onClick={() => { setFilterLowStock(!filterLowStock); setFilterOutOfStock(false); }}
-                        className={`px-3 py-2 text-xs font-medium rounded-md ${filterLowStock ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                        Low Stock ({inventoryData.lowStockCount})
-                      </button>
-                      <button onClick={() => { setFilterOutOfStock(!filterOutOfStock); setFilterLowStock(false); }}
-                        className={`px-3 py-2 text-xs font-medium rounded-md ${filterOutOfStock ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                        Out of Stock ({inventoryData.outOfStockCount})
-                      </button>
+                      {/* View Mode Toggle */}
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">View</span>
+                        <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
+                          <button
+                            onClick={() => setInventoryViewMode('list')}
+                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                              inventoryViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            List
+                          </button>
+                          <button
+                            onClick={() => setInventoryViewMode('grouped')}
+                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                              inventoryViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            Grouped
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -1476,6 +1535,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('inTransit')}>
                                   In Transit <SortIcon active={sortBy === 'inTransit'} order={sortOrder} />
                                 </th>
+                                <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                                  In Prod
+                                </th>
                                 <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
                                   Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
                                 </th>
@@ -1520,6 +1582,8 @@ export default function Dashboard({ session }: DashboardProps) {
                               const inTransit = (item as any).inTransit || 0;
                               const transferDetails = (item as any).transferDetails || [];
                               const transferTooltip = formatTransferTooltip(transferDetails);
+                              // Get pending PO quantity for this SKU
+                              const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
                               
                               return (
                                 <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -1538,6 +1602,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                     title={transferTooltip}
                                   >
                                     {inTransit > 0 ? inTransit.toLocaleString() : '—'}
+                                  </td>
+                                  <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                                    {poQty > 0 ? poQty.toLocaleString() : '—'}
                                   </td>
                                   <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
                                     {item.totalAvailable.toLocaleString()}
@@ -1675,6 +1742,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                       <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('inTransit')}>
                                         In Transit <SortIcon active={sortBy === 'inTransit'} order={sortOrder} />
                                       </th>
+                                      <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">
+                                        In Prod
+                                      </th>
                                       <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('total')}>
                                         Total <SortIcon active={sortBy === 'total'} order={sortOrder} />
                                       </th>
@@ -1686,6 +1756,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                       const inTransit = (item as any).inTransit || 0;
                                       const transferDetails = (item as any).transferDetails || [];
                                       const transferTooltip = formatTransferTooltip(transferDetails);
+                                      // Get pending PO quantity for this SKU
+                                      const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
                                       
                                       return (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -1704,6 +1776,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                             title={transferTooltip}
                                           >
                                             {inTransit > 0 ? inTransit.toLocaleString() : '—'}
+                                          </td>
+                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
+                                            {poQty > 0 ? poQty.toLocaleString() : '—'}
                                           </td>
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
                                             {item.totalAvailable.toLocaleString()}
@@ -2463,7 +2538,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     if (planningRunwayDisplay === 'dates') {
                       const runoutDate = new Date();
                       runoutDate.setDate(runoutDate.getDate() + runwayDays);
-                      return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                      return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
                     }
                     return `${runwayDays}d`;
                   };
