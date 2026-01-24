@@ -106,6 +106,9 @@ export class ShopifyGraphQLTransferService {
         lineItem: __type(name: "InventoryTransferLineItem") {
           fields { name }
         }
+        inventoryItem: __type(name: "InventoryItem") {
+          fields { name }
+        }
       }
     `;
 
@@ -118,8 +121,13 @@ export class ShopifyGraphQLTransferService {
         (schemaResult?.lineItem?.fields || []).map((f: { name: string }) => f.name)
       );
 
+      const inventoryItemFields = new Set<string>(
+        (schemaResult?.inventoryItem?.fields || []).map((f: { name: string }) => f.name)
+      );
+
       console.log(`📋 Available InventoryTransfer fields: ${Array.from(transferFields).join(', ')}`);
       console.log(`📋 Available LineItem fields: ${Array.from(lineItemFields).join(', ')}`);
+      console.log(`📋 Available InventoryItem fields: ${Array.from(inventoryItemFields).join(', ')}`);
 
       // Build query dynamically based on available fields
       const hasLineItems = transferFields.has('lineItems');
@@ -138,12 +146,22 @@ export class ShopifyGraphQLTransferService {
         return [];
       }
 
+      // Build inventoryItem selection based on available fields
+      let inventoryItemSelection = '';
+      if (lineItemFields.has('inventoryItem')) {
+        const invItemParts = ['id'];
+        if (inventoryItemFields.has('sku')) invItemParts.push('sku');
+        if (inventoryItemFields.has('variant')) invItemParts.push('variant { sku displayName product { title } }');
+        inventoryItemSelection = `inventoryItem { ${invItemParts.join(' ')} }`;
+      }
+
       // Build line item selection
       const lineItemSelections = [
         'id',
+        'title',
         quantityField,
         receivedField,
-        lineItemFields.has('inventoryItem') ? 'inventoryItem { id sku variant { sku product { title } } }' : '',
+        inventoryItemSelection,
         lineItemFields.has('sku') ? 'sku' : '',
       ].filter(Boolean).join('\n');
 
@@ -191,9 +209,23 @@ export class ShopifyGraphQLTransferService {
         
         // Parse line items
         const lineItems: GraphQLTransferLineItem[] = [];
+        const lineItemCount = node.lineItems?.edges?.length || 0;
+        console.log(`📦 Transfer "${node.name}" has ${lineItemCount} line items`);
+        
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const lineEdge of node.lineItems?.edges || []) {
           const lineNode = lineEdge.node;
+          
+          // Log the first line item to see structure
+          if (lineItems.length === 0) {
+            console.log(`📦 Sample line item keys: ${Object.keys(lineNode).join(', ')}`);
+            if (lineNode.inventoryItem) {
+              console.log(`📦 InventoryItem keys: ${Object.keys(lineNode.inventoryItem).join(', ')}`);
+              if (lineNode.inventoryItem.variant) {
+                console.log(`📦 Variant keys: ${Object.keys(lineNode.inventoryItem.variant).join(', ')}`);
+              }
+            }
+          }
           
           // Try to get SKU from various possible locations
           const sku = lineNode.sku || 
@@ -219,9 +251,11 @@ export class ShopifyGraphQLTransferService {
               sku,
               quantity,
               receivedQuantity,
-              productTitle: lineNode.inventoryItem?.variant?.product?.title || '',
-              variantTitle: '',
+              productTitle: lineNode.inventoryItem?.variant?.product?.title || lineNode.title || '',
+              variantTitle: lineNode.inventoryItem?.variant?.displayName || '',
             });
+          } else {
+            console.log(`⚠️ Line item missing SKU - title: ${lineNode.title}, inventoryItem: ${JSON.stringify(lineNode.inventoryItem || {}).substring(0, 200)}`);
           }
         }
 
