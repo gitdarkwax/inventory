@@ -978,6 +978,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const InfoTooltip = ({ content }: { content: string }) => {
     const [isOpen, setIsOpen] = useState(false);
     const tooltipRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const [position, setPosition] = useState<'center' | 'left' | 'right'>('center');
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -987,13 +989,32 @@ export default function Dashboard({ session }: DashboardProps) {
       };
       if (isOpen) {
         document.addEventListener('mousedown', handleClickOutside);
+        // Calculate position based on button location
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          const windowWidth = window.innerWidth;
+          if (rect.left < 150) {
+            setPosition('left');
+          } else if (windowWidth - rect.right < 150) {
+            setPosition('right');
+          } else {
+            setPosition('center');
+          }
+        }
       }
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isOpen]);
 
+    const positionClasses = {
+      center: 'left-1/2 -translate-x-1/2',
+      left: 'left-0',
+      right: 'right-0',
+    };
+
     return (
       <span className="relative inline-block ml-1" ref={tooltipRef}>
         <button
+          ref={buttonRef}
           type="button"
           onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
           className="inline-flex items-center justify-center w-4 h-4 text-[10px] font-medium text-gray-400 bg-gray-100 rounded-full hover:bg-gray-200 hover:text-gray-600 transition-colors"
@@ -1002,9 +1023,8 @@ export default function Dashboard({ session }: DashboardProps) {
           i
         </button>
         {isOpen && (
-          <div className="absolute z-50 left-1/2 -translate-x-1/2 mt-2 w-64 p-3 text-xs font-normal normal-case text-left text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg">
+          <div className={`absolute z-50 ${positionClasses[position]} mt-2 w-72 p-3 text-xs font-normal normal-case text-left text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg`}>
             <div className="whitespace-pre-line leading-relaxed">{content}</div>
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-l border-t border-gray-200 rotate-45"></div>
           </div>
         )}
       </span>
@@ -2442,27 +2462,27 @@ export default function Dashboard({ session }: DashboardProps) {
                               In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
                               <InfoTooltip content="Pending quantity from production orders (Open POs)" />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
-                              Units/Day <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
-                              <InfoTooltip content="Average daily sales velocity (selectable: 7d, 21d, or 90d)" />
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
+                              BR <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
+                              <InfoTooltip content="Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)" />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
-                              LA Need <SortIcon active={planningSortBy === 'laNeed'} order={planningSortOrder} />
+                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
+                              Need <SortIcon active={planningSortBy === 'laNeed'} order={planningSortOrder} />
                               <InfoTooltip content={`For LA, units needed to cover target days (14d, 30d, 60d, 120d, or 180d) minus available LA inventory.\n\n(LA Office + LA WH) - committed`} />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
+                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
                               Ship Type <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
                               <InfoTooltip content={`Recommended shipping method based on urgency and China inventory.\n\nDays of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → "Express"\n• ≤60 days & China > 0 → "Slow Air"\n• ≤90 days & China > 0 → "Sea"\n• >90 days & China > 0 → "No Action"\n• <60 days & China = 0 → "No CN Inv"\n• Phase out list → "Phase Out"`} />
                             </th>
-                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
+                            <th className="w-32 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
                               Prod Status <SortIcon active={planningSortBy === 'prodStatus'} order={planningSortOrder} />
                               <InfoTooltip content={`Production action based on TOTAL runway.\n\nRunway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → "More in Prod"\n• >90 days, no PO → "No Action"\n• 60-90 days + active PO → "Get Prod Status"\n• 60-90 days, no PO → "No Action"\n• ≤60 days + active PO → "Push Vendor"\n• ≤60 days, no PO → "Order More"\n• Phase out list → "Phase Out"`} />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
+                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
                               Runway Air <SortIcon active={planningSortBy === 'runwayAir'} order={planningSortOrder} />
                               <InfoTooltip content={`Days of stock considering only LA inventory + air freight in transit.\n\n(LA Office + LA WH + In Air) / unitsPerDay`} />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runway')}>
+                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runway')}>
                               Runway <SortIcon active={planningSortBy === 'runway'} order={planningSortOrder} />
                               <InfoTooltip content={`Days of stock considering LA inventory + all in-transit inventory.\n\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay`} />
                             </th>
@@ -2676,12 +2696,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea <InfoTooltip content="Units in transit via sea freight (from Shopify transfers tagged &quot;sea&quot;)" /></th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China <InfoTooltip content="Available inventory at China warehouse" /></th>
                                         <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod <InfoTooltip content="Pending quantity from production orders (Open POs)" /></th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Units/Day <InfoTooltip content="Average daily sales velocity (selectable: 7d, 21d, or 90d)" /></th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Need <InfoTooltip content={`For LA, units needed to cover target days (14d, 30d, 60d, 120d, or 180d) minus available LA inventory.\n\n(LA Office + LA WH) - committed`} /></th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type <InfoTooltip content={`Recommended shipping method based on urgency and China inventory.\n\nDays of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → "Express"\n• ≤60 days & China > 0 → "Slow Air"\n• ≤90 days & China > 0 → "Sea"\n• >90 days & China > 0 → "No Action"\n• <60 days & China = 0 → "No CN Inv"\n• Phase out list → "Phase Out"`} /></th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status <InfoTooltip content={`Production action based on TOTAL runway.\n\nRunway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → "More in Prod"\n• >90 days, no PO → "No Action"\n• 60-90 days + active PO → "Get Prod Status"\n• 60-90 days, no PO → "No Action"\n• ≤60 days + active PO → "Push Vendor"\n• ≤60 days, no PO → "Order More"\n• Phase out list → "Phase Out"`} /></th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air <InfoTooltip content={`Days of stock considering only LA inventory + air freight in transit.\n\n(LA Office + LA WH + In Air) / unitsPerDay`} /></th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway <InfoTooltip content={`Days of stock considering LA inventory + all in-transit inventory.\n\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay`} /></th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">BR <InfoTooltip content="Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)" /></th>
+                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Need <InfoTooltip content={`For LA, units needed to cover target days (14d, 30d, 60d, 120d, or 180d) minus available LA inventory.\n\n(LA Office + LA WH) - committed`} /></th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type <InfoTooltip content={`Recommended shipping method based on urgency and China inventory.\n\nDays of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → "Express"\n• ≤60 days & China > 0 → "Slow Air"\n• ≤90 days & China > 0 → "Sea"\n• >90 days & China > 0 → "No Action"\n• <60 days & China = 0 → "No CN Inv"\n• Phase out list → "Phase Out"`} /></th>
+                                        <th className="w-32 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status <InfoTooltip content={`Production action based on TOTAL runway.\n\nRunway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → "More in Prod"\n• >90 days, no PO → "No Action"\n• 60-90 days + active PO → "Get Prod Status"\n• 60-90 days, no PO → "No Action"\n• ≤60 days + active PO → "Push Vendor"\n• ≤60 days, no PO → "Order More"\n• Phase out list → "Phase Out"`} /></th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air <InfoTooltip content={`Days of stock considering only LA inventory + air freight in transit.\n\n(LA Office + LA WH + In Air) / unitsPerDay`} /></th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway <InfoTooltip content={`Days of stock considering LA inventory + all in-transit inventory.\n\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay`} /></th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -2745,7 +2765,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'LA', 'In Air', 'In Sea', 'China', 'In Prod', 'Units/Day', 'LA Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'LA', 'In Air', 'In Sea', 'China', 'In Prod', 'BR', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
