@@ -193,7 +193,7 @@ async function fetchInventoryData() {
   }
   
   // Transfer info for hover tooltip
-  interface TransferInfo {
+  interface TransferDetailInfo {
     id: string;
     name: string;
     quantity: number;
@@ -211,7 +211,7 @@ async function fetchInventoryData() {
     locations: Record<string, number>;
     totalAvailable: number;
     inTransit: number;
-    transferDetails: TransferInfo[];
+    transferDetails: TransferDetailInfo[];
   }>();
   
   // Also build detailed location data
@@ -244,7 +244,7 @@ async function fetchInventoryData() {
       // Get total in-transit for this SKU from GraphQL transfer data
       const transferData = transferDataBySku.get(variantInfo.sku);
       const inTransit = transferData?.totalInTransit || 0;
-      const transferDetails: TransferInfo[] = (transferData?.transfers || []).map(t => ({
+      const transferDetails: TransferDetailInfo[] = (transferData?.transfers || []).map(t => ({
         id: t.transferId,
         name: t.transferName,
         quantity: t.quantity,
