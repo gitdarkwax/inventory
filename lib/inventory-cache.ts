@@ -9,12 +9,24 @@ import path from 'path';
 import { GoogleDriveCacheService } from './google-drive-cache';
 
 // Types for cached data
+export interface TransferDetailInfo {
+  id: string;
+  name: string;
+  quantity: number;
+  tags: string[];
+  note: string | null;
+  createdAt: string;
+  expectedArrivalAt: string | null;
+}
+
 export interface InventoryByLocation {
   sku: string;
   productTitle: string;
   variantTitle: string;
   locations: Record<string, number>;
   totalAvailable: number;
+  inTransit: number;
+  transferDetails: TransferDetailInfo[];
 }
 
 export interface LocationDetail {
@@ -25,6 +37,11 @@ export interface LocationDetail {
   onHand: number;
   committed: number;
   incoming: number;
+  inboundAir: number;
+  inboundSea: number;
+  transferNotes: Array<{ id: string; note: string | null }>;
+  airTransfers: TransferDetailInfo[];
+  seaTransfers: TransferDetailInfo[];
 }
 
 export interface ForecastingItem {
