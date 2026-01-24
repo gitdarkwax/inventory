@@ -1285,7 +1285,7 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
           
           {/* Tabs and Refresh */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between">
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
               <button
                 onClick={() => setActiveTab('planning')}
@@ -1320,13 +1320,16 @@ export default function Dashboard({ session }: DashboardProps) {
                 📈 Forecasting
               </button>
             </div>
-            <button 
-              onClick={() => refreshAllData()} 
-              disabled={isRefreshing}
-              className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-            >
-              {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
-            </button>
+            <div className="flex flex-col items-end">
+              <button 
+                onClick={() => refreshAllData()} 
+                disabled={isRefreshing}
+                className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+              >
+                {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+              </button>
+              <p className="text-xs text-red-500 mt-1">Data auto-refreshes every hour</p>
+            </div>
           </div>
         </div>
 
