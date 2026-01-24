@@ -2994,6 +2994,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 setSkuSearchQuery(sku);
                                 setSkuSearchSelected(sku);
                                 setShowSkuSearchSuggestions(false);
+                                setProductionFilterStatus('all'); // Show all orders when searching
                               }}
                               className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
                             >
