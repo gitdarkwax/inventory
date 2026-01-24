@@ -1081,9 +1081,9 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed in LA to cover the period selected under the "Units needed in LA" drop down menu.\nCurrent stock available in LA is factored into the calculation.\n(Target Days selected × Burn Rate) - (LA Inventory - committed)' },
     { name: 'Ship Type', description: 'Recommended shipping method based on days of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list → Phase Out' },
-    { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / unitsPerDay:\n• >90 days + active PO → More in Prod\n• >90 days, no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days, no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days, no PO → Order More' },
-    { name: 'Runway Air', description: 'Days of stock with LA + air freight only:\n(LA Office + LA WH + In Air) / unitsPerDay\n\nColor: Red if < 60 days' },
-    { name: 'Runway', description: 'Days of stock with LA + all in-transit:\n(LA Office + LA WH + In Air + In Sea) / unitsPerDay\n\nColor: Red if < 90 days' },
+    { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / Burn Rate:\n• >90 days & active PO → More in Prod\n• >90 days & no PO → No Action\n• 60-90 days & active PO → Get Prod Status\n• 60-90 days & no PO → No Action\n• ≤60 days & active PO → Push Vendor\n• ≤60 days & no PO → Order More' },
+    { name: 'Runway Air', description: 'Days of stock based on LA + air shipments only:\n(LA Office + LA WH + In Air) / Burn Rate\nColor: Red if < 60 days' },
+    { name: 'Runway', description: 'Days of stock based on LA + all air and sea shipments:\n(LA Office + LA WH + In Air + In Sea) / Burn Rate\nColor: Red if < 90 days' },
   ];
 
   // Location Detail View
