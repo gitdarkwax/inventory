@@ -20,6 +20,7 @@ export interface ActivityLogEntry {
 
 export interface ProductionOrder {
   id: string;
+  poNumber?: string; // User-provided PO number
   items: ProductionOrderItem[];
   notes: string;
   vendor?: string;
@@ -256,11 +257,12 @@ export class ProductionOrdersService {
     createdBy: string,
     createdByEmail: string,
     vendor?: string,
-    eta?: string
+    eta?: string,
+    poNumber?: string
   ): Promise<ProductionOrder> {
     const cache = await ProductionOrdersService.loadOrders();
     
-    // Generate sequential PO number
+    // Generate sequential PO number for internal ID
     const nextNum = cache.nextOrderNumber || 1;
     const orderId = `PO-${String(nextNum).padStart(3, '0')}`;
     cache.nextOrderNumber = nextNum + 1;
@@ -277,6 +279,7 @@ export class ProductionOrdersService {
     
     const newOrder: ProductionOrder = {
       id: orderId,
+      poNumber: poNumber || undefined, // User-provided PO number
       items: orderItems,
       notes,
       vendor,

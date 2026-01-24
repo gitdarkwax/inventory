@@ -184,6 +184,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showNewOrderForm, setShowNewOrderForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
   const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
+  const [newOrderPoNumber, setNewOrderPoNumber] = useState('');
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderVendor, setNewOrderVendor] = useState('');
   const [newOrderEta, setNewOrderEta] = useState('');
@@ -363,12 +364,14 @@ export default function Dashboard({ session }: DashboardProps) {
           notes: newOrderNotes,
           vendor: newOrderVendor || undefined,
           eta: newOrderEta || undefined,
+          poNumber: newOrderPoNumber || undefined,
         }),
       });
 
       if (response.ok) {
         setShowNewOrderForm(false);
         setNewOrderItems([{ sku: '', quantity: '' }]);
+        setNewOrderPoNumber('');
         setNewOrderNotes('');
         setNewOrderVendor('');
         setNewOrderEta('');
@@ -3090,7 +3093,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
-                                  {order.id.split('-').slice(0, 2).join('-')}
+                                  {order.poNumber || order.id.split('-').slice(0, 2).join('-')}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
@@ -3322,6 +3325,17 @@ export default function Dashboard({ session }: DashboardProps) {
                     <h3 className="text-lg font-semibold text-gray-900">New Production Order</h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
+                    {/* PO Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# (optional)</label>
+                      <input
+                        type="text"
+                        value={newOrderPoNumber}
+                        onChange={(e) => setNewOrderPoNumber(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        placeholder="e.g. PO-2026-001"
+                      />
+                    </div>
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>

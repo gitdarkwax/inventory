@@ -42,11 +42,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { items, notes, vendor, eta } = body as { 
+    const { items, notes, vendor, eta, poNumber } = body as { 
       items: { sku: string; quantity: number }[]; 
       notes: string;
       vendor?: string;
       eta?: string;
+      poNumber?: string;
     };
 
     if (!items || items.length === 0) {
@@ -72,7 +73,8 @@ export async function POST(request: NextRequest) {
       session.user.name || 'Unknown',
       session.user.email || 'unknown@example.com',
       vendor,
-      eta
+      eta,
+      poNumber
     );
 
     return NextResponse.json({ order: newOrder }, { status: 201 });
