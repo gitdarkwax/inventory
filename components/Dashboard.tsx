@@ -167,6 +167,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showColumnDefinitions, setShowColumnDefinitions] = useState(false);
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
+  const [planningRunwayDisplay, setPlanningRunwayDisplay] = useState<'days' | 'dates'>('days');
   const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'runway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
@@ -978,7 +979,7 @@ export default function Dashboard({ session }: DashboardProps) {
   // Column definitions for LA Planning
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
-    { name: 'LA', description: 'Total available inventory across LA Office and DTLA WH locations' },
+    { name: 'In Stock', description: 'Total available inventory across LA Office and DTLA WH locations' },
     { name: 'In Air', description: 'Units in transit via air freight (from Shopify transfers tagged "air")' },
     { name: 'In Sea', description: 'Units in transit via sea freight (from Shopify transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
@@ -2393,6 +2394,18 @@ export default function Dashboard({ session }: DashboardProps) {
                     return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                   };
                   
+                  // Helper to format runway based on toggle
+                  const formatRunway = (runwayDays: number): string => {
+                    if (runwayDays >= 999) return '∞';
+                    if (runwayDays <= 0) return '0d';
+                    if (planningRunwayDisplay === 'dates') {
+                      const runoutDate = new Date();
+                      runoutDate.setDate(runoutDate.getDate() + runwayDays);
+                      return runoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }
+                    return `${runwayDays}d`;
+                  };
+                  
                   const PlanningTable = ({ items, showHeader = true }: { items: typeof planningItems; showHeader?: boolean }) => (
                     <table className="min-w-full divide-y divide-gray-200 table-fixed">
                       {showHeader && (
@@ -2401,8 +2414,8 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
                               SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
-                              LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
+                              In Stock <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
                             </th>
                             <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundAir')}>
                               In Air <SortIcon active={planningSortBy === 'inboundAir'} order={planningSortOrder} />
@@ -2456,7 +2469,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             </td>
                             <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
                             <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                            <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                            <td className="w-20 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{Math.ceil(item.unitsPerDay)}</td>
                             <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                               {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                             </td>
@@ -2471,16 +2484,16 @@ export default function Dashboard({ session }: DashboardProps) {
                               </span>
                             </td>
                             <td 
-                              className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
                               title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                             >
-                              {item.runwayAir >= 999 ? '∞' : `${item.runwayAir}d`}
+                              {formatRunway(item.runwayAir)}
                             </td>
                             <td 
-                              className={`w-24 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
                               title={`Runs out: ${getRunoutDate(item.runway)}`}
                             >
-                              {item.runway >= 999 ? '∞' : `${item.runway}d`}
+                              {formatRunway(item.runway)}
                             </td>
                           </tr>
                         ))}
@@ -2563,6 +2576,20 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <button onClick={() => setPlanningListMode('grouped')}
                                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningListMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
                                   Grouped
+                                </button>
+                              </div>
+                            </div>
+                            {/* Runway Display Toggle */}
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">Runway in</span>
+                              <div className="flex items-center h-[34px] bg-gray-100 p-1 rounded-lg">
+                                <button onClick={() => setPlanningRunwayDisplay('days')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningRunwayDisplay === 'days' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                                  Days
+                                </button>
+                                <button onClick={() => setPlanningRunwayDisplay('dates')}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${planningRunwayDisplay === 'dates' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+                                  Dates
                                 </button>
                               </div>
                             </div>
@@ -2682,7 +2709,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <thead className="bg-gray-50">
                                       <tr>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
+                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Stock</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea</th>
                                         <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
@@ -2714,7 +2741,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           </td>
                                           <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                                          <td className="w-20 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{Math.ceil(item.unitsPerDay)}</td>
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                             {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                                           </td>
@@ -2729,16 +2756,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                             </span>
                                           </td>
                                           <td 
-                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : item.runwayAir < 90 ? 'text-orange-600' : 'text-gray-900'}`}
                                             title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                                           >
-                                            {item.runwayAir >= 999 ? '∞' : `${item.runwayAir}d`}
+                                            {formatRunway(item.runwayAir)}
                                           </td>
                                           <td 
-                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
+                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 60 ? 'text-red-600 font-medium' : item.runway < 90 ? 'text-orange-600' : 'text-gray-900'}`}
                                             title={`Runs out: ${getRunoutDate(item.runway)}`}
                                           >
-                                            {item.runway >= 999 ? '∞' : `${item.runway}d`}
+                                            {formatRunway(item.runway)}
                                           </td>
                                         </tr>
                                       ))}
@@ -2756,7 +2783,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'LA', 'In Air', 'In Sea', 'China', 'In Prod', 'BR', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'In Stock', 'In Air', 'In Sea', 'China', 'In Prod', 'BR', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
@@ -2765,7 +2792,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               item.inboundSea,
                               item.china,
                               item.poQty,
-                              item.unitsPerDay.toFixed(1),
+                              Math.ceil(item.unitsPerDay),
                               item.laNeed,
                               item.shipType,
                               item.prodStatus,
