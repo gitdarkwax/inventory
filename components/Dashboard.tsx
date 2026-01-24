@@ -573,9 +573,6 @@ export default function Dashboard({ session }: DashboardProps) {
       }
       // Reload both caches after successful refresh
       await Promise.all([loadInventoryFromCache(), loadForecastingFromCache()]);
-      if (isAutoRefresh) {
-        console.log('🔄 Hourly auto-refresh completed at', new Date().toLocaleTimeString());
-      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Refresh failed';
       setInventoryError(errorMsg);

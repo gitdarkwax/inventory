@@ -1,22 +1,59 @@
-# Inventory Dashboard
+# MagBak Inventory Management Dashboard v1.0
 
-Real-time Shopify inventory tracking and analytics dashboard.
+Real-time Shopify inventory tracking, forecasting, and production planning dashboard.
 
 ## Features
 
-- 📦 Real-time inventory levels from Shopify
-- ⚠️ Low stock alerts and notifications
-- 📊 Inventory analytics by category
-- 🔔 Slack notifications for stock alerts
-- 🔐 Google OAuth authentication with email allowlist
+### 📋 LA Planning
+- SKU-level inventory visibility across all locations (LA Office, DTLA WH, ShipBob, China WH)
+- Burn rate calculations (7-day, 21-day, 90-day averages)
+- Runway calculations with air and sea shipment tracking
+- Ship type recommendations based on inventory levels
+- Production status tracking with active PO awareness
+- Multi-select product filtering
+- Export to Excel
+
+### 📦 PO Tracker
+- Manual production order management with Shopify PO# integration
+- Delivery logging with partial delivery support
+- SKU search with autocomplete
+- Activity log tracking for all order changes
+- Date range filtering
+- Export to Excel
+
+### 📊 Inventory
+- Real-time inventory levels from Shopify (products tagged "inventoried")
+- Location-specific views with on-hand, available, committed, incoming quantities
+- In-transit tracking from Shopify transfers (air/sea tagged)
+- Product group filtering
+- List and grouped view modes
+- Export to Excel
+
+### 📈 Forecasting
+- Sales velocity analysis with multiple time periods (7d, 21d, 90d, last year 30d)
+- Days of stock calculations
+- Run-out date projections
+- Category and location filtering
+- By Period and By Metric view layouts
+- Export to Excel
+
+### 🔄 Auto-Refresh
+- Hourly server-side cron job for automatic data refresh
+- Manual refresh with user attribution
+- Google Drive cache for persistent data storage
 
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router)
 - **Styling:** Tailwind CSS 4
-- **Auth:** NextAuth.js v5
-- **APIs:** Shopify Admin API, Google Drive API, Slack API
+- **Auth:** NextAuth.js v5 (Google OAuth)
+- **APIs:** 
+  - Shopify Admin REST API (2024-10)
+  - Shopify Admin GraphQL API (2026-01) for transfers
+  - ShopifyQL for sales data
+  - Google Drive API for cache storage
 - **Language:** TypeScript
+- **Deployment:** Vercel with Cron Jobs
 
 ## Getting Started
 
@@ -25,15 +62,12 @@ Real-time Shopify inventory tracking and analytics dashboard.
 - Node.js 18+
 - npm or yarn
 - Shopify store with Admin API access
-- Google Cloud project with OAuth credentials
-- Slack workspace with bot token
+- Google Cloud project with OAuth and Service Account credentials
+- Google Drive shared drive named "ProjectionsVsActual Cache"
 
 ### Installation
 
-1. Clone the repository:
-   ```bash
-   cd /Users/alexbaca/vibe/inventory
-   ```
+1. Clone the repository
 
 2. Install dependencies:
    ```bash
@@ -65,11 +99,10 @@ Real-time Shopify inventory tracking and analytics dashboard.
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Google service account email for Drive access |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Google service account private key |
 | `GOOGLE_PROJECT_ID` | Google Cloud project ID |
-| `SLACK_BOT_TOKEN` | Slack bot OAuth token |
-| `SLACK_CHANNEL_ID` | Slack channel ID for notifications |
 | `ALLOWED_EMAILS` | Comma-separated list of allowed email addresses |
 | `AUTH_SECRET` | NextAuth secret (generate with `openssl rand -base64 32`) |
 | `AUTH_URL` | Application URL (e.g., `http://localhost:3000`) |
+| `CRON_SECRET` | Secret for Vercel cron job authentication |
 
 ## Project Structure
 
@@ -77,18 +110,30 @@ Real-time Shopify inventory tracking and analytics dashboard.
 inventory/
 ├── app/                    # Next.js App Router
 │   ├── api/               # API routes
-│   │   └── auth/          # NextAuth handlers
+│   │   ├── auth/          # NextAuth handlers
+│   │   ├── cron/refresh/  # Hourly cron endpoint
+│   │   ├── forecasting/   # Forecasting data endpoint
+│   │   ├── inventory/     # Inventory data endpoint
+│   │   ├── phase-out/     # Phase-out SKUs management
+│   │   ├── production-orders/  # PO Tracker CRUD
+│   │   └── refresh/       # Manual refresh endpoint
 │   ├── auth/              # Auth pages (signin, error)
 │   ├── globals.css        # Global styles
 │   ├── layout.tsx         # Root layout
 │   └── page.tsx           # Home page
+├── components/
+│   └── Dashboard.tsx      # Main dashboard component
 ├── lib/                   # Shared utilities
 │   ├── auth.ts           # NextAuth configuration
 │   ├── constants.ts      # App constants and categories
 │   ├── google-drive-cache.ts  # Google Drive caching
-│   ├── shopify.ts        # Shopify API client
-│   └── slack.ts          # Slack notifications
-├── public/               # Static assets
+│   ├── inventory-cache.ts    # Cache service wrapper
+│   ├── phase-out-skus.ts     # Phase-out SKU management
+│   ├── production-orders.ts  # Production orders service
+│   ├── shopify.ts        # Shopify REST API client
+│   ├── shopify-graphql-transfers.ts  # GraphQL transfer service
+│   └── shopifyql.ts      # ShopifyQL queries
+├── vercel.json           # Vercel cron configuration
 └── package.json
 ```
 
@@ -100,14 +145,10 @@ Deploy to Vercel:
 vercel
 ```
 
-Make sure to set all environment variables in your Vercel project settings.
-
-## Related Projects
-
-- [projections-v2](../projections-v2) - Sales analytics dashboard
+Make sure to:
+1. Set all environment variables in your Vercel project settings
+2. The `CRON_SECRET` will be auto-generated by Vercel for cron jobs
 
 ## License
 
 Private - Internal use only
-
-
