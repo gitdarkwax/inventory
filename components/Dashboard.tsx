@@ -193,8 +193,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [skuSearchQuery, setSkuSearchQuery] = useState('');
   const [skuSearchSelected, setSkuSearchSelected] = useState(''); // The selected SKU for filtering
   const [showSkuSearchSuggestions, setShowSkuSearchSuggestions] = useState(false);
-  const [skuSearchDateFrom, setSkuSearchDateFrom] = useState('');
-  const [skuSearchDateTo, setSkuSearchDateTo] = useState('');
+  const [poDateFilter, setPoDateFilter] = useState<string>('all'); // 'all' | '1m' | '3m' | '6m' | '1y' | '2y'
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
   const skuSearchRef = useRef<HTMLDivElement>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
@@ -3007,31 +3006,27 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 whitespace-nowrap">From:</label>
-                  <input
-                    type="date"
-                    value={skuSearchDateFrom}
-                    onChange={(e) => setSkuSearchDateFrom(e.target.value)}
+                  <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                  <select
+                    value={poDateFilter}
+                    onChange={(e) => setPoDateFilter(e.target.value)}
                     className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
-                  />
+                  >
+                    <option value="all">All Time</option>
+                    <option value="1m">Last 1 Month</option>
+                    <option value="3m">Last 3 Months</option>
+                    <option value="6m">Last 6 Months</option>
+                    <option value="1y">Last 1 Year</option>
+                    <option value="2y">Last 2 Years</option>
+                  </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 whitespace-nowrap">To:</label>
-                  <input
-                    type="date"
-                    value={skuSearchDateTo}
-                    onChange={(e) => setSkuSearchDateTo(e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
-                  />
-                </div>
-                {(skuSearchSelected || skuSearchDateFrom || skuSearchDateTo) && (
+                {(skuSearchSelected || poDateFilter !== 'all') && (
                   <button
                     type="button"
                     onClick={() => {
                       setSkuSearchQuery('');
                       setSkuSearchSelected('');
-                      setSkuSearchDateFrom('');
-                      setSkuSearchDateTo('');
+                      setPoDateFilter('all');
                     }}
                     className="text-sm text-gray-500 hover:text-gray-700"
                   >
@@ -3062,18 +3057,21 @@ export default function Dashboard({ session }: DashboardProps) {
                   if (!hasMatchingSku) return false;
                 }
                 
-                // Date range filter (based on createdAt)
-                if (skuSearchDateFrom) {
+                // Date filter (based on createdAt)
+                if (poDateFilter !== 'all') {
                   const orderDate = new Date(order.createdAt);
-                  const fromDate = new Date(skuSearchDateFrom);
-                  fromDate.setHours(0, 0, 0, 0);
-                  if (orderDate < fromDate) return false;
-                }
-                if (skuSearchDateTo) {
-                  const orderDate = new Date(order.createdAt);
-                  const toDate = new Date(skuSearchDateTo);
-                  toDate.setHours(23, 59, 59, 999);
-                  if (orderDate > toDate) return false;
+                  const now = new Date();
+                  let cutoffDate = new Date();
+                  
+                  switch (poDateFilter) {
+                    case '1m': cutoffDate.setMonth(now.getMonth() - 1); break;
+                    case '3m': cutoffDate.setMonth(now.getMonth() - 3); break;
+                    case '6m': cutoffDate.setMonth(now.getMonth() - 6); break;
+                    case '1y': cutoffDate.setFullYear(now.getFullYear() - 1); break;
+                    case '2y': cutoffDate.setFullYear(now.getFullYear() - 2); break;
+                  }
+                  
+                  if (orderDate < cutoffDate) return false;
                 }
                 
                 return true;
@@ -3137,14 +3135,15 @@ export default function Dashboard({ session }: DashboardProps) {
                     <table className="min-w-full divide-y divide-gray-200 table-fixed">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
-                          <th className="w-[18%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
-                          <th className="w-[10%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ordered</th>
-                          <th className="w-[10%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Received</th>
-                          <th className="w-[10%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase pr-8">Pending</th>
-                          <th className="w-[14%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase pl-8">Vendor</th>
-                          <th className="w-[12%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
-                          <th className="w-[16%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="w-[9%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
+                          <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Date</th>
+                          <th className="w-[16%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
+                          <th className="w-[9%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ordered</th>
+                          <th className="w-[9%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Received</th>
+                          <th className="w-[9%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase pr-6">Pending</th>
+                          <th className="w-[12%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase pl-6">Vendor</th>
+                          <th className="w-[11%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ETA</th>
+                          <th className="w-[15%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -3161,7 +3160,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                               onClick={() => setSelectedOrder(isExpanded ? null : order)}
                             >
-                              <td className="w-[10%] px-4 py-3 text-sm font-medium text-gray-900">
+                              <td className="w-[9%] px-4 py-3 text-sm font-medium text-gray-900">
                                 <span className="flex items-center gap-2">
                                   <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -3169,17 +3168,20 @@ export default function Dashboard({ session }: DashboardProps) {
                                   {order.poNumber || order.id.split('-').slice(0, 2).join('-')}
                                 </span>
                               </td>
-                              <td className="w-[18%] px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
-                              <td className="w-[10%] px-4 py-3 text-sm text-gray-600 text-center">{totalOrdered.toLocaleString()}</td>
-                              <td className="w-[10%] px-4 py-3 text-sm text-green-600 text-center">{totalReceived.toLocaleString()}</td>
-                              <td className={`w-[10%] px-4 py-3 text-sm text-center pr-8 ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                              <td className="w-[10%] px-4 py-3 text-sm text-gray-600">
+                                {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
+                              </td>
+                              <td className="w-[16%] px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
+                              <td className="w-[9%] px-4 py-3 text-sm text-gray-600 text-center">{totalOrdered.toLocaleString()}</td>
+                              <td className="w-[9%] px-4 py-3 text-sm text-green-600 text-center">{totalReceived.toLocaleString()}</td>
+                              <td className={`w-[9%] px-4 py-3 text-sm text-center pr-6 ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                 {(totalOrdered - totalReceived).toLocaleString()}
                               </td>
-                              <td className="w-[14%] px-4 py-3 text-sm text-gray-600 pl-8">{order.vendor || '—'}</td>
-                              <td className="w-[12%] px-4 py-3 text-sm text-gray-600">
+                              <td className="w-[12%] px-4 py-3 text-sm text-gray-600 pl-6">{order.vendor || '—'}</td>
+                              <td className="w-[11%] px-4 py-3 text-sm text-gray-600">
                                 {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
                               </td>
-                              <td className="w-[16%] px-4 py-3">
+                              <td className="w-[15%] px-4 py-3">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   order.status === 'in_production' ? 'bg-blue-100 text-blue-800' :
                                   order.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
@@ -3197,7 +3199,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             {/* Expanded Details Row */}
                             {isExpanded && (
                               <tr>
-                                <td colSpan={8} className="bg-gray-50 px-4 py-4">
+                                <td colSpan={9} className="bg-gray-50 px-4 py-4">
                                   <div className="space-y-4">
                                     {/* Meta info */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -3376,8 +3378,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       })}
                         {filteredOrders.length === 0 && (
                           <tr>
-                            <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                              {skuSearchSelected || skuSearchDateFrom || skuSearchDateTo
+                            <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                              {skuSearchSelected || poDateFilter !== 'all'
                                 ? 'No orders match your search criteria.'
                                 : 'No orders found. Click "New Production Order" to create one.'}
                             </td>
