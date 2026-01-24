@@ -191,9 +191,12 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newOrderEta, setNewOrderEta] = useState('');
   const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'open' | 'completed'>('open');
   const [skuSearchQuery, setSkuSearchQuery] = useState('');
+  const [skuSearchSelected, setSkuSearchSelected] = useState(''); // The selected SKU for filtering
+  const [showSkuSearchSuggestions, setShowSkuSearchSuggestions] = useState(false);
   const [skuSearchDateFrom, setSkuSearchDateFrom] = useState('');
   const [skuSearchDateTo, setSkuSearchDateTo] = useState('');
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
+  const skuSearchRef = useRef<HTMLDivElement>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -595,6 +598,19 @@ export default function Dashboard({ session }: DashboardProps) {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProductDropdown]);
+
+  // Close SKU search suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (skuSearchRef.current && !skuSearchRef.current.contains(event.target as Node)) {
+        setShowSkuSearchSuggestions(false);
+      }
+    };
+    if (showSkuSearchSuggestions) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSkuSearchSuggestions]);
 
   // Helper to calculate inventory for selected locations
   const getInventoryForLocations = (inventoryItem: InventoryByLocation | undefined, selectedLocations: string[]): number => {
@@ -2935,15 +2951,60 @@ export default function Dashboard({ session }: DashboardProps) {
               
               {/* SKU Search Row */}
               <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 relative" ref={skuSearchRef}>
                   <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
-                  <input
-                    type="text"
-                    value={skuSearchQuery}
-                    onChange={(e) => setSkuSearchQuery(e.target.value.toUpperCase())}
-                    placeholder="e.g. EC-IP17PM"
-                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-36 font-mono"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={skuSearchQuery}
+                      onChange={(e) => {
+                        const value = e.target.value.toUpperCase();
+                        setSkuSearchQuery(value);
+                        setShowSkuSearchSuggestions(value.length >= 2);
+                        // Clear selected if user is typing something different
+                        if (skuSearchSelected && value !== skuSearchSelected) {
+                          setSkuSearchSelected('');
+                        }
+                      }}
+                      onFocus={() => {
+                        if (skuSearchQuery.length >= 2) {
+                          setShowSkuSearchSuggestions(true);
+                        }
+                      }}
+                      placeholder="e.g. EC-IP17PM"
+                      className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-40 font-mono"
+                    />
+                    {/* SKU Suggestions Dropdown */}
+                    {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && (() => {
+                      // Get unique SKUs from all production orders that match the search
+                      const matchingSkus = [...new Set(
+                        productionOrders
+                          .flatMap(order => order.items.map(item => item.sku))
+                          .filter(sku => sku.toUpperCase().includes(skuSearchQuery))
+                      )].slice(0, 10);
+                      
+                      if (matchingSkus.length === 0) return null;
+                      
+                      return (
+                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-full max-h-48 overflow-y-auto">
+                          {matchingSkus.map(sku => (
+                            <button
+                              key={sku}
+                              type="button"
+                              onClick={() => {
+                                setSkuSearchQuery(sku);
+                                setSkuSearchSelected(sku);
+                                setShowSkuSearchSuggestions(false);
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
+                            >
+                              {sku}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-gray-600 whitespace-nowrap">From:</label>
@@ -2963,11 +3024,12 @@ export default function Dashboard({ session }: DashboardProps) {
                     className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
                   />
                 </div>
-                {(skuSearchQuery || skuSearchDateFrom || skuSearchDateTo) && (
+                {(skuSearchSelected || skuSearchDateFrom || skuSearchDateTo) && (
                   <button
                     type="button"
                     onClick={() => {
                       setSkuSearchQuery('');
+                      setSkuSearchSelected('');
                       setSkuSearchDateFrom('');
                       setSkuSearchDateTo('');
                     }}
@@ -2992,10 +3054,10 @@ export default function Dashboard({ session }: DashboardProps) {
                 if (productionFilterStatus === 'open' && !['in_production', 'partial'].includes(order.status)) return false;
                 if (productionFilterStatus === 'completed' && !['completed', 'cancelled'].includes(order.status)) return false;
                 
-                // SKU search filter
-                if (skuSearchQuery) {
+                // SKU search filter (only filter when a SKU is selected)
+                if (skuSearchSelected) {
                   const hasMatchingSku = order.items.some(item => 
-                    item.sku.toUpperCase().includes(skuSearchQuery.toUpperCase())
+                    item.sku.toUpperCase() === skuSearchSelected.toUpperCase()
                   );
                   if (!hasMatchingSku) return false;
                 }
@@ -3017,17 +3079,17 @@ export default function Dashboard({ session }: DashboardProps) {
                 return true;
               });
 
-              // Calculate SKU-specific stats when searching
+              // Calculate SKU-specific stats when a SKU is selected
               let skuStats: { totalOrdered: number; totalReceived: number; poCount: number } | null = null;
-              if (skuSearchQuery) {
-                const searchTerm = skuSearchQuery.toUpperCase();
+              if (skuSearchSelected) {
+                const searchTerm = skuSearchSelected.toUpperCase();
                 let totalOrdered = 0;
                 let totalReceived = 0;
                 const poSet = new Set<string>();
                 
                 filteredOrders.forEach(order => {
                   order.items.forEach(item => {
-                    if (item.sku.toUpperCase().includes(searchTerm)) {
+                    if (item.sku.toUpperCase() === searchTerm) {
                       totalOrdered += item.quantity;
                       totalReceived += item.receivedQuantity || 0;
                       poSet.add(order.id);
@@ -3047,7 +3109,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="flex items-center gap-6">
                           <div>
                             <span className="text-sm text-blue-600">SKU Search:</span>
-                            <span className="ml-2 font-mono font-medium text-blue-900">{skuSearchQuery}</span>
+                            <span className="ml-2 font-mono font-medium text-blue-900">{skuSearchSelected}</span>
                           </div>
                           <div className="h-8 w-px bg-blue-200"></div>
                           <div className="text-sm">
@@ -3315,7 +3377,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         {filteredOrders.length === 0 && (
                           <tr>
                             <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                              {skuSearchQuery || skuSearchDateFrom || skuSearchDateTo
+                              {skuSearchSelected || skuSearchDateFrom || skuSearchDateTo
                                 ? 'No orders match your search criteria.'
                                 : 'No orders found. Click "New Production Order" to create one.'}
                             </td>
