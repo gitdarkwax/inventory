@@ -33,6 +33,7 @@ export interface LocationDetail {
   sku: string;
   productTitle: string;
   variantTitle: string;
+  inventoryItemId: string;
   available: number;
   onHand: number;
   committed: number;
@@ -65,6 +66,7 @@ export interface CachedInventoryData {
     lowStockCount: number;
     outOfStockCount: number;
     locations: string[];
+    locationIds: Record<string, string>; // location display name -> Shopify location ID
     inventory: InventoryByLocation[];
     locationDetails: Record<string, LocationDetail[]>;
   };

@@ -232,6 +232,10 @@ export default function Dashboard({ session }: DashboardProps) {
   const [warehouseSortOrder, setWarehouseSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showWarehouseConfirm, setShowWarehouseConfirm] = useState(false);
   const [isSubmittingWarehouse, setIsSubmittingWarehouse] = useState(false);
+  const [warehouseFilterProducts, setWarehouseFilterProducts] = useState<string[]>([]);
+  const [showWarehouseProductDropdown, setShowWarehouseProductDropdown] = useState(false);
+  const warehouseProductDropdownRef = useRef<HTMLDivElement>(null);
+  const [warehouseViewMode, setWarehouseViewMode] = useState<'list' | 'grouped'>('list');
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -664,6 +668,19 @@ export default function Dashboard({ session }: DashboardProps) {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showInventoryProductDropdown]);
+
+  // Close warehouse product dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (warehouseProductDropdownRef.current && !warehouseProductDropdownRef.current.contains(event.target as Node)) {
+        setShowWarehouseProductDropdown(false);
+      }
+    };
+    if (showWarehouseProductDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showWarehouseProductDropdown]);
 
   // Load warehouse counts from localStorage on mount
   useEffect(() => {
@@ -3212,12 +3229,22 @@ export default function Dashboard({ session }: DashboardProps) {
                 // Get LA Office data
                 const laOfficeData = inventoryData.locationDetails['LA Office'] || [];
                 
-                // Filter by search
+                // Get all product groups for filter dropdown
+                const allWarehouseProductGroups = [...new Set(laOfficeData.map(item => extractProductModel(item.productTitle, item.sku)))].sort((a, b) => {
+                  return getModelPriority(b) - getModelPriority(a);
+                });
+                
+                // Filter by search and product
                 const filteredData = laOfficeData.filter(item => {
                   const matchesSearch = !warehouseSearchTerm || 
                     item.sku.toLowerCase().includes(warehouseSearchTerm.toLowerCase()) ||
                     item.productTitle.toLowerCase().includes(warehouseSearchTerm.toLowerCase());
-                  return matchesSearch;
+                  
+                  // Filter by product group
+                  const itemProductGroup = extractProductModel(item.productTitle, item.sku);
+                  const matchesProduct = warehouseFilterProducts.length === 0 || warehouseFilterProducts.includes(itemProductGroup);
+                  
+                  return matchesSearch && matchesProduct;
                 });
                 
                 // Sort data
@@ -3254,19 +3281,154 @@ export default function Dashboard({ session }: DashboardProps) {
                   return warehouseSortOrder === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
                 });
                 
-                // Calculate discrepancy stats
+                // Group data by product model for grouped view
+                const groupedWarehouseData = sortedData.reduce((groups, item) => {
+                  const model = extractProductModel(item.productTitle, item.sku);
+                  if (!groups[model]) groups[model] = [];
+                  groups[model].push(item);
+                  return groups;
+                }, {} as Record<string, typeof sortedData>);
+                
+                const sortedWarehouseGroupNames = Object.keys(groupedWarehouseData).sort((a, b) => {
+                  return getModelPriority(b) - getModelPriority(a);
+                });
+                
+                // Calculate discrepancy stats (from ALL data, not just filtered)
+                const allItemsWithCounts = laOfficeData.filter(item => warehouseCounts[item.sku] !== null && warehouseCounts[item.sku] !== undefined);
                 const itemsWithCounts = sortedData.filter(item => warehouseCounts[item.sku] !== null && warehouseCounts[item.sku] !== undefined);
-                const discrepancies = itemsWithCounts.filter(item => warehouseCounts[item.sku] !== item.onHand);
-                const totalDifference = itemsWithCounts.reduce((sum, item) => {
+                const discrepancies = allItemsWithCounts.filter(item => warehouseCounts[item.sku] !== item.onHand);
+                const totalDifference = allItemsWithCounts.reduce((sum, item) => {
                   return sum + ((warehouseCounts[item.sku] ?? 0) - item.onHand);
                 }, 0);
                 
+                // Render a single row
+                const renderWarehouseRow = (item: typeof sortedData[0], index: number) => {
+                  const countedValue = warehouseCounts[item.sku];
+                  const hasCounted = countedValue !== null && countedValue !== undefined;
+                  const difference = hasCounted ? countedValue - item.onHand : null;
+                  
+                  return (
+                    <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="w-40 px-4 py-3 text-sm font-medium text-gray-900 font-mono">
+                        {item.sku}
+                      </td>
+                      <td className="w-48 px-4 py-3 text-sm text-gray-600 truncate" title={item.productTitle}>
+                        {item.productTitle}
+                      </td>
+                      <td className="w-24 px-4 py-3 text-sm text-center text-gray-900">
+                        {item.onHand.toLocaleString()}
+                      </td>
+                      <td className="w-28 px-4 py-3 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          value={countedValue ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value);
+                            setWarehouseCounts(prev => ({ ...prev, [item.sku]: val }));
+                          }}
+                          onBlur={(e) => {
+                            const val = e.target.value === '' ? null : parseInt(e.target.value);
+                            saveWarehouseCount(item.sku, val);
+                          }}
+                          className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="—"
+                        />
+                      </td>
+                      <td className={`w-24 px-4 py-3 text-sm text-center font-medium ${
+                        difference === null ? 'text-gray-400' :
+                        difference === 0 ? 'text-green-600' :
+                        difference > 0 ? 'text-blue-600' :
+                        'text-red-600'
+                      }`}>
+                        {difference === null ? '—' : 
+                         difference === 0 ? '✓' :
+                         difference > 0 ? `+${difference}` : difference}
+                      </td>
+                    </tr>
+                  );
+                };
+                
                 return (
                   <>
-                    {/* Header with Submit Button */}
+                    {/* Header with Filters and Submit Button */}
                     <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4">
                       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-                        <div className="flex gap-3 items-end">
+                        <div className="flex gap-3 flex-wrap items-end">
+                          {/* Product Filter */}
+                          <div className="flex flex-col relative" ref={warehouseProductDropdownRef}>
+                            <span className="text-[10px] text-gray-400 mb-1">Product</span>
+                            <button
+                              onClick={() => setShowWarehouseProductDropdown(!showWarehouseProductDropdown)}
+                              className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left flex items-center justify-between min-w-[140px]"
+                            >
+                              <span className="truncate">
+                                {warehouseFilterProducts.length === 0 
+                                  ? 'All Products' 
+                                  : warehouseFilterProducts.length === 1 
+                                    ? warehouseFilterProducts[0]
+                                    : `${warehouseFilterProducts.length} selected`}
+                              </span>
+                              <svg className="w-4 h-4 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {showWarehouseProductDropdown && (
+                              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                                <div className="p-2 border-b border-gray-200">
+                                  <button
+                                    onClick={() => setWarehouseFilterProducts([])}
+                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                  >
+                                    Clear all
+                                  </button>
+                                </div>
+                                {allWarehouseProductGroups.map(group => (
+                                  <label
+                                    key={group}
+                                    className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={warehouseFilterProducts.includes(group)}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setWarehouseFilterProducts([...warehouseFilterProducts, group]);
+                                        } else {
+                                          setWarehouseFilterProducts(warehouseFilterProducts.filter(p => p !== group));
+                                        }
+                                      }}
+                                      className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                    />
+                                    <span className="ml-2 text-xs text-gray-700">{group}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {/* View Mode Toggle */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-400 mb-1">View</span>
+                            <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
+                              <button
+                                onClick={() => setWarehouseViewMode('list')}
+                                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                                  warehouseViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                              >
+                                List
+                              </button>
+                              <button
+                                onClick={() => setWarehouseViewMode('grouped')}
+                                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                                  warehouseViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                              >
+                                Grouped
+                              </button>
+                            </div>
+                          </div>
+                          {/* Search */}
                           <div className="flex flex-col">
                             <span className="text-[10px] text-gray-400 mb-1">Search</span>
                             <input 
@@ -3281,7 +3443,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="flex items-center gap-4">
                           {/* Stats */}
                           <div className="text-sm text-gray-600">
-                            <span className="font-medium">{itemsWithCounts.length}</span> SKUs counted
+                            <span className="font-medium">{allItemsWithCounts.length}</span> SKUs counted
                             {discrepancies.length > 0 && (
                               <span className="ml-3 text-orange-600">
                                 <span className="font-medium">{discrepancies.length}</span> discrepancies
@@ -3289,7 +3451,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             )}
                           </div>
                           {/* Clear Button */}
-                          {itemsWithCounts.length > 0 && (
+                          {allItemsWithCounts.length > 0 && (
                             <button
                               onClick={clearWarehouseCounts}
                               className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md"
@@ -3377,52 +3539,23 @@ export default function Dashboard({ session }: DashboardProps) {
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {sortedData.map((item, index) => {
-                              const countedValue = warehouseCounts[item.sku];
-                              const hasCounted = countedValue !== null && countedValue !== undefined;
-                              const difference = hasCounted ? countedValue - item.onHand : null;
-                              
-                              return (
-                                <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                  <td className="w-40 px-4 py-3 text-sm font-medium text-gray-900 font-mono">
-                                    {item.sku}
-                                  </td>
-                                  <td className="w-48 px-4 py-3 text-sm text-gray-600 truncate" title={item.productTitle}>
-                                    {item.productTitle}
-                                  </td>
-                                  <td className="w-24 px-4 py-3 text-sm text-center text-gray-900">
-                                    {item.onHand.toLocaleString()}
-                                  </td>
-                                  <td className="w-28 px-4 py-3 text-center">
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      value={countedValue ?? ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value === '' ? null : parseInt(e.target.value);
-                                        setWarehouseCounts(prev => ({ ...prev, [item.sku]: val }));
-                                      }}
-                                      onBlur={(e) => {
-                                        const val = e.target.value === '' ? null : parseInt(e.target.value);
-                                        saveWarehouseCount(item.sku, val);
-                                      }}
-                                      className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                      placeholder="—"
-                                    />
-                                  </td>
-                                  <td className={`w-24 px-4 py-3 text-sm text-center font-medium ${
-                                    difference === null ? 'text-gray-400' :
-                                    difference === 0 ? 'text-green-600' :
-                                    difference > 0 ? 'text-blue-600' :
-                                    'text-red-600'
-                                  }`}>
-                                    {difference === null ? '—' : 
-                                     difference === 0 ? '✓' :
-                                     difference > 0 ? `+${difference}` : difference}
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {warehouseViewMode === 'list' ? (
+                              sortedData.map((item, index) => renderWarehouseRow(item, index))
+                            ) : (
+                              sortedWarehouseGroupNames.map(groupName => (
+                                <Fragment key={groupName}>
+                                  {/* Group Header */}
+                                  <tr className="bg-blue-50 border-t-2 border-blue-200">
+                                    <td colSpan={5} className="px-4 py-2">
+                                      <span className="text-sm font-semibold text-blue-800">{groupName}</span>
+                                      <span className="ml-2 text-xs text-blue-600">({groupedWarehouseData[groupName].length} SKUs)</span>
+                                    </td>
+                                  </tr>
+                                  {/* Group Items */}
+                                  {groupedWarehouseData[groupName].map((item, index) => renderWarehouseRow(item, index))}
+                                </Fragment>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>

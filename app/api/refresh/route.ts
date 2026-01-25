@@ -124,7 +124,7 @@ export async function fetchInventoryData() {
   
   // Build a map of inventory_item_id -> variant info
   // Only include products with the "inventoried" tag
-  const variantMap = new Map<string, { sku: string; productTitle: string; variantTitle: string }>();
+  const variantMap = new Map<string, { sku: string; productTitle: string; variantTitle: string; inventoryItemId: string }>();
   for (const product of products) {
     // Check if product has the "inventoried" tag (tags is a comma-separated string)
     const productTags = product.tags?.toLowerCase().split(',').map(t => t.trim()) || [];
@@ -138,6 +138,7 @@ export async function fetchInventoryData() {
           sku: variant.sku,
           productTitle: product.title,
           variantTitle: variant.title,
+          inventoryItemId: String(variant.inventory_item_id),
         });
       }
     }
@@ -242,6 +243,7 @@ export async function fetchInventoryData() {
     sku: string;
     productTitle: string;
     variantTitle: string;
+    inventoryItemId: string;
     available: number;
     onHand: number;
     committed: number;
@@ -349,6 +351,7 @@ export async function fetchInventoryData() {
           sku: variantInfo.sku,
           productTitle: variantInfo.productTitle,
           variantTitle: variantInfo.variantTitle,
+          inventoryItemId: variantInfo.inventoryItemId,
           available: level.available,
           onHand: level.onHand,
           committed: level.committed,
@@ -375,6 +378,7 @@ export async function fetchInventoryData() {
     sku: string;
     productTitle: string;
     variantTitle: string;
+    inventoryItemId: string;
     available: number;
     onHand: number;
     committed: number;
@@ -396,12 +400,20 @@ export async function fetchInventoryData() {
   const outOfStockCount = inventory.filter(item => item.totalAvailable <= 0).length;
   const lowStockCount = inventory.filter(item => item.totalAvailable > 0 && item.totalAvailable <= 10).length;
 
+  // Build location ID map (display name -> Shopify location ID)
+  const locationIds: Record<string, string> = {};
+  for (const loc of activeLocations) {
+    const displayName = locationDisplayNames[loc.name] || loc.name;
+    locationIds[displayName] = loc.id;
+  }
+
   return {
     totalSKUs,
     totalUnits,
     lowStockCount,
     outOfStockCount,
     locations: locationNames,
+    locationIds,
     inventory,
     locationDetails,
   };
