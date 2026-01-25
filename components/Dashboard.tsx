@@ -873,7 +873,8 @@ export default function Dashboard({ session }: DashboardProps) {
   
   // Export log entry to Excel/CSV
   const exportLogToExcel = (log: typeof trackerLogs[0], location: string) => {
-    const timestamp = new Date(log.timestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const logDate = new Date(log.timestamp);
+    const timestamp = `${logDate.getFullYear()}${String(logDate.getMonth() + 1).padStart(2, '0')}${String(logDate.getDate()).padStart(2, '0')}-${String(logDate.getHours() % 12 || 12).padStart(2, '0')}${String(logDate.getMinutes()).padStart(2, '0')}${logDate.getHours() >= 12 ? 'PM' : 'AM'}`;
     const filename = `inventory-counts-${location.replace(/\s/g, '-')}-${timestamp}.csv`;
     
     // Build CSV content
@@ -3913,16 +3914,19 @@ export default function Dashboard({ session }: DashboardProps) {
                             const csvContent = [headers.join(','), ...rows].join('\n');
                             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                             const link = document.createElement('a');
-                            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-                            link.href = URL.createObjectURL(blob);
-                            link.download = `inventory-counts-${trackerLocation.replace(/\s/g, '-')}-${timestamp}.csv`;
+                            const url = URL.createObjectURL(blob);
+                            link.setAttribute('href', url);
+                            const now = new Date();
+                            const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+                            link.setAttribute('download', `inventory-counts-${trackerLocation.replace(/\s/g, '-')}-${timestamp}.csv`);
+                            link.style.visibility = 'hidden';
+                            document.body.appendChild(link);
                             link.click();
-                            URL.revokeObjectURL(link.href);
+                            document.body.removeChild(link);
                           }}
-                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
+                          className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
                         >
-                          <span>📊</span>
-                          Export to Excel
+                          <span>📥</span> Export to Excel
                         </button>
                       </div>
                     )}
