@@ -3532,16 +3532,16 @@ export default function Dashboard({ session }: DashboardProps) {
                   
                   return (
                     <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="w-40 px-4 py-3 text-sm font-medium text-gray-900 font-mono">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 font-mono truncate">
                         {item.sku}
                       </td>
-                      <td className="w-48 px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
+                      <td className="px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
                         {item.variantTitle}
                       </td>
-                      <td className="w-24 px-4 py-3 text-sm text-center text-gray-900">
+                      <td className="px-4 py-3 text-sm text-center text-gray-900">
                         {item.onHand.toLocaleString()}
                       </td>
-                      <td className="w-28 px-4 py-3 text-center">
+                      <td className="px-4 py-3 text-center">
                         <input
                           type="number"
                           min="0"
@@ -3561,7 +3561,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           placeholder="—"
                         />
                       </td>
-                      <td className={`w-24 px-4 py-3 text-sm text-center font-medium ${
+                      <td className={`px-4 py-3 text-sm text-center font-medium ${
                         difference === null ? 'text-gray-400' :
                         difference === 0 ? 'text-green-600' :
                         difference > 0 ? 'text-blue-600' :
@@ -3782,11 +3782,18 @@ export default function Dashboard({ session }: DashboardProps) {
                     {/* Table */}
                     <div className="bg-white shadow rounded-lg overflow-hidden">
                       <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                        <table className="w-full divide-y divide-gray-200" style={{ tableLayout: 'fixed' }}>
+                          <colgroup>
+                            <col style={{ width: '140px' }} />
+                            <col style={{ width: 'auto' }} />
+                            <col style={{ width: '100px' }} />
+                            <col style={{ width: '120px' }} />
+                            <col style={{ width: '110px' }} />
+                          </colgroup>
                           <thead className="bg-gray-50">
                             <tr>
                               <th 
-                                className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'sku') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3798,11 +3805,11 @@ export default function Dashboard({ session }: DashboardProps) {
                               >
                                 SKU {trackerSortBy === 'sku' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
-                              <th className="w-48 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 Variant
                               </th>
                               <th 
-                                className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'onHand') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3815,7 +3822,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 On Hand {trackerSortBy === 'onHand' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                               <th 
-                                className="w-28 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'counted') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3828,7 +3835,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 Counted {trackerSortBy === 'counted' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                               <th 
-                                className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'difference') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
