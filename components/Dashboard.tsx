@@ -3582,19 +3582,21 @@ export default function Dashboard({ session }: DashboardProps) {
                   
                   return (
                     <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900 font-mono truncate">
+                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 font-mono">
                         {item.sku}
                       </td>
                       <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
                         {item.variantTitle}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-900">
+                      <td className="px-1 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-center text-gray-900">
                         {item.onHand.toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-1 sm:px-4 py-2 sm:py-3 text-center">
                         <input
                           type="number"
                           min="0"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           value={countedValue ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value);
@@ -3607,11 +3609,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             const val = e.target.value === '' ? null : parseInt(e.target.value);
                             saveTrackerCount(trackerLocation, item.sku, val);
                           }}
-                          className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-14 sm:w-20 px-1 sm:px-2 py-1 text-xs sm:text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="—"
                         />
                       </td>
-                      <td className={`px-4 py-3 text-sm text-center font-medium ${
+                      <td className={`px-1 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-center font-medium ${
                         difference === null ? 'text-gray-400' :
                         difference === 0 ? 'text-green-600' :
                         difference > 0 ? 'text-blue-600' :
@@ -3832,8 +3834,9 @@ export default function Dashboard({ session }: DashboardProps) {
                     {/* Table */}
                     <div className="bg-white shadow rounded-lg overflow-hidden">
                       <div className="overflow-x-auto">
-                        <table className="w-full divide-y divide-gray-200" style={{ tableLayout: 'fixed' }}>
-                          <colgroup>
+                        <table className="w-full divide-y divide-gray-200 sm:table-fixed">
+                          {/* Column widths for desktop only */}
+                          <colgroup className="hidden sm:table-column-group">
                             <col style={{ width: '130px' }} />
                             <col style={{ width: '280px' }} />
                             <col style={{ width: '100px' }} />
@@ -3843,7 +3846,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <thead className="bg-gray-50">
                             <tr>
                               <th 
-                                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'sku') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3859,7 +3862,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 Variant
                               </th>
                               <th 
-                                className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-1 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 whitespace-nowrap"
                                 onClick={() => {
                                   if (trackerSortBy === 'onHand') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3869,10 +3872,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                   }
                                 }}
                               >
-                                On Hand {trackerSortBy === 'onHand' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
+                                <span className="hidden sm:inline">On Hand</span>
+                                <span className="sm:hidden">Sys</span>
+                                {trackerSortBy === 'onHand' && (trackerSortOrder === 'asc' ? ' ↑' : ' ↓')}
                               </th>
                               <th 
-                                className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-1 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'counted') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3882,10 +3887,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                   }
                                 }}
                               >
-                                Counted {trackerSortBy === 'counted' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
+                                <span className="hidden sm:inline">Counted</span>
+                                <span className="sm:hidden">Count</span>
+                                {trackerSortBy === 'counted' && (trackerSortOrder === 'asc' ? ' ↑' : ' ↓')}
                               </th>
                               <th 
-                                className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="px-1 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'difference') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3895,7 +3902,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                   }
                                 }}
                               >
-                                Difference {trackerSortBy === 'difference' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
+                                <span className="hidden sm:inline">Difference</span>
+                                <span className="sm:hidden">Diff</span>
+                                {trackerSortBy === 'difference' && (trackerSortOrder === 'asc' ? ' ↑' : ' ↓')}
                               </th>
                             </tr>
                           </thead>
