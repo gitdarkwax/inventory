@@ -3609,7 +3609,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             const val = e.target.value === '' ? null : parseInt(e.target.value);
                             saveTrackerCount(trackerLocation, item.sku, val);
                           }}
-                          className="w-14 sm:w-20 px-1 sm:px-2 py-1 text-xs sm:text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-14 sm:w-20 px-1 sm:px-2 py-1 text-base sm:text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="—"
                         />
                       </td>
