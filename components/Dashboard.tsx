@@ -127,8 +127,21 @@ interface ProductionOrder {
 type TabType = 'inventory' | 'forecasting' | 'planning' | 'production' | 'warehouse';
 
 export default function Dashboard({ session }: DashboardProps) {
-  // Tab state
-  const [activeTab, setActiveTab] = useState<TabType>('planning');
+  // Tab state - persist to localStorage
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('activeTab');
+      if (saved && ['inventory', 'forecasting', 'planning', 'production', 'warehouse'].includes(saved)) {
+        return saved as TabType;
+      }
+    }
+    return 'inventory'; // Default to Overview tab
+  });
+  
+  // Save active tab to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
   
   // Inventory state
   const [inventoryData, setInventoryData] = useState<InventorySummary | null>(null);
@@ -1652,6 +1665,14 @@ export default function Dashboard({ session }: DashboardProps) {
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-max sm:w-fit">
                 <button
+                  onClick={() => setActiveTab('inventory')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📊 Overview
+                </button>
+                <button
                   onClick={() => setActiveTab('planning')}
                   className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                     activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
@@ -1665,23 +1686,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                   }`}
                 >
-                  📦 PO Tracker
-                </button>
-                <button
-                  onClick={() => setActiveTab('inventory')}
-                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                    activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                  }`}
-                >
-                  📦 Inventory
-                </button>
-                <button
-                  onClick={() => setActiveTab('forecasting')}
-                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
-                    activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                  }`}
-                >
-                  📈 Forecasting
+                  🚚 Prod & Transfer
                 </button>
                 <button
                   onClick={() => setActiveTab('warehouse')}
@@ -1690,6 +1695,14 @@ export default function Dashboard({ session }: DashboardProps) {
                   }`}
                 >
                   📦 Inventory Counts
+                </button>
+                <button
+                  onClick={() => setActiveTab('forecasting')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📈 Forecast
                 </button>
               </div>
             </div>
