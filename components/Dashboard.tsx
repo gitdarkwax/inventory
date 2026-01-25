@@ -261,6 +261,11 @@ export default function Dashboard({ session }: DashboardProps) {
     'DTLA WH': null,
     'China WH': null,
   });
+  const [trackerLastSubmission, setTrackerLastSubmission] = useState<Record<TrackerLocation, { submittedAt: string; submittedBy: string; skuCount: number } | null>>({
+    'LA Office': null,
+    'DTLA WH': null,
+    'China WH': null,
+  });
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [trackerNotification, setTrackerNotification] = useState<{
     type: 'success' | 'error' | 'warning';
@@ -807,6 +812,8 @@ export default function Dashboard({ session }: DashboardProps) {
         ...prev,
         [location]: { savedAt: result.savedAt, savedBy: result.savedBy },
       }));
+      // Clear last submission info when a new draft is saved
+      setTrackerLastSubmission(prev => ({ ...prev, [location]: null }));
       showTrackerNotification('success', 'Draft Saved', `${result.skuCount} SKUs for ${location} saved to Google Drive.`);
     } catch (error) {
       console.error('Failed to save draft:', error);
@@ -3408,6 +3415,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 // Get current counts for selected location
                 const currentCounts = trackerCounts[trackerLocation];
                 const currentDraftInfo = trackerDraftInfo[trackerLocation];
+                const currentLastSubmission = trackerLastSubmission[trackerLocation];
                 
                 // Get data for selected location
                 const locationData = inventoryData.locationDetails[trackerLocation] || [];
@@ -3541,6 +3549,12 @@ export default function Dashboard({ session }: DashboardProps) {
                     <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4">
                       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                         <div className="flex gap-3 flex-wrap items-end">
+                          {/* Location Title */}
+                          <div className="flex items-center h-[34px] mr-2">
+                            <h2 className="text-2xl font-bold text-gray-900 tracking-tight uppercase">
+                              {trackerLocation}
+                            </h2>
+                          </div>
                           {/* Location Toggle */}
                           <div className="flex flex-col">
                             <span className="text-[10px] text-gray-400 mb-1">Location</span>
@@ -3666,10 +3680,15 @@ export default function Dashboard({ session }: DashboardProps) {
                               </div>
                             )}
                           </div>
-                          {/* Draft Info */}
+                          {/* Draft/Submission Info */}
                           {currentDraftInfo && (
                             <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                               Draft saved: {new Date(currentDraftInfo.savedAt).toLocaleString()} by {currentDraftInfo.savedBy}
+                            </div>
+                          )}
+                          {!currentDraftInfo && currentLastSubmission && (
+                            <div className="text-xs text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
+                              ✓ Submitted: {new Date(currentLastSubmission.submittedAt).toLocaleString()} by {currentLastSubmission.submittedBy} ({currentLastSubmission.skuCount} SKUs)
                             </div>
                           )}
                         </div>
@@ -4031,20 +4050,31 @@ export default function Dashboard({ session }: DashboardProps) {
                                       console.error('Failed to save log to Google Drive:', logError);
                                     }
                                     
-                                    if (!trackerTestMode) {
-                                      // Only delete draft and clear counts in non-test mode
-                                      // Delete draft from Google Drive (data is now in logs)
-                                      try {
-                                        await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}`, { method: 'DELETE' });
-                                        setTrackerDraftInfo(prev => ({ ...prev, [trackerLocation]: null }));
-                                      } catch (draftError) {
-                                        console.error('Failed to delete draft:', draftError);
-                                      }
-                                      
-                                      // Clear counts for this location on success
+                                    // Delete draft from Google Drive (data is now in logs)
+                                    try {
+                                      await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}`, { method: 'DELETE' });
+                                      setTrackerDraftInfo(prev => ({ ...prev, [trackerLocation]: null }));
+                                    } catch (draftError) {
+                                      console.error('Failed to delete draft:', draftError);
+                                    }
+                                    
+                                    // Clear counts for this location on success
+                                    startTransition(() => {
                                       setTrackerCounts(prev => ({ ...prev, [trackerLocation]: {} }));
-                                      const localKey = `trackerCounts_${trackerLocation.replace(/\s/g, '_')}`;
-                                      localStorage.removeItem(localKey);
+                                    });
+                                    const localKey = `trackerCounts_${trackerLocation.replace(/\s/g, '_')}`;
+                                    localStorage.removeItem(localKey);
+                                    
+                                    // Track last submission info (only for real submissions)
+                                    if (!trackerTestMode) {
+                                      setTrackerLastSubmission(prev => ({
+                                        ...prev,
+                                        [trackerLocation]: {
+                                          submittedAt: logEntry.timestamp,
+                                          submittedBy: logEntry.submittedBy,
+                                          skuCount: updates.length,
+                                        },
+                                      }));
                                     }
                                     
                                     if (trackerTestMode) {
