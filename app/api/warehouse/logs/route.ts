@@ -1,6 +1,7 @@
 /**
  * Warehouse Submission Logs API
  * Stores and retrieves submission logs from Google Drive
+ * Supports multiple locations: LA Office, LA Warehouse, China
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,8 +10,13 @@ import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
 
-const LOGS_FILE_NAME = 'warehouse-submission-logs.json';
 const SHARED_DRIVE_NAME = 'ProjectionsVsActual Cache';
+
+// Get logs file name for a specific location
+const getLogsFileName = (location: string) => {
+  const sanitizedLocation = location.replace(/\s/g, '-').toLowerCase();
+  return `warehouse-logs-${sanitizedLocation}.json`;
+};
 
 interface SubmissionLog {
   timestamp: string;
@@ -116,18 +122,22 @@ async function findFile(
   return null;
 }
 
-// GET - Retrieve logs
-export async function GET() {
+// GET - Retrieve logs for a location
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const location = searchParams.get('location') || 'LA Office';
+    const logsFileName = getLogsFileName(location);
+
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, LOGS_FILE_NAME);
+    const fileId = await findFile(drive, folderId, sharedDriveId, logsFileName);
 
     if (!fileId) {
       return NextResponse.json({ logs: [] });
@@ -156,7 +166,7 @@ export async function GET() {
   }
 }
 
-// POST - Add new log entry
+// POST - Add new log entry for a location
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -164,15 +174,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { log } = await request.json();
+    const { log, location = 'LA Office' } = await request.json();
     if (!log) {
       return NextResponse.json({ error: 'No log entry provided' }, { status: 400 });
     }
 
+    const logsFileName = getLogsFileName(location);
+
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, LOGS_FILE_NAME);
+    const fileId = await findFile(drive, folderId, sharedDriveId, logsFileName);
 
     // Load existing logs
     let logs: SubmissionLog[] = [];
@@ -189,8 +201,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Add new log at beginning
-    logs.unshift(log);
+    // Add new log at beginning (with location info)
+    logs.unshift({ ...log, location });
     
     // Keep last 500 logs
     logs = logs.slice(0, 500);
@@ -210,7 +222,7 @@ export async function POST(request: NextRequest) {
     } else {
       await drive.files.create({
         requestBody: {
-          name: LOGS_FILE_NAME,
+          name: logsFileName,
           parents: [folderId],
         },
         media: {

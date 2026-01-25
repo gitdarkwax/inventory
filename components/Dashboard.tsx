@@ -227,35 +227,46 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isAddingPhaseOut, setIsAddingPhaseOut] = useState(false);
   const [isRemovingPhaseOut, setIsRemovingPhaseOut] = useState<string | null>(null);
 
-  // LA Warehouse count state
-  const [warehouseCounts, setWarehouseCounts] = useState<Record<string, number | null>>({});
-  const [warehouseSearchTerm, setWarehouseSearchTerm] = useState('');
-  const [warehouseSortBy, setWarehouseSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
-  const [warehouseSortOrder, setWarehouseSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [showWarehouseConfirm, setShowWarehouseConfirm] = useState(false);
-  const [isSubmittingWarehouse, setIsSubmittingWarehouse] = useState(false);
-  const [warehouseFilterProducts, setWarehouseFilterProducts] = useState<string[]>([]);
-  const [showWarehouseProductDropdown, setShowWarehouseProductDropdown] = useState(false);
-  const warehouseProductDropdownRef = useRef<HTMLDivElement>(null);
-  const [warehouseViewMode, setWarehouseViewMode] = useState<'list' | 'grouped'>('grouped');
-  const [showWarehouseLogs, setShowWarehouseLogs] = useState(false);
-  const [warehouseLogs, setWarehouseLogs] = useState<Array<{
+  // Inventory Tracker state
+  type TrackerLocation = 'LA Office' | 'LA Warehouse' | 'China';
+  const [trackerLocation, setTrackerLocation] = useState<TrackerLocation>('LA Office');
+  const [trackerCounts, setTrackerCounts] = useState<Record<TrackerLocation, Record<string, number | null>>>({
+    'LA Office': {},
+    'LA Warehouse': {},
+    'China': {},
+  });
+  const [trackerSearchTerm, setTrackerSearchTerm] = useState('');
+  const [trackerSortBy, setTrackerSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
+  const [trackerSortOrder, setTrackerSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [showTrackerConfirm, setShowTrackerConfirm] = useState(false);
+  const [isSubmittingTracker, setIsSubmittingTracker] = useState(false);
+  const [trackerFilterProducts, setTrackerFilterProducts] = useState<string[]>([]);
+  const [showTrackerProductDropdown, setShowTrackerProductDropdown] = useState(false);
+  const trackerProductDropdownRef = useRef<HTMLDivElement>(null);
+  const [trackerViewMode, setTrackerViewMode] = useState<'list' | 'grouped'>('grouped');
+  const [showTrackerLogs, setShowTrackerLogs] = useState(false);
+  const [trackerLogs, setTrackerLogs] = useState<Array<{
     timestamp: string;
     submittedBy: string;
+    location: string;
     summary: { totalSKUs: number; discrepancies: number; totalDifference: number };
     updates: Array<{ sku: string; previousOnHand: number; newQuantity: number }>;
     result: { total: number; success: number; failed: number };
   }>>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [draftInfo, setDraftInfo] = useState<{ savedAt: string; savedBy: string } | null>(null);
+  const [trackerDraftInfo, setTrackerDraftInfo] = useState<Record<TrackerLocation, { savedAt: string; savedBy: string } | null>>({
+    'LA Office': null,
+    'LA Warehouse': null,
+    'China': null,
+  });
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
-  const [warehouseNotification, setWarehouseNotification] = useState<{
+  const [trackerNotification, setTrackerNotification] = useState<{
     type: 'success' | 'error' | 'warning';
     title: string;
     message: string;
   } | null>(null);
-  const [warehouseTestMode, setWarehouseTestMode] = useState(false);
+  const [trackerTestMode, setTrackerTestMode] = useState(false);
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -689,76 +700,100 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showInventoryProductDropdown]);
 
-  // Close warehouse product dropdown when clicking outside
+  // Close tracker product dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (warehouseProductDropdownRef.current && !warehouseProductDropdownRef.current.contains(event.target as Node)) {
-        setShowWarehouseProductDropdown(false);
+      if (trackerProductDropdownRef.current && !trackerProductDropdownRef.current.contains(event.target as Node)) {
+        setShowTrackerProductDropdown(false);
       }
     };
-    if (showWarehouseProductDropdown) {
+    if (showTrackerProductDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showWarehouseProductDropdown]);
+  }, [showTrackerProductDropdown]);
 
-  // Load warehouse draft from Google Drive on mount
+  // Load tracker drafts from Google Drive on mount
   useEffect(() => {
-    const loadDraft = async () => {
+    const loadAllDrafts = async () => {
       setIsLoadingDraft(true);
+      const locations: TrackerLocation[] = ['LA Office', 'LA Warehouse', 'China'];
+      
       try {
         // First check localStorage for any unsaved work
-        const localSaved = localStorage.getItem('warehouseCounts');
-        if (localSaved) {
-          try {
-            setWarehouseCounts(JSON.parse(localSaved));
-          } catch (e) {
-            console.error('Failed to load local warehouse counts:', e);
+        for (const loc of locations) {
+          const localKey = `trackerCounts_${loc.replace(/\s/g, '_')}`;
+          const localSaved = localStorage.getItem(localKey);
+          if (localSaved) {
+            try {
+              setTrackerCounts(prev => ({
+                ...prev,
+                [loc]: JSON.parse(localSaved),
+              }));
+            } catch (e) {
+              console.error(`Failed to load local counts for ${loc}:`, e);
+            }
           }
         }
         
-        // Then try to load from Google Drive
-        const response = await fetch('/api/warehouse/draft');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.draft) {
-            // If there's a saved draft and no local changes (or local is empty), use the draft
-            const localCounts = localSaved ? JSON.parse(localSaved) : {};
-            const localCountedSkus = Object.keys(localCounts).filter(k => localCounts[k] !== null);
-            
-            if (localCountedSkus.length === 0) {
-              setWarehouseCounts(data.draft.counts);
-              localStorage.setItem('warehouseCounts', JSON.stringify(data.draft.counts));
+        // Then try to load from Google Drive for each location
+        for (const loc of locations) {
+          try {
+            const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(loc)}`);
+            if (response.ok) {
+              const data = await response.json();
+              if (data.draft) {
+                const localKey = `trackerCounts_${loc.replace(/\s/g, '_')}`;
+                const localSaved = localStorage.getItem(localKey);
+                const localCounts = localSaved ? JSON.parse(localSaved) : {};
+                const localCountedSkus = Object.keys(localCounts).filter(k => localCounts[k] !== null);
+                
+                if (localCountedSkus.length === 0) {
+                  setTrackerCounts(prev => ({
+                    ...prev,
+                    [loc]: data.draft.counts,
+                  }));
+                  localStorage.setItem(localKey, JSON.stringify(data.draft.counts));
+                }
+                setTrackerDraftInfo(prev => ({
+                  ...prev,
+                  [loc]: { savedAt: data.draft.savedAt, savedBy: data.draft.savedBy },
+                }));
+              }
             }
-            setDraftInfo({ savedAt: data.draft.savedAt, savedBy: data.draft.savedBy });
+          } catch (error) {
+            console.error(`Failed to load draft for ${loc}:`, error);
           }
         }
-      } catch (error) {
-        console.error('Failed to load warehouse draft:', error);
       } finally {
         setIsLoadingDraft(false);
       }
     };
-    loadDraft();
+    loadAllDrafts();
   }, []);
 
-  // Save warehouse counts to localStorage when changed (for auto-save on blur)
-  const saveWarehouseCount = (sku: string, count: number | null) => {
-    setWarehouseCounts(prev => {
-      const updated = { ...prev, [sku]: count };
-      localStorage.setItem('warehouseCounts', JSON.stringify(updated));
+  // Save tracker counts to localStorage when changed (for auto-save on blur)
+  const saveTrackerCount = (location: TrackerLocation, sku: string, count: number | null) => {
+    setTrackerCounts(prev => {
+      const updated = {
+        ...prev,
+        [location]: { ...prev[location], [sku]: count },
+      };
+      const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
+      localStorage.setItem(localKey, JSON.stringify(updated[location]));
       return updated;
     });
   };
 
-  // Save draft to Google Drive
-  const saveDraftToGoogleDrive = async () => {
+  // Save draft to Google Drive for specific location
+  const saveDraftToGoogleDrive = async (location: TrackerLocation) => {
     setIsSavingDraft(true);
     try {
+      const counts = trackerCounts[location];
       const response = await fetch('/api/warehouse/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ counts: warehouseCounts }),
+        body: JSON.stringify({ counts, location }),
       });
       
       if (!response.ok) {
@@ -767,24 +802,27 @@ export default function Dashboard({ session }: DashboardProps) {
       }
       
       const result = await response.json();
-      setDraftInfo({ savedAt: result.savedAt, savedBy: result.savedBy });
-      showWarehouseNotification('success', 'Draft Saved', `${result.skuCount} SKUs saved to Google Drive.`);
+      setTrackerDraftInfo(prev => ({
+        ...prev,
+        [location]: { savedAt: result.savedAt, savedBy: result.savedBy },
+      }));
+      showTrackerNotification('success', 'Draft Saved', `${result.skuCount} SKUs for ${location} saved to Google Drive.`);
     } catch (error) {
       console.error('Failed to save draft:', error);
-      showWarehouseNotification('error', 'Save Failed', error instanceof Error ? error.message : 'Unknown error');
+      showTrackerNotification('error', 'Save Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsSavingDraft(false);
     }
   };
 
-  // Load logs from Google Drive
-  const loadWarehouseLogs = async () => {
+  // Load logs from Google Drive for specific location
+  const loadTrackerLogs = async (location: TrackerLocation) => {
     setIsLoadingLogs(true);
     try {
-      const response = await fetch('/api/warehouse/logs');
+      const response = await fetch(`/api/warehouse/logs?location=${encodeURIComponent(location)}`);
       if (response.ok) {
         const data = await response.json();
-        setWarehouseLogs(data.logs || []);
+        setTrackerLogs(data.logs || []);
       }
     } catch (error) {
       console.error('Failed to load logs:', error);
@@ -792,19 +830,58 @@ export default function Dashboard({ session }: DashboardProps) {
       setIsLoadingLogs(false);
     }
   };
-
-  // Show warehouse notification
-  const showWarehouseNotification = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
-    setWarehouseNotification({ type, title, message });
-    // Auto-dismiss after 5 seconds for success, 8 seconds for errors
-    setTimeout(() => setWarehouseNotification(null), type === 'error' ? 8000 : 5000);
+  
+  // Export log entry to Excel/CSV
+  const exportLogToExcel = (log: typeof trackerLogs[0], location: string) => {
+    const timestamp = new Date(log.timestamp).toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `inventory-counts-${location.replace(/\s/g, '-')}-${timestamp}.csv`;
+    
+    // Build CSV content
+    const headers = ['SKU', 'Previous On Hand', 'New Quantity', 'Change'];
+    const rows = log.updates.map(u => [
+      u.sku,
+      u.previousOnHand,
+      u.newQuantity,
+      u.newQuantity - u.previousOnHand,
+    ]);
+    
+    const csvContent = [
+      `Inventory Count Submission - ${location}`,
+      `Submitted: ${new Date(log.timestamp).toLocaleString()}`,
+      `Submitted By: ${log.submittedBy}`,
+      `Total SKUs: ${log.summary.totalSKUs}`,
+      `Discrepancies: ${log.summary.discrepancies}`,
+      `Total Difference: ${log.summary.totalDifference}`,
+      '',
+      headers.join(','),
+      ...rows.map(r => r.join(',')),
+    ].join('\n');
+    
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
 
-  // Clear warehouse counts
-  const clearWarehouseCounts = () => {
-    if (confirm('Are you sure you want to clear all counted values?')) {
-      setWarehouseCounts({});
-      localStorage.removeItem('warehouseCounts');
+  // Show tracker notification
+  const showTrackerNotification = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setTrackerNotification({ type, title, message });
+    // Auto-dismiss after 5 seconds for success, 8 seconds for errors
+    setTimeout(() => setTrackerNotification(null), type === 'error' ? 8000 : 5000);
+  };
+
+  // Clear tracker counts for current location
+  const clearTrackerCounts = (location: TrackerLocation) => {
+    if (confirm(`Are you sure you want to clear all counted values for ${location}?`)) {
+      setTrackerCounts(prev => ({
+        ...prev,
+        [location]: {},
+      }));
+      const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
+      localStorage.removeItem(localKey);
     }
   };
 
@@ -1521,7 +1598,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                 }`}
               >
-                🏭 LA Warehouse
+                📦 Inventory Tracker
               </button>
             </div>
             <div className="flex flex-col items-end">
@@ -3303,7 +3380,7 @@ export default function Dashboard({ session }: DashboardProps) {
           </>
         )}
 
-        {/* LA Warehouse Tab */}
+        {/* Inventory Tracker Tab */}
         {activeTab === 'warehouse' && (
           <>
             {inventoryLoading && (
@@ -3325,23 +3402,27 @@ export default function Dashboard({ session }: DashboardProps) {
 
             {!inventoryLoading && inventoryData && inventoryData.locationDetails && (
               (() => {
-                // Get LA Office data
-                const laOfficeData = inventoryData.locationDetails['LA Office'] || [];
+                // Get current counts for selected location
+                const currentCounts = trackerCounts[trackerLocation];
+                const currentDraftInfo = trackerDraftInfo[trackerLocation];
+                
+                // Get data for selected location
+                const locationData = inventoryData.locationDetails[trackerLocation] || [];
                 
                 // Get all product groups for filter dropdown
-                const allWarehouseProductGroups = [...new Set(laOfficeData.map(item => extractProductModel(item.productTitle, item.sku)))].sort((a, b) => {
+                const allTrackerProductGroups = [...new Set(locationData.map(item => extractProductModel(item.productTitle, item.sku)))].sort((a, b) => {
                   return getModelPriority(b) - getModelPriority(a);
                 });
                 
                 // Filter by search and product
-                const filteredData = laOfficeData.filter(item => {
-                  const matchesSearch = !warehouseSearchTerm || 
-                    item.sku.toLowerCase().includes(warehouseSearchTerm.toLowerCase()) ||
-                    item.productTitle.toLowerCase().includes(warehouseSearchTerm.toLowerCase());
+                const filteredData = locationData.filter(item => {
+                  const matchesSearch = !trackerSearchTerm || 
+                    item.sku.toLowerCase().includes(trackerSearchTerm.toLowerCase()) ||
+                    item.productTitle.toLowerCase().includes(trackerSearchTerm.toLowerCase());
                   
                   // Filter by product group
                   const itemProductGroup = extractProductModel(item.productTitle, item.sku);
-                  const matchesProduct = warehouseFilterProducts.length === 0 || warehouseFilterProducts.includes(itemProductGroup);
+                  const matchesProduct = trackerFilterProducts.length === 0 || trackerFilterProducts.includes(itemProductGroup);
                   
                   return matchesSearch && matchesProduct;
                 });
@@ -3351,7 +3432,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   let aVal: number | string = 0;
                   let bVal: number | string = 0;
                   
-                  switch (warehouseSortBy) {
+                  switch (trackerSortBy) {
                     case 'sku':
                       aVal = a.sku;
                       bVal = b.sku;
@@ -3361,48 +3442,48 @@ export default function Dashboard({ session }: DashboardProps) {
                       bVal = b.onHand;
                       break;
                     case 'counted':
-                      aVal = warehouseCounts[a.sku] ?? -Infinity;
-                      bVal = warehouseCounts[b.sku] ?? -Infinity;
+                      aVal = currentCounts[a.sku] ?? -Infinity;
+                      bVal = currentCounts[b.sku] ?? -Infinity;
                       break;
                     case 'difference':
-                      const aDiff = warehouseCounts[a.sku] !== null && warehouseCounts[a.sku] !== undefined 
-                        ? warehouseCounts[a.sku]! - a.onHand : -Infinity;
-                      const bDiff = warehouseCounts[b.sku] !== null && warehouseCounts[b.sku] !== undefined 
-                        ? warehouseCounts[b.sku]! - b.onHand : -Infinity;
+                      const aDiff = currentCounts[a.sku] !== null && currentCounts[a.sku] !== undefined 
+                        ? currentCounts[a.sku]! - a.onHand : -Infinity;
+                      const bDiff = currentCounts[b.sku] !== null && currentCounts[b.sku] !== undefined 
+                        ? currentCounts[b.sku]! - b.onHand : -Infinity;
                       aVal = aDiff;
                       bVal = bDiff;
                       break;
                   }
                   
                   if (typeof aVal === 'string' && typeof bVal === 'string') {
-                    return warehouseSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                    return trackerSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
                   }
-                  return warehouseSortOrder === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+                  return trackerSortOrder === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
                 });
                 
                 // Group data by product model for grouped view
-                const groupedWarehouseData = sortedData.reduce((groups, item) => {
+                const groupedTrackerData = sortedData.reduce((groups, item) => {
                   const model = extractProductModel(item.productTitle, item.sku);
                   if (!groups[model]) groups[model] = [];
                   groups[model].push(item);
                   return groups;
                 }, {} as Record<string, typeof sortedData>);
                 
-                const sortedWarehouseGroupNames = Object.keys(groupedWarehouseData).sort((a, b) => {
+                const sortedTrackerGroupNames = Object.keys(groupedTrackerData).sort((a, b) => {
                   return getModelPriority(b) - getModelPriority(a);
                 });
                 
                 // Calculate discrepancy stats (from ALL data, not just filtered)
-                const allItemsWithCounts = laOfficeData.filter(item => warehouseCounts[item.sku] !== null && warehouseCounts[item.sku] !== undefined);
-                const itemsWithCounts = sortedData.filter(item => warehouseCounts[item.sku] !== null && warehouseCounts[item.sku] !== undefined);
-                const discrepancies = allItemsWithCounts.filter(item => warehouseCounts[item.sku] !== item.onHand);
+                const allItemsWithCounts = locationData.filter(item => currentCounts[item.sku] !== null && currentCounts[item.sku] !== undefined);
+                const itemsWithCounts = sortedData.filter(item => currentCounts[item.sku] !== null && currentCounts[item.sku] !== undefined);
+                const discrepancies = allItemsWithCounts.filter(item => currentCounts[item.sku] !== item.onHand);
                 const totalDifference = allItemsWithCounts.reduce((sum, item) => {
-                  return sum + ((warehouseCounts[item.sku] ?? 0) - item.onHand);
+                  return sum + ((currentCounts[item.sku] ?? 0) - item.onHand);
                 }, 0);
                 
                 // Render a single row
-                const renderWarehouseRow = (item: typeof sortedData[0], index: number) => {
-                  const countedValue = warehouseCounts[item.sku];
+                const renderTrackerRow = (item: typeof sortedData[0], index: number) => {
+                  const countedValue = currentCounts[item.sku];
                   const hasCounted = countedValue !== null && countedValue !== undefined;
                   const difference = hasCounted ? countedValue - item.onHand : null;
                   
@@ -3424,11 +3505,14 @@ export default function Dashboard({ session }: DashboardProps) {
                           value={countedValue ?? ''}
                           onChange={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value);
-                            setWarehouseCounts(prev => ({ ...prev, [item.sku]: val }));
+                            setTrackerCounts(prev => ({
+                              ...prev,
+                              [trackerLocation]: { ...prev[trackerLocation], [item.sku]: val },
+                            }));
                           }}
                           onBlur={(e) => {
                             const val = e.target.value === '' ? null : parseInt(e.target.value);
-                            saveWarehouseCount(item.sku, val);
+                            saveTrackerCount(trackerLocation, item.sku, val);
                           }}
                           className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="—"
@@ -3450,51 +3534,68 @@ export default function Dashboard({ session }: DashboardProps) {
                 
                 return (
                   <>
-                    {/* Header with Filters and Submit Button */}
+                    {/* Header with Filters */}
                     <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4">
                       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                         <div className="flex gap-3 flex-wrap items-end">
+                          {/* Location Toggle */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-400 mb-1">Location</span>
+                            <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
+                              {(['LA Office', 'LA Warehouse', 'China'] as const).map(loc => (
+                                <button
+                                  key={loc}
+                                  onClick={() => setTrackerLocation(loc)}
+                                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                                    trackerLocation === loc ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                  }`}
+                                >
+                                  {loc}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           {/* Product Filter */}
-                          <div className="flex flex-col relative" ref={warehouseProductDropdownRef}>
+                          <div className="flex flex-col relative" ref={trackerProductDropdownRef}>
                             <span className="text-[10px] text-gray-400 mb-1">Product</span>
                             <button
-                              onClick={() => setShowWarehouseProductDropdown(!showWarehouseProductDropdown)}
+                              onClick={() => setShowTrackerProductDropdown(!showTrackerProductDropdown)}
                               className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-left flex items-center justify-between min-w-[140px]"
                             >
                               <span className="truncate">
-                                {warehouseFilterProducts.length === 0 
+                                {trackerFilterProducts.length === 0 
                                   ? 'All Products' 
-                                  : warehouseFilterProducts.length === 1 
-                                    ? warehouseFilterProducts[0]
-                                    : `${warehouseFilterProducts.length} selected`}
+                                  : trackerFilterProducts.length === 1 
+                                    ? trackerFilterProducts[0]
+                                    : `${trackerFilterProducts.length} selected`}
                               </span>
                               <svg className="w-4 h-4 ml-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
                             </button>
-                            {showWarehouseProductDropdown && (
+                            {showTrackerProductDropdown && (
                               <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
                                 <div className="p-2 border-b border-gray-200">
                                   <button
-                                    onClick={() => setWarehouseFilterProducts([])}
+                                    onClick={() => setTrackerFilterProducts([])}
                                     className="text-xs text-blue-600 hover:text-blue-800"
                                   >
                                     Clear all
                                   </button>
                                 </div>
-                                {allWarehouseProductGroups.map(group => (
+                                {allTrackerProductGroups.map(group => (
                                   <label
                                     key={group}
                                     className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
                                   >
                                     <input
                                       type="checkbox"
-                                      checked={warehouseFilterProducts.includes(group)}
+                                      checked={trackerFilterProducts.includes(group)}
                                       onChange={(e) => {
                                         if (e.target.checked) {
-                                          setWarehouseFilterProducts([...warehouseFilterProducts, group]);
+                                          setTrackerFilterProducts([...trackerFilterProducts, group]);
                                         } else {
-                                          setWarehouseFilterProducts(warehouseFilterProducts.filter(p => p !== group));
+                                          setTrackerFilterProducts(trackerFilterProducts.filter(p => p !== group));
                                         }
                                       }}
                                       className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
@@ -3510,17 +3611,17 @@ export default function Dashboard({ session }: DashboardProps) {
                             <span className="text-[10px] text-gray-400 mb-1">View</span>
                             <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
                               <button
-                                onClick={() => setWarehouseViewMode('list')}
+                                onClick={() => setTrackerViewMode('list')}
                                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                                  warehouseViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                  trackerViewMode === 'list' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
                                 }`}
                               >
                                 List
                               </button>
                               <button
-                                onClick={() => setWarehouseViewMode('grouped')}
+                                onClick={() => setTrackerViewMode('grouped')}
                                 className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                                  warehouseViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                                  trackerViewMode === 'grouped' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
                                 }`}
                               >
                                 Grouped
@@ -3533,8 +3634,8 @@ export default function Dashboard({ session }: DashboardProps) {
                             <input 
                               type="text" 
                               placeholder="Search by SKU or product..." 
-                              value={warehouseSearchTerm} 
-                              onChange={(e) => setWarehouseSearchTerm(e.target.value)}
+                              value={trackerSearchTerm} 
+                              onChange={(e) => setTrackerSearchTerm(e.target.value)}
                               className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             />
                           </div>
@@ -3552,7 +3653,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             <div className="flex items-center gap-2">
                               <span className="text-gray-500">Counted:</span>
                               <span className="font-semibold text-gray-900">{allItemsWithCounts.length}</span>
-                              <span className="text-gray-400">/ {laOfficeData.length} SKUs</span>
+                              <span className="text-gray-400">/ {locationData.length} SKUs</span>
                             </div>
                             {discrepancies.length > 0 && (
                               <div className="flex items-center gap-2 text-orange-600">
@@ -3563,9 +3664,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             )}
                           </div>
                           {/* Draft Info */}
-                          {draftInfo && (
+                          {currentDraftInfo && (
                             <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-                              Draft saved: {new Date(draftInfo.savedAt).toLocaleString()} by {draftInfo.savedBy}
+                              Draft saved: {new Date(currentDraftInfo.savedAt).toLocaleString()} by {currentDraftInfo.savedBy}
                             </div>
                           )}
                         </div>
@@ -3575,8 +3676,8 @@ export default function Dashboard({ session }: DashboardProps) {
                           {/* View Logs Button */}
                           <button
                             onClick={() => {
-                              loadWarehouseLogs();
-                              setShowWarehouseLogs(true);
+                              loadTrackerLogs(trackerLocation);
+                              setShowTrackerLogs(true);
                             }}
                             className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                           >
@@ -3585,7 +3686,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           {/* Clear Button */}
                           {allItemsWithCounts.length > 0 && (
                             <button
-                              onClick={clearWarehouseCounts}
+                              onClick={() => clearTrackerCounts(trackerLocation)}
                               className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                             >
                               🗑️ Clear All
@@ -3593,7 +3694,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           )}
                           {/* Save Draft Button */}
                           <button
-                            onClick={saveDraftToGoogleDrive}
+                            onClick={() => saveDraftToGoogleDrive(trackerLocation)}
                             disabled={isSavingDraft || allItemsWithCounts.length === 0}
                             className={`px-4 py-2 text-sm font-medium rounded-md ${
                               isSavingDraft || allItemsWithCounts.length === 0
@@ -3605,7 +3706,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           </button>
                           {/* Submit Button */}
                           <button
-                            onClick={() => setShowWarehouseConfirm(true)}
+                            onClick={() => setShowTrackerConfirm(true)}
                             disabled={allItemsWithCounts.length === 0}
                             className={`px-4 py-2 text-sm font-medium rounded-md ${
                               allItemsWithCounts.length === 0 
@@ -3628,15 +3729,15 @@ export default function Dashboard({ session }: DashboardProps) {
                               <th 
                                 className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
-                                  if (warehouseSortBy === 'sku') {
-                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  if (trackerSortBy === 'sku') {
+                                    setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
                                   } else {
-                                    setWarehouseSortBy('sku');
-                                    setWarehouseSortOrder('asc');
+                                    setTrackerSortBy('sku');
+                                    setTrackerSortOrder('asc');
                                   }
                                 }}
                               >
-                                SKU {warehouseSortBy === 'sku' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                                SKU {trackerSortBy === 'sku' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                               <th className="w-48 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 Product
@@ -3644,59 +3745,59 @@ export default function Dashboard({ session }: DashboardProps) {
                               <th 
                                 className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
-                                  if (warehouseSortBy === 'onHand') {
-                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  if (trackerSortBy === 'onHand') {
+                                    setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
                                   } else {
-                                    setWarehouseSortBy('onHand');
-                                    setWarehouseSortOrder('desc');
+                                    setTrackerSortBy('onHand');
+                                    setTrackerSortOrder('desc');
                                   }
                                 }}
                               >
-                                On Hand {warehouseSortBy === 'onHand' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                                On Hand {trackerSortBy === 'onHand' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                               <th 
                                 className="w-28 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
-                                  if (warehouseSortBy === 'counted') {
-                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  if (trackerSortBy === 'counted') {
+                                    setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
                                   } else {
-                                    setWarehouseSortBy('counted');
-                                    setWarehouseSortOrder('desc');
+                                    setTrackerSortBy('counted');
+                                    setTrackerSortOrder('desc');
                                   }
                                 }}
                               >
-                                Counted {warehouseSortBy === 'counted' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                                Counted {trackerSortBy === 'counted' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                               <th 
                                 className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
-                                  if (warehouseSortBy === 'difference') {
-                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  if (trackerSortBy === 'difference') {
+                                    setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
                                   } else {
-                                    setWarehouseSortBy('difference');
-                                    setWarehouseSortOrder('desc');
+                                    setTrackerSortBy('difference');
+                                    setTrackerSortOrder('desc');
                                   }
                                 }}
                               >
-                                Difference {warehouseSortBy === 'difference' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                                Difference {trackerSortBy === 'difference' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {warehouseViewMode === 'list' ? (
-                              sortedData.map((item, index) => renderWarehouseRow(item, index))
+                            {trackerViewMode === 'list' ? (
+                              sortedData.map((item, index) => renderTrackerRow(item, index))
                             ) : (
-                              sortedWarehouseGroupNames.map(groupName => (
+                              sortedTrackerGroupNames.map(groupName => (
                                 <Fragment key={groupName}>
                                   {/* Group Header */}
                                   <tr className="bg-blue-50 border-t-2 border-blue-200">
                                     <td colSpan={5} className="px-4 py-2">
                                       <span className="text-sm font-semibold text-blue-800">{groupName}</span>
-                                      <span className="ml-2 text-xs text-blue-600">({groupedWarehouseData[groupName].length} SKUs)</span>
+                                      <span className="ml-2 text-xs text-blue-600">({groupedTrackerData[groupName].length} SKUs)</span>
                                     </td>
                                   </tr>
                                   {/* Group Items */}
-                                  {groupedWarehouseData[groupName].map((item, index) => renderWarehouseRow(item, index))}
+                                  {groupedTrackerData[groupName].map((item, index) => renderTrackerRow(item, index))}
                                 </Fragment>
                               ))
                             )}
@@ -3711,10 +3812,10 @@ export default function Dashboard({ session }: DashboardProps) {
                     </div>
 
                     {/* Confirmation Modal */}
-                    {showWarehouseConfirm && (() => {
+                    {showTrackerConfirm && (() => {
                       // Find SKUs with large discrepancies (difference > 50 or < -50)
                       const largeDiscrepancies = allItemsWithCounts.filter(item => {
-                        const diff = (warehouseCounts[item.sku] ?? 0) - item.onHand;
+                        const diff = (currentCounts[item.sku] ?? 0) - item.onHand;
                         return Math.abs(diff) > 50;
                       });
                       
@@ -3774,7 +3875,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           </thead>
                                           <tbody>
                                             {largeDiscrepancies.map(item => {
-                                              const counted = warehouseCounts[item.sku] ?? 0;
+                                              const counted = currentCounts[item.sku] ?? 0;
                                               const diff = counted - item.onHand;
                                               return (
                                                 <tr key={item.sku} className="border-t border-amber-200">
@@ -3803,8 +3904,8 @@ export default function Dashboard({ session }: DashboardProps) {
                             <label className="flex items-center gap-2 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
                               <input
                                 type="checkbox"
-                                checked={warehouseTestMode}
-                                onChange={(e) => setWarehouseTestMode(e.target.checked)}
+                                checked={trackerTestMode}
+                                onChange={(e) => setTrackerTestMode(e.target.checked)}
                                 className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
                               />
                               <div>
@@ -3815,34 +3916,34 @@ export default function Dashboard({ session }: DashboardProps) {
                           </div>
                           <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                             <button
-                              onClick={() => setShowWarehouseConfirm(false)}
+                              onClick={() => setShowTrackerConfirm(false)}
                               className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
                             >
                               Cancel
                             </button>
                             <button
                               onClick={async () => {
-                                  setIsSubmittingWarehouse(true);
+                                  setIsSubmittingTracker(true);
                                   try {
-                                    // Get the LA Office location ID
-                                    const locationId = inventoryData?.locationIds?.['LA Office'];
+                                    // Get the location ID for current tracker location
+                                    const locationId = inventoryData?.locationIds?.[trackerLocation];
                                     
                                     // In test mode, we don't need the location ID
-                                    if (!locationId && !warehouseTestMode) {
-                                      throw new Error('LA Office location ID not found. Please click "Refresh Data" to update the inventory data.');
+                                    if (!locationId && !trackerTestMode) {
+                                      throw new Error(`${trackerLocation} location ID not found. Please click "Refresh Data" to update the inventory data.`);
                                     }
                                     
                                     // Build updates array - only counted SKUs
                                     const updates = allItemsWithCounts.map(item => ({
                                       sku: item.sku,
                                       inventoryItemId: item.inventoryItemId,
-                                      quantity: warehouseCounts[item.sku] ?? 0,
+                                      quantity: currentCounts[item.sku] ?? 0,
                                       locationId: locationId || 'test-mode',
                                     }));
                                     
                                     let result;
                                     
-                                    if (warehouseTestMode) {
+                                    if (trackerTestMode) {
                                       // Test mode - simulate success without calling Shopify
                                       result = {
                                         summary: {
@@ -3869,7 +3970,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     // Save to submission log in Google Drive
                                     const logEntry = {
                                       timestamp: new Date().toISOString(),
-                                      submittedBy: (warehouseTestMode ? '[TEST] ' : '') + (session?.user?.name || 'Unknown'),
+                                      submittedBy: (trackerTestMode ? '[TEST] ' : '') + (session?.user?.name || 'Unknown'),
                                       summary: {
                                         totalSKUs: updates.length,
                                         discrepancies: discrepancies.length,
@@ -3888,55 +3989,56 @@ export default function Dashboard({ session }: DashboardProps) {
                                       await fetch('/api/warehouse/logs', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ log: logEntry }),
+                                        body: JSON.stringify({ log: logEntry, location: trackerLocation }),
                                       });
                                     } catch (logError) {
                                       console.error('Failed to save log to Google Drive:', logError);
                                     }
                                     
-                                    if (!warehouseTestMode) {
+                                    if (!trackerTestMode) {
                                       // Only delete draft and clear counts in non-test mode
                                       // Delete draft from Google Drive (data is now in logs)
                                       try {
-                                        await fetch('/api/warehouse/draft', { method: 'DELETE' });
-                                        setDraftInfo(null);
+                                        await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}`, { method: 'DELETE' });
+                                        setTrackerDraftInfo(prev => ({ ...prev, [trackerLocation]: null }));
                                       } catch (draftError) {
                                         console.error('Failed to delete draft:', draftError);
                                       }
                                       
-                                      // Clear warehouse counts on success
-                                      setWarehouseCounts({});
-                                      localStorage.removeItem('warehouseCounts');
+                                      // Clear counts for this location on success
+                                      setTrackerCounts(prev => ({ ...prev, [trackerLocation]: {} }));
+                                      const localKey = `trackerCounts_${trackerLocation.replace(/\s/g, '_')}`;
+                                      localStorage.removeItem(localKey);
                                     }
                                     
-                                    if (warehouseTestMode) {
-                                      showWarehouseNotification('success', 'Test Submission Logged', 
+                                    if (trackerTestMode) {
+                                      showTrackerNotification('success', 'Test Submission Logged', 
                                         `${updates.length} SKUs logged (Shopify not updated). Check logs to verify.`);
                                     } else if (result.summary.failed > 0) {
-                                      showWarehouseNotification('warning', 'Partial Success', 
+                                      showTrackerNotification('warning', 'Partial Success', 
                                         `${result.summary.success} SKUs updated successfully, ${result.summary.failed} failed.`);
                                     } else {
-                                      showWarehouseNotification('success', 'Inventory Updated', 
+                                      showTrackerNotification('success', 'Inventory Updated', 
                                         `Successfully updated ${result.summary.success} SKUs in Shopify.`);
                                     }
                                     
                                   } catch (error) {
                                     console.error('Submission failed:', error);
-                                    showWarehouseNotification('error', 'Submission Failed', 
+                                    showTrackerNotification('error', 'Submission Failed', 
                                       error instanceof Error ? error.message : 'Unknown error');
                                   } finally {
-                                    setIsSubmittingWarehouse(false);
-                                    setShowWarehouseConfirm(false);
+                                    setIsSubmittingTracker(false);
+                                    setShowTrackerConfirm(false);
                                   }
                                 }}
-                                disabled={isSubmittingWarehouse}
+                                disabled={isSubmittingTracker}
                                 className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                  isSubmittingWarehouse
+                                  isSubmittingTracker
                                     ? 'bg-green-400 text-white cursor-not-allowed'
                                     : 'bg-green-600 text-white hover:bg-green-700'
                                 }`}
                               >
-                                {isSubmittingWarehouse ? 'Submitting...' : 'Yes, Submit to Shopify'}
+                                {isSubmittingTracker ? 'Submitting...' : 'Yes, Submit to Shopify'}
                               </button>
                             </div>
                           </div>
@@ -3945,13 +4047,13 @@ export default function Dashboard({ session }: DashboardProps) {
                     })()}
                     
                     {/* Submission Logs Modal */}
-                    {showWarehouseLogs && (
+                    {showTrackerLogs && (
                       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
                           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                             <h3 className="text-lg font-semibold text-gray-900">Submission Logs</h3>
                             <button
-                              onClick={() => setShowWarehouseLogs(false)}
+                              onClick={() => setShowTrackerLogs(false)}
                               className="text-gray-400 hover:text-gray-600"
                             >
                               ✕
@@ -3963,11 +4065,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                                 <span className="ml-3 text-gray-600">Loading logs from Google Drive...</span>
                               </div>
-                            ) : warehouseLogs.length === 0 ? (
+                            ) : trackerLogs.length === 0 ? (
                               <p className="text-gray-500 text-center py-8">No submission logs yet.</p>
                             ) : (
                               <div className="space-y-4">
-                                {warehouseLogs.map((log, index) => (
+                                {trackerLogs.map((log, index) => (
                                   <div key={index} className="border border-gray-200 rounded-lg p-4">
                                     <div className="flex justify-between items-start mb-3">
                                       <div>
@@ -4005,11 +4107,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                         </span>
                                       </div>
                                     </div>
-                                    <details className="text-xs">
-                                      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
-                                        View {log.updates.length} SKU details
-                                      </summary>
-                                      <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <details className="flex-1">
+                                        <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+                                          View {log.updates.length} SKU details
+                                        </summary>
+                                        <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded">
                                         <table className="w-full">
                                           <thead className="bg-gray-50 sticky top-0">
                                             <tr>
@@ -4038,7 +4141,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                           </tbody>
                                         </table>
                                       </div>
-                                    </details>
+                                      </details>
+                                      <button
+                                        onClick={() => exportLogToExcel(log, log.location || trackerLocation)}
+                                        className="ml-4 text-green-600 hover:text-green-800 hover:underline whitespace-nowrap"
+                                      >
+                                        📥 Export to Excel
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
                               </div>
@@ -4049,7 +4159,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               Logs are stored in Google Drive
                             </span>
                             <button
-                              onClick={() => setShowWarehouseLogs(false)}
+                              onClick={() => setShowTrackerLogs(false)}
                               className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
                             >
                               Close
@@ -4060,51 +4170,51 @@ export default function Dashboard({ session }: DashboardProps) {
                     )}
                     
                     {/* Toast Notification */}
-                    {warehouseNotification && (
+                    {trackerNotification && (
                       <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
                         <div className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border ${
-                          warehouseNotification.type === 'success' 
+                          trackerNotification.type === 'success' 
                             ? 'bg-green-50 border-green-200' 
-                            : warehouseNotification.type === 'warning'
+                            : trackerNotification.type === 'warning'
                             ? 'bg-amber-50 border-amber-200'
                             : 'bg-red-50 border-red-200'
                         }`}>
                           <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                            warehouseNotification.type === 'success'
+                            trackerNotification.type === 'success'
                               ? 'bg-green-100 text-green-600'
-                              : warehouseNotification.type === 'warning'
+                              : trackerNotification.type === 'warning'
                               ? 'bg-amber-100 text-amber-600'
                               : 'bg-red-100 text-red-600'
                           }`}>
-                            {warehouseNotification.type === 'success' ? '✓' : 
-                             warehouseNotification.type === 'warning' ? '!' : '✕'}
+                            {trackerNotification.type === 'success' ? '✓' : 
+                             trackerNotification.type === 'warning' ? '!' : '✕'}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className={`text-sm font-medium ${
-                              warehouseNotification.type === 'success'
+                              trackerNotification.type === 'success'
                                 ? 'text-green-800'
-                                : warehouseNotification.type === 'warning'
+                                : trackerNotification.type === 'warning'
                                 ? 'text-amber-800'
                                 : 'text-red-800'
                             }`}>
-                              {warehouseNotification.title}
+                              {trackerNotification.title}
                             </p>
                             <p className={`text-sm mt-0.5 ${
-                              warehouseNotification.type === 'success'
+                              trackerNotification.type === 'success'
                                 ? 'text-green-600'
-                                : warehouseNotification.type === 'warning'
+                                : trackerNotification.type === 'warning'
                                 ? 'text-amber-600'
                                 : 'text-red-600'
                             }`}>
-                              {warehouseNotification.message}
+                              {trackerNotification.message}
                             </p>
                           </div>
                           <button
-                            onClick={() => setWarehouseNotification(null)}
+                            onClick={() => setTrackerNotification(null)}
                             className={`flex-shrink-0 p-1 rounded hover:bg-opacity-20 ${
-                              warehouseNotification.type === 'success'
+                              trackerNotification.type === 'success'
                                 ? 'text-green-500 hover:bg-green-500'
-                                : warehouseNotification.type === 'warning'
+                                : trackerNotification.type === 'warning'
                                 ? 'text-amber-500 hover:bg-amber-500'
                                 : 'text-red-500 hover:bg-red-500'
                             }`}

@@ -1,6 +1,7 @@
 /**
  * Warehouse Draft API
  * Stores and retrieves draft inventory counts from Google Drive
+ * Supports multiple locations: LA Office, LA Warehouse, China
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,8 +10,13 @@ import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
 
-const DRAFT_FILE_NAME = 'warehouse-draft.json';
 const SHARED_DRIVE_NAME = 'ProjectionsVsActual Cache';
+
+// Get draft file name for a specific location
+const getDraftFileName = (location: string) => {
+  const sanitizedLocation = location.replace(/\s/g, '-').toLowerCase();
+  return `warehouse-draft-${sanitizedLocation}.json`;
+};
 
 interface DraftData {
   counts: Record<string, number | null>;
@@ -102,18 +108,22 @@ async function findFile(
   return null;
 }
 
-// GET - Retrieve draft
-export async function GET() {
+// GET - Retrieve draft for a location
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const location = searchParams.get('location') || 'LA Office';
+    const draftFileName = getDraftFileName(location);
+
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, DRAFT_FILE_NAME);
+    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
 
     if (!fileId) {
       return NextResponse.json({ draft: null });
@@ -142,7 +152,7 @@ export async function GET() {
   }
 }
 
-// POST - Save draft
+// POST - Save draft for a location
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -150,15 +160,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { counts } = await request.json();
+    const { counts, location = 'LA Office' } = await request.json();
     if (!counts) {
       return NextResponse.json({ error: 'No counts provided' }, { status: 400 });
     }
 
+    const draftFileName = getDraftFileName(location);
+
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, DRAFT_FILE_NAME);
+    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
 
     const draft: DraftData = {
       counts,
@@ -181,7 +193,7 @@ export async function POST(request: NextRequest) {
     } else {
       await drive.files.create({
         requestBody: {
-          name: DRAFT_FILE_NAME,
+          name: draftFileName,
           parents: [folderId],
         },
         media: {
@@ -207,18 +219,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Delete draft (after successful submission)
-export async function DELETE() {
+// DELETE - Delete draft for a location (after successful submission)
+export async function DELETE(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const location = searchParams.get('location') || 'LA Office';
+    const draftFileName = getDraftFileName(location);
+
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, DRAFT_FILE_NAME);
+    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
 
     if (fileId) {
       await drive.files.delete({
