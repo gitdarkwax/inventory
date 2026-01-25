@@ -719,9 +719,9 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showTrackerProductDropdown]);
 
-  // Load tracker drafts from Google Drive on mount
+  // Load tracker drafts and last submission info from Google Drive on mount
   useEffect(() => {
-    const loadAllDrafts = async () => {
+    const loadAllDraftsAndSubmissions = async () => {
       setIsLoadingDraft(true);
       const locations: TrackerLocation[] = ['LA Office', 'DTLA WH', 'China WH'];
       
@@ -742,13 +742,17 @@ export default function Dashboard({ session }: DashboardProps) {
           }
         }
         
-        // Then try to load from Google Drive for each location
+        // Then try to load drafts and last submission from Google Drive for each location
         for (const loc of locations) {
+          let hasDraft = false;
+          
+          // Load draft
           try {
             const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(loc)}`);
             if (response.ok) {
               const data = await response.json();
               if (data.draft) {
+                hasDraft = true;
                 const localKey = `trackerCounts_${loc.replace(/\s/g, '_')}`;
                 const localSaved = localStorage.getItem(localKey);
                 const localCounts = localSaved ? JSON.parse(localSaved) : {};
@@ -770,12 +774,40 @@ export default function Dashboard({ session }: DashboardProps) {
           } catch (error) {
             console.error(`Failed to load draft for ${loc}:`, error);
           }
+          
+          // If no draft, load the most recent submission from logs
+          if (!hasDraft) {
+            try {
+              const logsResponse = await fetch(`/api/warehouse/logs?location=${encodeURIComponent(loc)}`);
+              if (logsResponse.ok) {
+                const logsData = await logsResponse.json();
+                const logs = logsData.logs || [];
+                // Find the most recent real submission (not test mode)
+                // Check both testMode field and [TEST] prefix for backwards compatibility
+                const lastRealSubmission = logs.find((log: { testMode?: boolean; submittedBy?: string }) => 
+                  !log.testMode && !log.submittedBy?.startsWith('[TEST]')
+                );
+                if (lastRealSubmission) {
+                  setTrackerLastSubmission(prev => ({
+                    ...prev,
+                    [loc]: {
+                      submittedAt: lastRealSubmission.timestamp,
+                      submittedBy: lastRealSubmission.submittedBy,
+                      skuCount: lastRealSubmission.updates?.length || 0,
+                    },
+                  }));
+                }
+              }
+            } catch (error) {
+              console.error(`Failed to load logs for ${loc}:`, error);
+            }
+          }
         }
       } finally {
         setIsLoadingDraft(false);
       }
     };
-    loadAllDrafts();
+    loadAllDraftsAndSubmissions();
   }, []);
 
   // Save tracker counts to localStorage when changed (for auto-save on blur)
@@ -4026,6 +4058,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     const logEntry = {
                                       timestamp: new Date().toISOString(),
                                       submittedBy: (trackerTestMode ? '[TEST] ' : '') + (session?.user?.name || 'Unknown'),
+                                      testMode: trackerTestMode,
                                       summary: {
                                         totalSKUs: updates.length,
                                         discrepancies: discrepancies.length,
