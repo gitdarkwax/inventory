@@ -4053,10 +4053,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                     // Delete draft from Google Drive (data is now in logs)
                                     try {
                                       await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}`, { method: 'DELETE' });
-                                      setTrackerDraftInfo(prev => ({ ...prev, [trackerLocation]: null }));
                                     } catch (draftError) {
                                       console.error('Failed to delete draft:', draftError);
                                     }
+                                    
+                                    // Always clear local draft info after successful submission
+                                    setTrackerDraftInfo(prev => ({ ...prev, [trackerLocation]: null }));
                                     
                                     // Clear counts for this location on success
                                     startTransition(() => {
@@ -4065,7 +4067,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     const localKey = `trackerCounts_${trackerLocation.replace(/\s/g, '_')}`;
                                     localStorage.removeItem(localKey);
                                     
-                                    // Track last submission info (only for real submissions)
+                                    // Track last submission info (only for real Shopify submissions)
                                     if (!trackerTestMode) {
                                       setTrackerLastSubmission(prev => ({
                                         ...prev,
