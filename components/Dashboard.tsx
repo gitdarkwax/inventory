@@ -1693,7 +1693,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 </button>
               </div>
             </div>
-            <div className="flex flex-col items-end shrink-0">
+            <div className="hidden sm:flex flex-col items-end shrink-0">
               <button 
                 onClick={() => refreshAllData()} 
                 disabled={isRefreshing}
@@ -3582,7 +3582,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   
                   return (
                     <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 font-mono">
+                      <td className="pl-2 pr-1 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 font-mono">
                         {item.sku}
                       </td>
                       <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
@@ -3846,7 +3846,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <thead className="bg-gray-50">
                             <tr>
                               <th 
-                                className="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                className="pl-2 pr-1 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                                 onClick={() => {
                                   if (trackerSortBy === 'sku') {
                                     setTrackerSortOrder(trackerSortOrder === 'asc' ? 'desc' : 'asc');
@@ -3872,9 +3872,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                   }
                                 }}
                               >
-                                <span className="hidden sm:inline">On Hand</span>
-                                <span className="sm:hidden">Sys</span>
-                                {trackerSortBy === 'onHand' && (trackerSortOrder === 'asc' ? ' ↑' : ' ↓')}
+                                On Hand{trackerSortBy === 'onHand' && (trackerSortOrder === 'asc' ? ' ↑' : ' ↓')}
                               </th>
                               <th 
                                 className="px-1 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
