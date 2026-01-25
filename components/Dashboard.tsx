@@ -3890,6 +3890,43 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
                     </div>
 
+                    {/* Export Section */}
+                    {sortedData.length > 0 && (
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          onClick={() => {
+                            // Build CSV content with all visible data
+                            const headers = ['SKU', 'Variant', 'On Hand', 'Counted', 'Difference'];
+                            const rows = sortedData.map(item => {
+                              const counted = currentCounts[item.sku];
+                              const hasCounted = counted !== null && counted !== undefined;
+                              const difference = hasCounted ? counted - item.onHand : '';
+                              return [
+                                item.sku,
+                                `"${item.variantTitle.replace(/"/g, '""')}"`,
+                                item.onHand,
+                                hasCounted ? counted : '',
+                                difference,
+                              ].join(',');
+                            });
+                            
+                            const csvContent = [headers.join(','), ...rows].join('\n');
+                            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                            const link = document.createElement('a');
+                            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                            link.href = URL.createObjectURL(blob);
+                            link.download = `inventory-counts-${trackerLocation.replace(/\s/g, '-')}-${timestamp}.csv`;
+                            link.click();
+                            URL.revokeObjectURL(link.href);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
+                        >
+                          <span>📊</span>
+                          Export to Excel
+                        </button>
+                      </div>
+                    )}
+
                     {/* Clear Confirmation Modal */}
                     {showTrackerClearConfirm && (
                       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
