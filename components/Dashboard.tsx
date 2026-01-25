@@ -3583,7 +3583,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 font-mono truncate">
                         {item.sku}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
+                      <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
                         {item.variantTitle}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900">
@@ -3780,13 +3780,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         
                         {/* Right: Action Buttons */}
                         <div className="flex items-center gap-3">
-                          {/* View Logs Button */}
+                          {/* View Logs Button - hidden on mobile */}
                           <button
                             onClick={() => {
                               loadTrackerLogs(trackerLocation);
                               setShowTrackerLogs(true);
                             }}
-                            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                            className="hidden sm:block px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                           >
                             📋 View Logs
                           </button>
@@ -3811,11 +3811,11 @@ export default function Dashboard({ session }: DashboardProps) {
                           >
                             {isSavingDraft ? '⏳ Saving...' : '💾 Save Draft'}
                           </button>
-                          {/* Submit Button */}
+                          {/* Submit Button - hidden on mobile */}
                           <button
                             onClick={() => setShowTrackerConfirm(true)}
                             disabled={allItemsWithCounts.length === 0}
-                            className={`px-4 py-2 text-sm font-medium rounded-md ${
+                            className={`hidden sm:block px-4 py-2 text-sm font-medium rounded-md ${
                               allItemsWithCounts.length === 0 
                                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                                 : 'bg-green-600 text-white hover:bg-green-700'
@@ -3853,7 +3853,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               >
                                 SKU {trackerSortBy === 'sku' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                                 Variant
                               </th>
                               <th 
@@ -3925,9 +3925,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
                     </div>
 
-                    {/* Export Section */}
+                    {/* Export Section - hidden on mobile */}
                     {sortedData.length > 0 && (
-                      <div className="mt-4 flex justify-end">
+                      <div className="hidden sm:flex mt-4 justify-end">
                         <button
                           onClick={() => {
                             // Build CSV content with all visible data
