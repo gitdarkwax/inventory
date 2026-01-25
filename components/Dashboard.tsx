@@ -250,6 +250,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftInfo, setDraftInfo] = useState<{ savedAt: string; savedBy: string } | null>(null);
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [warehouseNotification, setWarehouseNotification] = useState<{
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -762,10 +767,10 @@ export default function Dashboard({ session }: DashboardProps) {
       
       const result = await response.json();
       setDraftInfo({ savedAt: result.savedAt, savedBy: result.savedBy });
-      alert(`Draft saved! ${result.skuCount} SKUs saved to Google Drive.`);
+      showWarehouseNotification('success', 'Draft Saved', `${result.skuCount} SKUs saved to Google Drive.`);
     } catch (error) {
       console.error('Failed to save draft:', error);
-      alert(`Failed to save draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showWarehouseNotification('error', 'Save Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsSavingDraft(false);
     }
@@ -785,6 +790,13 @@ export default function Dashboard({ session }: DashboardProps) {
     } finally {
       setIsLoadingLogs(false);
     }
+  };
+
+  // Show warehouse notification
+  const showWarehouseNotification = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setWarehouseNotification({ type, title, message });
+    // Auto-dismiss after 5 seconds for success, 8 seconds for errors
+    setTimeout(() => setWarehouseNotification(null), type === 'error' ? 8000 : 5000);
   };
 
   // Clear warehouse counts
@@ -3864,11 +3876,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                     setWarehouseCounts({});
                                     localStorage.removeItem('warehouseCounts');
                                     
-                                    alert(`Successfully updated ${result.summary.success} SKUs in Shopify!${result.summary.failed > 0 ? ` (${result.summary.failed} failed)` : ''}`);
+                                    if (result.summary.failed > 0) {
+                                      showWarehouseNotification('warning', 'Partial Success', 
+                                        `${result.summary.success} SKUs updated successfully, ${result.summary.failed} failed.`);
+                                    } else {
+                                      showWarehouseNotification('success', 'Inventory Updated', 
+                                        `Successfully updated ${result.summary.success} SKUs in Shopify.`);
+                                    }
                                     
                                   } catch (error) {
                                     console.error('Submission failed:', error);
-                                    alert(`Failed to submit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                    showWarehouseNotification('error', 'Submission Failed', 
+                                      error instanceof Error ? error.message : 'Unknown error');
                                   } finally {
                                     setIsSubmittingWarehouse(false);
                                     setShowWarehouseConfirm(false);
@@ -4000,6 +4019,62 @@ export default function Dashboard({ session }: DashboardProps) {
                               Close
                             </button>
                           </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Toast Notification */}
+                    {warehouseNotification && (
+                      <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+                        <div className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border ${
+                          warehouseNotification.type === 'success' 
+                            ? 'bg-green-50 border-green-200' 
+                            : warehouseNotification.type === 'warning'
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-red-50 border-red-200'
+                        }`}>
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                            warehouseNotification.type === 'success'
+                              ? 'bg-green-100 text-green-600'
+                              : warehouseNotification.type === 'warning'
+                              ? 'bg-amber-100 text-amber-600'
+                              : 'bg-red-100 text-red-600'
+                          }`}>
+                            {warehouseNotification.type === 'success' ? '✓' : 
+                             warehouseNotification.type === 'warning' ? '!' : '✕'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium ${
+                              warehouseNotification.type === 'success'
+                                ? 'text-green-800'
+                                : warehouseNotification.type === 'warning'
+                                ? 'text-amber-800'
+                                : 'text-red-800'
+                            }`}>
+                              {warehouseNotification.title}
+                            </p>
+                            <p className={`text-sm mt-0.5 ${
+                              warehouseNotification.type === 'success'
+                                ? 'text-green-600'
+                                : warehouseNotification.type === 'warning'
+                                ? 'text-amber-600'
+                                : 'text-red-600'
+                            }`}>
+                              {warehouseNotification.message}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setWarehouseNotification(null)}
+                            className={`flex-shrink-0 p-1 rounded hover:bg-opacity-20 ${
+                              warehouseNotification.type === 'success'
+                                ? 'text-green-500 hover:bg-green-500'
+                                : warehouseNotification.type === 'warning'
+                                ? 'text-amber-500 hover:bg-amber-500'
+                                : 'text-red-500 hover:bg-red-500'
+                            }`}
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
                     )}
