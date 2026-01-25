@@ -3503,8 +3503,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       <td className="w-40 px-4 py-3 text-sm font-medium text-gray-900 font-mono">
                         {item.sku}
                       </td>
-                      <td className="w-48 px-4 py-3 text-sm text-gray-600 truncate" title={item.productTitle}>
-                        {item.productTitle}
+                      <td className="w-48 px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
+                        {item.variantTitle}
                       </td>
                       <td className="w-24 px-4 py-3 text-sm text-center text-gray-900">
                         {item.onHand.toLocaleString()}
@@ -3762,7 +3762,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 SKU {trackerSortBy === 'sku' && (trackerSortOrder === 'asc' ? '↑' : '↓')}
                               </th>
                               <th className="w-48 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                Product
+                                Variant
                               </th>
                               <th 
                                 className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
