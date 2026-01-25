@@ -3826,8 +3826,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                   try {
                                     // Get the LA Office location ID
                                     const locationId = inventoryData?.locationIds?.['LA Office'];
-                                    if (!locationId) {
-                                      throw new Error('LA Office location ID not found');
+                                    
+                                    // In test mode, we don't need the location ID
+                                    if (!locationId && !warehouseTestMode) {
+                                      throw new Error('LA Office location ID not found. Please click "Refresh Data" to update the inventory data.');
                                     }
                                     
                                     // Build updates array - only counted SKUs
@@ -3835,7 +3837,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       sku: item.sku,
                                       inventoryItemId: item.inventoryItemId,
                                       quantity: warehouseCounts[item.sku] ?? 0,
-                                      locationId: locationId,
+                                      locationId: locationId || 'test-mode',
                                     }));
                                     
                                     let result;
