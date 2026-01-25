@@ -122,7 +122,7 @@ interface ProductionOrder {
   activityLog?: ActivityLogEntry[];
 }
 
-type TabType = 'inventory' | 'forecasting' | 'planning' | 'production';
+type TabType = 'inventory' | 'forecasting' | 'planning' | 'production' | 'warehouse';
 
 export default function Dashboard({ session }: DashboardProps) {
   // Tab state
@@ -224,6 +224,14 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newPhaseOutSku, setNewPhaseOutSku] = useState('');
   const [isAddingPhaseOut, setIsAddingPhaseOut] = useState(false);
   const [isRemovingPhaseOut, setIsRemovingPhaseOut] = useState<string | null>(null);
+
+  // LA Warehouse count state
+  const [warehouseCounts, setWarehouseCounts] = useState<Record<string, number | null>>({});
+  const [warehouseSearchTerm, setWarehouseSearchTerm] = useState('');
+  const [warehouseSortBy, setWarehouseSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
+  const [warehouseSortOrder, setWarehouseSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [showWarehouseConfirm, setShowWarehouseConfirm] = useState(false);
+  const [isSubmittingWarehouse, setIsSubmittingWarehouse] = useState(false);
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -656,6 +664,33 @@ export default function Dashboard({ session }: DashboardProps) {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showInventoryProductDropdown]);
+
+  // Load warehouse counts from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('warehouseCounts');
+    if (saved) {
+      try {
+        setWarehouseCounts(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load warehouse counts:', e);
+      }
+    }
+  }, []);
+
+  // Save warehouse counts to localStorage when changed
+  const saveWarehouseCount = (sku: string, count: number | null) => {
+    setWarehouseCounts(prev => {
+      const updated = { ...prev, [sku]: count };
+      localStorage.setItem('warehouseCounts', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Clear all warehouse counts
+  const clearWarehouseCounts = () => {
+    setWarehouseCounts({});
+    localStorage.removeItem('warehouseCounts');
+  };
 
   // Helper to calculate inventory for selected locations
   const getInventoryForLocations = (inventoryItem: InventoryByLocation | undefined, selectedLocations: string[]): number => {
@@ -1363,6 +1398,14 @@ export default function Dashboard({ session }: DashboardProps) {
                 }`}
               >
                 📈 Forecasting
+              </button>
+              <button
+                onClick={() => setActiveTab('warehouse')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                }`}
+              >
+                🏭 LA Warehouse
               </button>
             </div>
             <div className="flex flex-col items-end">
@@ -3140,6 +3183,325 @@ export default function Dashboard({ session }: DashboardProps) {
                   );
                 })()}
               </div>
+            )}
+          </>
+        )}
+
+        {/* LA Warehouse Tab */}
+        {activeTab === 'warehouse' && (
+          <>
+            {inventoryLoading && (
+              <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className="mt-4 text-gray-600">Loading inventory data...</p>
+              </div>
+            )}
+
+            {inventoryError && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
+                <p className="text-sm text-yellow-800 mb-4">{inventoryError}</p>
+                <button onClick={() => refreshAllData()} disabled={isRefreshing}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                </button>
+              </div>
+            )}
+
+            {!inventoryLoading && inventoryData && inventoryData.locationDetails && (
+              (() => {
+                // Get LA Office data
+                const laOfficeData = inventoryData.locationDetails['LA Office'] || [];
+                
+                // Filter by search
+                const filteredData = laOfficeData.filter(item => {
+                  const matchesSearch = !warehouseSearchTerm || 
+                    item.sku.toLowerCase().includes(warehouseSearchTerm.toLowerCase()) ||
+                    item.productTitle.toLowerCase().includes(warehouseSearchTerm.toLowerCase());
+                  return matchesSearch;
+                });
+                
+                // Sort data
+                const sortedData = [...filteredData].sort((a, b) => {
+                  let aVal: number | string = 0;
+                  let bVal: number | string = 0;
+                  
+                  switch (warehouseSortBy) {
+                    case 'sku':
+                      aVal = a.sku;
+                      bVal = b.sku;
+                      break;
+                    case 'onHand':
+                      aVal = a.onHand;
+                      bVal = b.onHand;
+                      break;
+                    case 'counted':
+                      aVal = warehouseCounts[a.sku] ?? -Infinity;
+                      bVal = warehouseCounts[b.sku] ?? -Infinity;
+                      break;
+                    case 'difference':
+                      const aDiff = warehouseCounts[a.sku] !== null && warehouseCounts[a.sku] !== undefined 
+                        ? warehouseCounts[a.sku]! - a.onHand : -Infinity;
+                      const bDiff = warehouseCounts[b.sku] !== null && warehouseCounts[b.sku] !== undefined 
+                        ? warehouseCounts[b.sku]! - b.onHand : -Infinity;
+                      aVal = aDiff;
+                      bVal = bDiff;
+                      break;
+                  }
+                  
+                  if (typeof aVal === 'string' && typeof bVal === 'string') {
+                    return warehouseSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+                  }
+                  return warehouseSortOrder === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+                });
+                
+                // Calculate discrepancy stats
+                const itemsWithCounts = sortedData.filter(item => warehouseCounts[item.sku] !== null && warehouseCounts[item.sku] !== undefined);
+                const discrepancies = itemsWithCounts.filter(item => warehouseCounts[item.sku] !== item.onHand);
+                const totalDifference = itemsWithCounts.reduce((sum, item) => {
+                  return sum + ((warehouseCounts[item.sku] ?? 0) - item.onHand);
+                }, 0);
+                
+                return (
+                  <>
+                    {/* Header with Submit Button */}
+                    <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4">
+                      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                        <div className="flex gap-3 items-end">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-400 mb-1">Search</span>
+                            <input 
+                              type="text" 
+                              placeholder="Search by SKU or product..." 
+                              value={warehouseSearchTerm} 
+                              onChange={(e) => setWarehouseSearchTerm(e.target.value)}
+                              className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {/* Stats */}
+                          <div className="text-sm text-gray-600">
+                            <span className="font-medium">{itemsWithCounts.length}</span> SKUs counted
+                            {discrepancies.length > 0 && (
+                              <span className="ml-3 text-orange-600">
+                                <span className="font-medium">{discrepancies.length}</span> discrepancies
+                              </span>
+                            )}
+                          </div>
+                          {/* Clear Button */}
+                          {itemsWithCounts.length > 0 && (
+                            <button
+                              onClick={clearWarehouseCounts}
+                              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md"
+                            >
+                              Clear All
+                            </button>
+                          )}
+                          {/* Submit Button */}
+                          <button
+                            onClick={() => setShowWarehouseConfirm(true)}
+                            disabled={itemsWithCounts.length === 0}
+                            className={`px-4 py-2 text-sm font-medium rounded-md ${
+                              itemsWithCounts.length === 0 
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
+                          >
+                            Submit to Shopify
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="bg-white shadow rounded-lg overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 table-fixed">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th 
+                                className="w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                onClick={() => {
+                                  if (warehouseSortBy === 'sku') {
+                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setWarehouseSortBy('sku');
+                                    setWarehouseSortOrder('asc');
+                                  }
+                                }}
+                              >
+                                SKU {warehouseSortBy === 'sku' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                              </th>
+                              <th className="w-48 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                Product
+                              </th>
+                              <th 
+                                className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                onClick={() => {
+                                  if (warehouseSortBy === 'onHand') {
+                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setWarehouseSortBy('onHand');
+                                    setWarehouseSortOrder('desc');
+                                  }
+                                }}
+                              >
+                                On Hand {warehouseSortBy === 'onHand' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                              </th>
+                              <th 
+                                className="w-28 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                onClick={() => {
+                                  if (warehouseSortBy === 'counted') {
+                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setWarehouseSortBy('counted');
+                                    setWarehouseSortOrder('desc');
+                                  }
+                                }}
+                              >
+                                Counted {warehouseSortBy === 'counted' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                              </th>
+                              <th 
+                                className="w-24 px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
+                                onClick={() => {
+                                  if (warehouseSortBy === 'difference') {
+                                    setWarehouseSortOrder(warehouseSortOrder === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setWarehouseSortBy('difference');
+                                    setWarehouseSortOrder('desc');
+                                  }
+                                }}
+                              >
+                                Difference {warehouseSortBy === 'difference' && (warehouseSortOrder === 'asc' ? '↑' : '↓')}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {sortedData.map((item, index) => {
+                              const countedValue = warehouseCounts[item.sku];
+                              const hasCounted = countedValue !== null && countedValue !== undefined;
+                              const difference = hasCounted ? countedValue - item.onHand : null;
+                              
+                              return (
+                                <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="w-40 px-4 py-3 text-sm font-medium text-gray-900 font-mono">
+                                    {item.sku}
+                                  </td>
+                                  <td className="w-48 px-4 py-3 text-sm text-gray-600 truncate" title={item.productTitle}>
+                                    {item.productTitle}
+                                  </td>
+                                  <td className="w-24 px-4 py-3 text-sm text-center text-gray-900">
+                                    {item.onHand.toLocaleString()}
+                                  </td>
+                                  <td className="w-28 px-4 py-3 text-center">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={countedValue ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value === '' ? null : parseInt(e.target.value);
+                                        setWarehouseCounts(prev => ({ ...prev, [item.sku]: val }));
+                                      }}
+                                      onBlur={(e) => {
+                                        const val = e.target.value === '' ? null : parseInt(e.target.value);
+                                        saveWarehouseCount(item.sku, val);
+                                      }}
+                                      className="w-20 px-2 py-1 text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      placeholder="—"
+                                    />
+                                  </td>
+                                  <td className={`w-24 px-4 py-3 text-sm text-center font-medium ${
+                                    difference === null ? 'text-gray-400' :
+                                    difference === 0 ? 'text-green-600' :
+                                    difference > 0 ? 'text-blue-600' :
+                                    'text-red-600'
+                                  }`}>
+                                    {difference === null ? '—' : 
+                                     difference === 0 ? '✓' :
+                                     difference > 0 ? `+${difference}` : difference}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {sortedData.length === 0 && (
+                        <div className="p-8 text-center text-gray-500">
+                          No inventory items found.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Confirmation Modal */}
+                    {showWarehouseConfirm && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                          <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold text-gray-900">Submit Inventory Counts to Shopify</h3>
+                          </div>
+                          <div className="px-6 py-4">
+                            <p className="text-sm text-gray-600 mb-4">
+                              Are you sure you want to submit these inventory counts to Shopify?
+                            </p>
+                            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">SKUs counted:</span>
+                                <span className="font-medium">{itemsWithCounts.length}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">SKUs with discrepancies:</span>
+                                <span className={`font-medium ${discrepancies.length > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                                  {discrepancies.length}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+                                <span className="text-gray-600">Total unit difference:</span>
+                                <span className={`font-medium ${
+                                  totalDifference === 0 ? 'text-green-600' :
+                                  totalDifference > 0 ? 'text-blue-600' : 'text-red-600'
+                                }`}>
+                                  {totalDifference > 0 ? `+${totalDifference}` : totalDifference}
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-4">
+                              This will update the on-hand quantities in Shopify for all counted SKUs.
+                            </p>
+                          </div>
+                          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                            <button
+                              onClick={() => setShowWarehouseConfirm(false)}
+                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => {
+                                // TODO: Implement Shopify submission
+                                setIsSubmittingWarehouse(true);
+                                setTimeout(() => {
+                                  alert('Shopify submission not yet implemented. This is a placeholder.');
+                                  setIsSubmittingWarehouse(false);
+                                  setShowWarehouseConfirm(false);
+                                }, 500);
+                              }}
+                              disabled={isSubmittingWarehouse}
+                              className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                isSubmittingWarehouse
+                                  ? 'bg-green-400 text-white cursor-not-allowed'
+                                  : 'bg-green-600 text-white hover:bg-green-700'
+                              }`}
+                            >
+                              {isSubmittingWarehouse ? 'Submitting...' : 'Yes, Submit to Shopify'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
             )}
           </>
         )}
