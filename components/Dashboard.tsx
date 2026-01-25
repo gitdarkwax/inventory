@@ -2146,7 +2146,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 )}
                 
                 {/* Export Button */}
-                <div className="mt-6 flex justify-center">
+                <div className="mt-6 flex justify-end">
                   <button
                     onClick={() => {
                       // Build CSV content for Inventory
@@ -2600,7 +2600,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 )}
                 
                 {/* Export Button */}
-                <div className="mt-6 flex justify-center">
+                <div className="mt-6 flex justify-end">
                   <button
                     onClick={() => {
                       // Build CSV content for Forecasting
@@ -3417,7 +3417,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
 
                       {/* Export Button */}
-                      <div className="mt-6 flex justify-center">
+                      <div className="mt-6 flex justify-end">
                         <button
                           onClick={() => {
                             // Build CSV content
@@ -4903,7 +4903,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     </table>
                   </div>
                   {/* Export Button */}
-                  <div className="mt-6 flex justify-center">
+                  <div className="mt-6 flex justify-end">
                     <button
                       onClick={() => {
                         // Build CSV content for PO Tracker
