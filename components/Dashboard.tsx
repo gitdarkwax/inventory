@@ -1693,7 +1693,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 </button>
               </div>
             </div>
-            <div className="hidden sm:flex flex-col items-end shrink-0">
+            <div className="hidden md:flex flex-col items-end shrink-0">
               <button 
                 onClick={() => refreshAllData()} 
                 disabled={isRefreshing}
@@ -3784,13 +3784,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         
                         {/* Right: Action Buttons */}
                         <div className="flex items-center gap-3">
-                          {/* View Logs Button - hidden on mobile */}
+                          {/* View Logs Button - hidden on mobile (portrait & landscape) */}
                           <button
                             onClick={() => {
                               loadTrackerLogs(trackerLocation);
                               setShowTrackerLogs(true);
                             }}
-                            className="hidden sm:block px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                            className="hidden md:block px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                           >
                             📋 View Logs
                           </button>
@@ -3815,11 +3815,11 @@ export default function Dashboard({ session }: DashboardProps) {
                           >
                             {isSavingDraft ? '⏳ Saving...' : '💾 Save Draft'}
                           </button>
-                          {/* Submit Button - hidden on mobile */}
+                          {/* Submit Button - hidden on mobile (portrait & landscape) */}
                           <button
                             onClick={() => setShowTrackerConfirm(true)}
                             disabled={allItemsWithCounts.length === 0}
-                            className={`hidden sm:block px-4 py-2 text-sm font-medium rounded-md ${
+                            className={`hidden md:block px-4 py-2 text-sm font-medium rounded-md ${
                               allItemsWithCounts.length === 0 
                                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                                 : 'bg-green-600 text-white hover:bg-green-700'
@@ -3934,9 +3934,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
                     </div>
 
-                    {/* Export Section - hidden on mobile */}
+                    {/* Export Section - hidden on mobile (portrait & landscape) */}
                     {sortedData.length > 0 && (
-                      <div className="hidden sm:flex mt-4 justify-end">
+                      <div className="hidden md:flex mt-4 justify-end">
                         <button
                           onClick={() => {
                             // Build CSV content with all visible data
