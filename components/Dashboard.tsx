@@ -3526,23 +3526,56 @@ export default function Dashboard({ session }: DashboardProps) {
                             />
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
+                      </div>
+                    </div>
+                    
+                    {/* Action Bar */}
+                    <div className="bg-white shadow rounded-lg p-4 mb-4">
+                      <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+                        {/* Left: Stats and Draft Info */}
+                        <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
                           {/* Stats */}
-                          <div className="text-sm text-gray-600">
-                            <span className="font-medium">{allItemsWithCounts.length}</span> SKUs counted
+                          <div className="flex items-center gap-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500">Counted:</span>
+                              <span className="font-semibold text-gray-900">{allItemsWithCounts.length}</span>
+                              <span className="text-gray-400">/ {laOfficeData.length} SKUs</span>
+                            </div>
                             {discrepancies.length > 0 && (
-                              <span className="ml-3 text-orange-600">
-                                <span className="font-medium">{discrepancies.length}</span> discrepancies
-                              </span>
+                              <div className="flex items-center gap-2 text-orange-600">
+                                <span>⚠️</span>
+                                <span className="font-semibold">{discrepancies.length}</span>
+                                <span>discrepancies</span>
+                              </div>
                             )}
                           </div>
+                          {/* Draft Info */}
+                          {draftInfo && (
+                            <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+                              Draft saved: {new Date(draftInfo.savedAt).toLocaleString()} by {draftInfo.savedBy}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Right: Action Buttons */}
+                        <div className="flex items-center gap-3">
+                          {/* View Logs Button */}
+                          <button
+                            onClick={() => {
+                              loadWarehouseLogs();
+                              setShowWarehouseLogs(true);
+                            }}
+                            className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                          >
+                            📋 View Logs
+                          </button>
                           {/* Clear Button */}
                           {allItemsWithCounts.length > 0 && (
                             <button
                               onClick={clearWarehouseCounts}
-                              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md"
+                              className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                             >
-                              Clear All
+                              🗑️ Clear All
                             </button>
                           )}
                           {/* Save Draft Button */}
@@ -3551,43 +3584,26 @@ export default function Dashboard({ session }: DashboardProps) {
                             disabled={isSavingDraft || allItemsWithCounts.length === 0}
                             className={`px-4 py-2 text-sm font-medium rounded-md ${
                               isSavingDraft || allItemsWithCounts.length === 0
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
                                 : 'bg-blue-600 text-white hover:bg-blue-700'
                             }`}
                           >
-                            {isSavingDraft ? 'Saving...' : '💾 Save Draft'}
+                            {isSavingDraft ? '⏳ Saving...' : '💾 Save Draft'}
                           </button>
                           {/* Submit Button */}
-                          <div className="flex flex-col items-end gap-1">
-                            <button
-                              onClick={() => setShowWarehouseConfirm(true)}
-                              disabled={allItemsWithCounts.length === 0}
-                              className={`px-4 py-2 text-sm font-medium rounded-md ${
-                                allItemsWithCounts.length === 0 
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                                  : 'bg-green-600 text-white hover:bg-green-700'
-                              }`}
-                            >
-                              Submit to Shopify
-                            </button>
-                            <button
-                              onClick={() => {
-                                loadWarehouseLogs();
-                                setShowWarehouseLogs(true);
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                            >
-                              View submission logs
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => setShowWarehouseConfirm(true)}
+                            disabled={allItemsWithCounts.length === 0}
+                            className={`px-4 py-2 text-sm font-medium rounded-md ${
+                              allItemsWithCounts.length === 0 
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
+                          >
+                            ✅ Submit to Shopify
+                          </button>
                         </div>
                       </div>
-                      {/* Draft Info */}
-                      {draftInfo && (
-                        <div className="text-xs text-gray-500 mt-2 text-right">
-                          Last draft saved: {new Date(draftInfo.savedAt).toLocaleString()} by {draftInfo.savedBy}
-                        </div>
-                      )}
                     </div>
 
                     {/* Table */}
