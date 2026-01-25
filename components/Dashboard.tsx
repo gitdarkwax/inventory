@@ -128,20 +128,24 @@ type TabType = 'inventory' | 'forecasting' | 'planning' | 'production' | 'wareho
 
 export default function Dashboard({ session }: DashboardProps) {
   // Tab state - persist to localStorage
-  const [activeTab, setActiveTab] = useState<TabType>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('activeTab');
-      if (saved && ['inventory', 'forecasting', 'planning', 'production', 'warehouse'].includes(saved)) {
-        return saved as TabType;
-      }
-    }
-    return 'inventory'; // Default to Overview tab
-  });
+  const [activeTab, setActiveTab] = useState<TabType>('inventory');
+  const [isTabInitialized, setIsTabInitialized] = useState(false);
   
-  // Save active tab to localStorage when it changes
+  // Load saved tab from localStorage on mount
   useEffect(() => {
-    localStorage.setItem('activeTab', activeTab);
-  }, [activeTab]);
+    const saved = localStorage.getItem('activeTab');
+    if (saved && ['inventory', 'forecasting', 'planning', 'production', 'warehouse'].includes(saved)) {
+      setActiveTab(saved as TabType);
+    }
+    setIsTabInitialized(true);
+  }, []);
+  
+  // Save active tab to localStorage when it changes (only after initialization)
+  useEffect(() => {
+    if (isTabInitialized) {
+      localStorage.setItem('activeTab', activeTab);
+    }
+  }, [activeTab, isTabInitialized]);
   
   // Inventory state
   const [inventoryData, setInventoryData] = useState<InventorySummary | null>(null);
