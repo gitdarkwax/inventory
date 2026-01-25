@@ -261,7 +261,7 @@ export default function Dashboard({ session }: DashboardProps) {
     'DTLA WH': null,
     'China WH': null,
   });
-  const [trackerLastSubmission, setTrackerLastSubmission] = useState<Record<TrackerLocation, { submittedAt: string; submittedBy: string; skuCount: number } | null>>({
+  const [trackerLastSubmission, setTrackerLastSubmission] = useState<Record<TrackerLocation, { submittedAt: string; submittedBy: string; skuCount: number; isTest?: boolean } | null>>({
     'LA Office': null,
     'DTLA WH': null,
     'China WH': null,
@@ -782,18 +782,18 @@ export default function Dashboard({ session }: DashboardProps) {
               if (logsResponse.ok) {
                 const logsData = await logsResponse.json();
                 const logs = logsData.logs || [];
-                // Find the most recent real submission (not test mode)
-                // Check both testMode field and [TEST] prefix for backwards compatibility
-                const lastRealSubmission = logs.find((log: { testMode?: boolean; submittedBy?: string }) => 
-                  !log.testMode && !log.submittedBy?.startsWith('[TEST]')
-                );
-                if (lastRealSubmission) {
+                // Get the most recent submission (first in the array)
+                const lastSubmission = logs[0];
+                if (lastSubmission) {
+                  // Check if it was a test submission
+                  const isTest = lastSubmission.testMode || lastSubmission.submittedBy?.startsWith('[TEST]');
                   setTrackerLastSubmission(prev => ({
                     ...prev,
                     [loc]: {
-                      submittedAt: lastRealSubmission.timestamp,
-                      submittedBy: lastRealSubmission.submittedBy,
-                      skuCount: lastRealSubmission.updates?.length || 0,
+                      submittedAt: lastSubmission.timestamp,
+                      submittedBy: lastSubmission.submittedBy?.replace('[TEST] ', '') || 'Unknown',
+                      skuCount: lastSubmission.updates?.length || 0,
+                      isTest: isTest,
                     },
                   }));
                 }
@@ -3719,8 +3719,13 @@ export default function Dashboard({ session }: DashboardProps) {
                             </div>
                           )}
                           {!currentDraftInfo && currentLastSubmission && (
-                            <div className="text-xs text-green-700 bg-green-100 px-3 py-1.5 rounded-full">
-                              ✓ Submitted: {new Date(currentLastSubmission.submittedAt).toLocaleString()} by {currentLastSubmission.submittedBy} ({currentLastSubmission.skuCount} SKUs)
+                            <div className={`text-xs px-3 py-1.5 rounded-full ${
+                              currentLastSubmission.isTest 
+                                ? 'text-amber-700 bg-amber-100' 
+                                : 'text-green-700 bg-green-100'
+                            }`}>
+                              {currentLastSubmission.isTest ? '🧪 Test: ' : '✓ Submitted: '}
+                              {new Date(currentLastSubmission.submittedAt).toLocaleString()} by {currentLastSubmission.submittedBy} ({currentLastSubmission.skuCount} SKUs)
                             </div>
                           )}
                         </div>
@@ -4100,17 +4105,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                     const localKey = `trackerCounts_${trackerLocation.replace(/\s/g, '_')}`;
                                     localStorage.removeItem(localKey);
                                     
-                                    // Track last submission info (only for real Shopify submissions)
-                                    if (!trackerTestMode) {
-                                      setTrackerLastSubmission(prev => ({
-                                        ...prev,
-                                        [trackerLocation]: {
-                                          submittedAt: logEntry.timestamp,
-                                          submittedBy: logEntry.submittedBy,
-                                          skuCount: updates.length,
-                                        },
-                                      }));
-                                    }
+                                    // Track last submission info
+                                    setTrackerLastSubmission(prev => ({
+                                      ...prev,
+                                      [trackerLocation]: {
+                                        submittedAt: logEntry.timestamp,
+                                        submittedBy: trackerTestMode ? (session?.user?.name || 'Unknown') : logEntry.submittedBy,
+                                        skuCount: updates.length,
+                                        isTest: trackerTestMode,
+                                      },
+                                    }));
                                     
                                     if (trackerTestMode) {
                                       showTrackerNotification('success', 'Test Submission Logged', 
