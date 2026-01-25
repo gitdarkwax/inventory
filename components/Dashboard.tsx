@@ -1648,54 +1648,56 @@ export default function Dashboard({ session }: DashboardProps) {
           </div>
           
           {/* Tabs and Refresh */}
-          <div className="flex items-start justify-between">
-            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-              <button
-                onClick={() => setActiveTab('planning')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📋 LA Planning
-              </button>
-              <button
-                onClick={() => setActiveTab('production')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📦 PO Tracker
-              </button>
-              <button
-                onClick={() => setActiveTab('inventory')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📦 Inventory
-              </button>
-              <button
-                onClick={() => setActiveTab('forecasting')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📈 Forecasting
-              </button>
-              <button
-                onClick={() => setActiveTab('warehouse')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
-                }`}
-              >
-                📦 Inventory Counts
-              </button>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-max sm:w-fit">
+                <button
+                  onClick={() => setActiveTab('planning')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📋 LA Planning
+                </button>
+                <button
+                  onClick={() => setActiveTab('production')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📦 PO Tracker
+                </button>
+                <button
+                  onClick={() => setActiveTab('inventory')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'inventory' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📦 Inventory
+                </button>
+                <button
+                  onClick={() => setActiveTab('forecasting')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'forecasting' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📈 Forecasting
+                </button>
+                <button
+                  onClick={() => setActiveTab('warehouse')}
+                  className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                    activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
+                  }`}
+                >
+                  📦 Inventory Counts
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end shrink-0">
               <button 
                 onClick={() => refreshAllData()} 
                 disabled={isRefreshing}
-                className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
               >
                 {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
               </button>
