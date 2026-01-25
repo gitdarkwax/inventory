@@ -1640,7 +1640,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   activeTab === 'warehouse' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                 }`}
               >
-                📦 Inventory Tracker
+                📦 Inventory Counts
               </button>
             </div>
             <div className="flex flex-col items-end">
@@ -3582,8 +3582,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                         <div className="flex gap-3 flex-wrap items-end">
                           {/* Location Title */}
-                          <div className="flex items-center h-[34px] mr-2">
-                            <h2 className="text-2xl font-bold text-gray-900 tracking-tight uppercase">
+                          <div className="flex items-center h-[34px] mr-2" style={{ width: '130px' }}>
+                            <h2 className="text-2xl font-bold text-gray-900 tracking-tight uppercase whitespace-nowrap">
                               {trackerLocation}
                             </h2>
                           </div>
@@ -3784,8 +3784,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="overflow-x-auto">
                         <table className="w-full divide-y divide-gray-200" style={{ tableLayout: 'fixed' }}>
                           <colgroup>
-                            <col style={{ width: '140px' }} />
-                            <col style={{ width: 'auto' }} />
+                            <col style={{ width: '130px' }} />
+                            <col style={{ width: '280px' }} />
                             <col style={{ width: '100px' }} />
                             <col style={{ width: '120px' }} />
                             <col style={{ width: '110px' }} />
