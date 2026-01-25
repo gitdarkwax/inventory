@@ -32,6 +32,7 @@ interface LocationDetail {
   sku: string;
   productTitle: string;
   variantTitle: string;
+  inventoryItemId: string;
   available: number;
   onHand: number;
   committed: number;
@@ -49,6 +50,7 @@ interface InventorySummary {
   lowStockCount: number;
   outOfStockCount: number;
   locations: string[];
+  locationIds: Record<string, string>;
   inventory: InventoryByLocation[];
   locationDetails: Record<string, LocationDetail[]>;
   lastUpdated: string;
@@ -235,7 +237,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [warehouseFilterProducts, setWarehouseFilterProducts] = useState<string[]>([]);
   const [showWarehouseProductDropdown, setShowWarehouseProductDropdown] = useState(false);
   const warehouseProductDropdownRef = useRef<HTMLDivElement>(null);
-  const [warehouseViewMode, setWarehouseViewMode] = useState<'list' | 'grouped'>('list');
+  const [warehouseViewMode, setWarehouseViewMode] = useState<'list' | 'grouped'>('grouped');
+  const [showWarehouseLogs, setShowWarehouseLogs] = useState(false);
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -3460,17 +3463,25 @@ export default function Dashboard({ session }: DashboardProps) {
                             </button>
                           )}
                           {/* Submit Button */}
-                          <button
-                            onClick={() => setShowWarehouseConfirm(true)}
-                            disabled={itemsWithCounts.length === 0}
-                            className={`px-4 py-2 text-sm font-medium rounded-md ${
-                              itemsWithCounts.length === 0 
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                                : 'bg-green-600 text-white hover:bg-green-700'
-                            }`}
-                          >
-                            Submit to Shopify
-                          </button>
+                          <div className="flex flex-col items-end gap-1">
+                            <button
+                              onClick={() => setShowWarehouseConfirm(true)}
+                              disabled={allItemsWithCounts.length === 0}
+                              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                                allItemsWithCounts.length === 0 
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                  : 'bg-green-600 text-white hover:bg-green-700'
+                              }`}
+                            >
+                              Submit to Shopify
+                            </button>
+                            <button
+                              onClick={() => setShowWarehouseLogs(true)}
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              View submission logs
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -3567,71 +3578,314 @@ export default function Dashboard({ session }: DashboardProps) {
                     </div>
 
                     {/* Confirmation Modal */}
-                    {showWarehouseConfirm && (
-                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-                          <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Submit Inventory Counts to Shopify</h3>
-                          </div>
-                          <div className="px-6 py-4">
-                            <p className="text-sm text-gray-600 mb-4">
-                              Are you sure you want to submit these inventory counts to Shopify?
-                            </p>
-                            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">SKUs counted:</span>
-                                <span className="font-medium">{itemsWithCounts.length}</span>
-                              </div>
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-600">SKUs with discrepancies:</span>
-                                <span className={`font-medium ${discrepancies.length > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                                  {discrepancies.length}
-                                </span>
-                              </div>
-                              <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
-                                <span className="text-gray-600">Total unit difference:</span>
-                                <span className={`font-medium ${
-                                  totalDifference === 0 ? 'text-green-600' :
-                                  totalDifference > 0 ? 'text-blue-600' : 'text-red-600'
-                                }`}>
-                                  {totalDifference > 0 ? `+${totalDifference}` : totalDifference}
-                                </span>
-                              </div>
+                    {showWarehouseConfirm && (() => {
+                      // Find SKUs with large discrepancies (difference > 50 or < -50)
+                      const largeDiscrepancies = allItemsWithCounts.filter(item => {
+                        const diff = (warehouseCounts[item.sku] ?? 0) - item.onHand;
+                        return Math.abs(diff) > 50;
+                      });
+                      
+                      return (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+                            <div className="px-6 py-4 border-b border-gray-200">
+                              <h3 className="text-lg font-semibold text-gray-900">Submit Inventory Counts to Shopify</h3>
                             </div>
-                            <p className="text-xs text-gray-500 mt-4">
-                              This will update the on-hand quantities in Shopify for all counted SKUs.
-                            </p>
-                          </div>
-                          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                            <button
-                              onClick={() => setShowWarehouseConfirm(false)}
-                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => {
-                                // TODO: Implement Shopify submission
-                                setIsSubmittingWarehouse(true);
-                                setTimeout(() => {
-                                  alert('Shopify submission not yet implemented. This is a placeholder.');
-                                  setIsSubmittingWarehouse(false);
-                                  setShowWarehouseConfirm(false);
-                                }, 500);
-                              }}
-                              disabled={isSubmittingWarehouse}
-                              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                isSubmittingWarehouse
-                                  ? 'bg-green-400 text-white cursor-not-allowed'
-                                  : 'bg-green-600 text-white hover:bg-green-700'
-                              }`}
-                            >
-                              {isSubmittingWarehouse ? 'Submitting...' : 'Yes, Submit to Shopify'}
-                            </button>
+                            <div className="px-6 py-4">
+                              <p className="text-sm text-gray-600 mb-4">
+                                Are you sure you want to submit these inventory counts to Shopify?
+                              </p>
+                              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-600">SKUs counted:</span>
+                                  <span className="font-medium">{allItemsWithCounts.length}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-gray-600">SKUs with discrepancies:</span>
+                                  <span className={`font-medium ${discrepancies.length > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                                    {discrepancies.length}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+                                  <span className="text-gray-600">Total unit difference:</span>
+                                  <span className={`font-medium ${
+                                    totalDifference === 0 ? 'text-green-600' :
+                                    totalDifference > 0 ? 'text-blue-600' : 'text-red-600'
+                                  }`}>
+                                    {totalDifference > 0 ? `+${totalDifference}` : totalDifference}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {/* Large Discrepancy Warning */}
+                              {largeDiscrepancies.length > 0 && (
+                                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                                  <div className="flex items-start gap-2">
+                                    <span className="text-amber-600 text-lg">⚠️</span>
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-amber-800">
+                                        Large discrepancies detected ({largeDiscrepancies.length} SKU{largeDiscrepancies.length > 1 ? 's' : ''})
+                                      </p>
+                                      <p className="text-xs text-amber-700 mt-1">
+                                        The following SKUs have a difference greater than 50 units. Please verify these counts are correct.
+                                      </p>
+                                      <div className="mt-3 max-h-40 overflow-y-auto">
+                                        <table className="w-full text-xs">
+                                          <thead className="bg-amber-100">
+                                            <tr>
+                                              <th className="px-2 py-1 text-left text-amber-800">SKU</th>
+                                              <th className="px-2 py-1 text-center text-amber-800">System</th>
+                                              <th className="px-2 py-1 text-center text-amber-800">Counted</th>
+                                              <th className="px-2 py-1 text-center text-amber-800">Diff</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {largeDiscrepancies.map(item => {
+                                              const counted = warehouseCounts[item.sku] ?? 0;
+                                              const diff = counted - item.onHand;
+                                              return (
+                                                <tr key={item.sku} className="border-t border-amber-200">
+                                                  <td className="px-2 py-1 font-mono text-amber-900">{item.sku}</td>
+                                                  <td className="px-2 py-1 text-center text-amber-900">{item.onHand}</td>
+                                                  <td className="px-2 py-1 text-center text-amber-900">{counted}</td>
+                                                  <td className={`px-2 py-1 text-center font-medium ${diff > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                                    {diff > 0 ? `+${diff}` : diff}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <p className="text-xs text-gray-500 mt-4">
+                                This will update the on-hand quantities in Shopify for all {allItemsWithCounts.length} counted SKUs.
+                              </p>
+                            </div>
+                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                              <button
+                                onClick={() => setShowWarehouseConfirm(false)}
+                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  setIsSubmittingWarehouse(true);
+                                  try {
+                                    // Get the LA Office location ID
+                                    const locationId = inventoryData?.locationIds?.['LA Office'];
+                                    if (!locationId) {
+                                      throw new Error('LA Office location ID not found');
+                                    }
+                                    
+                                    // Build updates array - only counted SKUs
+                                    const updates = allItemsWithCounts.map(item => ({
+                                      sku: item.sku,
+                                      inventoryItemId: item.inventoryItemId,
+                                      quantity: warehouseCounts[item.sku] ?? 0,
+                                      locationId: locationId,
+                                    }));
+                                    
+                                    // Submit to Shopify
+                                    const response = await fetch('/api/inventory/update', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ updates }),
+                                    });
+                                    
+                                    const result = await response.json();
+                                    
+                                    if (!response.ok) {
+                                      throw new Error(result.error || 'Failed to update inventory');
+                                    }
+                                    
+                                    // Save to submission log
+                                    const logEntry = {
+                                      timestamp: new Date().toISOString(),
+                                      submittedBy: session?.user?.name || 'Unknown',
+                                      summary: {
+                                        totalSKUs: updates.length,
+                                        discrepancies: discrepancies.length,
+                                        totalDifference,
+                                      },
+                                      updates: updates.map(u => ({
+                                        sku: u.sku,
+                                        previousOnHand: allItemsWithCounts.find(i => i.sku === u.sku)?.onHand ?? 0,
+                                        newQuantity: u.quantity,
+                                      })),
+                                      result: result.summary,
+                                    };
+                                    
+                                    // Get existing logs and add new one
+                                    const existingLogs = JSON.parse(localStorage.getItem('warehouseSubmissionLogs') || '[]');
+                                    existingLogs.unshift(logEntry);
+                                    // Keep last 100 logs
+                                    localStorage.setItem('warehouseSubmissionLogs', JSON.stringify(existingLogs.slice(0, 100)));
+                                    
+                                    // Clear warehouse counts on success
+                                    setWarehouseCounts({});
+                                    localStorage.removeItem('warehouseCounts');
+                                    
+                                    alert(`Successfully updated ${result.summary.success} SKUs in Shopify!${result.summary.failed > 0 ? ` (${result.summary.failed} failed)` : ''}`);
+                                    
+                                  } catch (error) {
+                                    console.error('Submission failed:', error);
+                                    alert(`Failed to submit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                  } finally {
+                                    setIsSubmittingWarehouse(false);
+                                    setShowWarehouseConfirm(false);
+                                  }
+                                }}
+                                disabled={isSubmittingWarehouse}
+                                className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                  isSubmittingWarehouse
+                                    ? 'bg-green-400 text-white cursor-not-allowed'
+                                    : 'bg-green-600 text-white hover:bg-green-700'
+                                }`}
+                              >
+                                {isSubmittingWarehouse ? 'Submitting...' : 'Yes, Submit to Shopify'}
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
+                    
+                    {/* Submission Logs Modal */}
+                    {showWarehouseLogs && (() => {
+                      const logs = JSON.parse(localStorage.getItem('warehouseSubmissionLogs') || '[]') as Array<{
+                        timestamp: string;
+                        submittedBy: string;
+                        summary: { totalSKUs: number; discrepancies: number; totalDifference: number };
+                        updates: Array<{ sku: string; previousOnHand: number; newQuantity: number }>;
+                        result: { total: number; success: number; failed: number };
+                      }>;
+                      
+                      return (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+                            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                              <h3 className="text-lg font-semibold text-gray-900">Submission Logs</h3>
+                              <button
+                                onClick={() => setShowWarehouseLogs(false)}
+                                className="text-gray-400 hover:text-gray-600"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-6">
+                              {logs.length === 0 ? (
+                                <p className="text-gray-500 text-center py-8">No submission logs yet.</p>
+                              ) : (
+                                <div className="space-y-4">
+                                  {logs.map((log, index) => (
+                                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                                      <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                          <p className="text-sm font-medium text-gray-900">
+                                            {new Date(log.timestamp).toLocaleString()}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            Submitted by: {log.submittedBy}
+                                          </p>
+                                        </div>
+                                        <div className="text-right">
+                                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                            log.result.failed === 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                          }`}>
+                                            {log.result.success}/{log.result.total} success
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+                                        <div className="bg-gray-50 rounded p-2">
+                                          <span className="text-gray-500">SKUs Updated:</span>
+                                          <span className="ml-2 font-medium">{log.summary.totalSKUs}</span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded p-2">
+                                          <span className="text-gray-500">Discrepancies:</span>
+                                          <span className="ml-2 font-medium">{log.summary.discrepancies}</span>
+                                        </div>
+                                        <div className="bg-gray-50 rounded p-2">
+                                          <span className="text-gray-500">Total Diff:</span>
+                                          <span className={`ml-2 font-medium ${
+                                            log.summary.totalDifference > 0 ? 'text-blue-600' : 
+                                            log.summary.totalDifference < 0 ? 'text-red-600' : 'text-green-600'
+                                          }`}>
+                                            {log.summary.totalDifference > 0 ? '+' : ''}{log.summary.totalDifference}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <details className="text-xs">
+                                        <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+                                          View {log.updates.length} SKU details
+                                        </summary>
+                                        <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded">
+                                          <table className="w-full">
+                                            <thead className="bg-gray-50 sticky top-0">
+                                              <tr>
+                                                <th className="px-2 py-1 text-left text-gray-600">SKU</th>
+                                                <th className="px-2 py-1 text-center text-gray-600">Previous</th>
+                                                <th className="px-2 py-1 text-center text-gray-600">New</th>
+                                                <th className="px-2 py-1 text-center text-gray-600">Change</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {log.updates.map((update, idx) => {
+                                                const diff = update.newQuantity - update.previousOnHand;
+                                                return (
+                                                  <tr key={idx} className="border-t border-gray-100">
+                                                    <td className="px-2 py-1 font-mono">{update.sku}</td>
+                                                    <td className="px-2 py-1 text-center">{update.previousOnHand}</td>
+                                                    <td className="px-2 py-1 text-center">{update.newQuantity}</td>
+                                                    <td className={`px-2 py-1 text-center font-medium ${
+                                                      diff > 0 ? 'text-blue-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'
+                                                    }`}>
+                                                      {diff === 0 ? '—' : diff > 0 ? `+${diff}` : diff}
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </details>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+                              {logs.length > 0 && (
+                                <button
+                                  onClick={() => {
+                                    if (confirm('Are you sure you want to clear all submission logs?')) {
+                                      localStorage.removeItem('warehouseSubmissionLogs');
+                                      setShowWarehouseLogs(false);
+                                      setTimeout(() => setShowWarehouseLogs(true), 0);
+                                    }
+                                  }}
+                                  className="text-sm text-red-600 hover:text-red-800"
+                                >
+                                  Clear all logs
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setShowWarehouseLogs(false)}
+                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium ml-auto"
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 );
               })()
