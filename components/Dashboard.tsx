@@ -239,6 +239,17 @@ export default function Dashboard({ session }: DashboardProps) {
   const warehouseProductDropdownRef = useRef<HTMLDivElement>(null);
   const [warehouseViewMode, setWarehouseViewMode] = useState<'list' | 'grouped'>('grouped');
   const [showWarehouseLogs, setShowWarehouseLogs] = useState(false);
+  const [warehouseLogs, setWarehouseLogs] = useState<Array<{
+    timestamp: string;
+    submittedBy: string;
+    summary: { totalSKUs: number; discrepancies: number; totalDifference: number };
+    updates: Array<{ sku: string; previousOnHand: number; newQuantity: number }>;
+    result: { total: number; success: number; failed: number };
+  }>>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftInfo, setDraftInfo] = useState<{ savedAt: string; savedBy: string } | null>(null);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -685,19 +696,47 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showWarehouseProductDropdown]);
 
-  // Load warehouse counts from localStorage on mount
+  // Load warehouse draft from Google Drive on mount
   useEffect(() => {
-    const saved = localStorage.getItem('warehouseCounts');
-    if (saved) {
+    const loadDraft = async () => {
+      setIsLoadingDraft(true);
       try {
-        setWarehouseCounts(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load warehouse counts:', e);
+        // First check localStorage for any unsaved work
+        const localSaved = localStorage.getItem('warehouseCounts');
+        if (localSaved) {
+          try {
+            setWarehouseCounts(JSON.parse(localSaved));
+          } catch (e) {
+            console.error('Failed to load local warehouse counts:', e);
+          }
+        }
+        
+        // Then try to load from Google Drive
+        const response = await fetch('/api/warehouse/draft');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.draft) {
+            // If there's a saved draft and no local changes (or local is empty), use the draft
+            const localCounts = localSaved ? JSON.parse(localSaved) : {};
+            const localCountedSkus = Object.keys(localCounts).filter(k => localCounts[k] !== null);
+            
+            if (localCountedSkus.length === 0) {
+              setWarehouseCounts(data.draft.counts);
+              localStorage.setItem('warehouseCounts', JSON.stringify(data.draft.counts));
+            }
+            setDraftInfo({ savedAt: data.draft.savedAt, savedBy: data.draft.savedBy });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load warehouse draft:', error);
+      } finally {
+        setIsLoadingDraft(false);
       }
-    }
+    };
+    loadDraft();
   }, []);
 
-  // Save warehouse counts to localStorage when changed
+  // Save warehouse counts to localStorage when changed (for auto-save on blur)
   const saveWarehouseCount = (sku: string, count: number | null) => {
     setWarehouseCounts(prev => {
       const updated = { ...prev, [sku]: count };
@@ -706,10 +745,54 @@ export default function Dashboard({ session }: DashboardProps) {
     });
   };
 
-  // Clear all warehouse counts
+  // Save draft to Google Drive
+  const saveDraftToGoogleDrive = async () => {
+    setIsSavingDraft(true);
+    try {
+      const response = await fetch('/api/warehouse/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ counts: warehouseCounts }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save draft');
+      }
+      
+      const result = await response.json();
+      setDraftInfo({ savedAt: result.savedAt, savedBy: result.savedBy });
+      alert(`Draft saved! ${result.skuCount} SKUs saved to Google Drive.`);
+    } catch (error) {
+      console.error('Failed to save draft:', error);
+      alert(`Failed to save draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
+
+  // Load logs from Google Drive
+  const loadWarehouseLogs = async () => {
+    setIsLoadingLogs(true);
+    try {
+      const response = await fetch('/api/warehouse/logs');
+      if (response.ok) {
+        const data = await response.json();
+        setWarehouseLogs(data.logs || []);
+      }
+    } catch (error) {
+      console.error('Failed to load logs:', error);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  // Clear warehouse counts
   const clearWarehouseCounts = () => {
-    setWarehouseCounts({});
-    localStorage.removeItem('warehouseCounts');
+    if (confirm('Are you sure you want to clear all counted values?')) {
+      setWarehouseCounts({});
+      localStorage.removeItem('warehouseCounts');
+    }
   };
 
   // Helper to calculate inventory for selected locations
@@ -3462,6 +3545,18 @@ export default function Dashboard({ session }: DashboardProps) {
                               Clear All
                             </button>
                           )}
+                          {/* Save Draft Button */}
+                          <button
+                            onClick={saveDraftToGoogleDrive}
+                            disabled={isSavingDraft || allItemsWithCounts.length === 0}
+                            className={`px-4 py-2 text-sm font-medium rounded-md ${
+                              isSavingDraft || allItemsWithCounts.length === 0
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                          >
+                            {isSavingDraft ? 'Saving...' : '💾 Save Draft'}
+                          </button>
                           {/* Submit Button */}
                           <div className="flex flex-col items-end gap-1">
                             <button
@@ -3476,7 +3571,10 @@ export default function Dashboard({ session }: DashboardProps) {
                               Submit to Shopify
                             </button>
                             <button
-                              onClick={() => setShowWarehouseLogs(true)}
+                              onClick={() => {
+                                loadWarehouseLogs();
+                                setShowWarehouseLogs(true);
+                              }}
                               className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
                             >
                               View submission logs
@@ -3484,6 +3582,12 @@ export default function Dashboard({ session }: DashboardProps) {
                           </div>
                         </div>
                       </div>
+                      {/* Draft Info */}
+                      {draftInfo && (
+                        <div className="text-xs text-gray-500 mt-2 text-right">
+                          Last draft saved: {new Date(draftInfo.savedAt).toLocaleString()} by {draftInfo.savedBy}
+                        </div>
+                      )}
                     </div>
 
                     {/* Table */}
@@ -3704,7 +3808,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       throw new Error(result.error || 'Failed to update inventory');
                                     }
                                     
-                                    // Save to submission log
+                                    // Save to submission log in Google Drive
                                     const logEntry = {
                                       timestamp: new Date().toISOString(),
                                       submittedBy: session?.user?.name || 'Unknown',
@@ -3721,11 +3825,24 @@ export default function Dashboard({ session }: DashboardProps) {
                                       result: result.summary,
                                     };
                                     
-                                    // Get existing logs and add new one
-                                    const existingLogs = JSON.parse(localStorage.getItem('warehouseSubmissionLogs') || '[]');
-                                    existingLogs.unshift(logEntry);
-                                    // Keep last 100 logs
-                                    localStorage.setItem('warehouseSubmissionLogs', JSON.stringify(existingLogs.slice(0, 100)));
+                                    // Save log to Google Drive
+                                    try {
+                                      await fetch('/api/warehouse/logs', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ log: logEntry }),
+                                      });
+                                    } catch (logError) {
+                                      console.error('Failed to save log to Google Drive:', logError);
+                                    }
+                                    
+                                    // Delete draft from Google Drive (data is now in logs)
+                                    try {
+                                      await fetch('/api/warehouse/draft', { method: 'DELETE' });
+                                      setDraftInfo(null);
+                                    } catch (draftError) {
+                                      console.error('Failed to delete draft:', draftError);
+                                    }
                                     
                                     // Clear warehouse counts on success
                                     setWarehouseCounts({});
@@ -3757,135 +3874,119 @@ export default function Dashboard({ session }: DashboardProps) {
                     })()}
                     
                     {/* Submission Logs Modal */}
-                    {showWarehouseLogs && (() => {
-                      const logs = JSON.parse(localStorage.getItem('warehouseSubmissionLogs') || '[]') as Array<{
-                        timestamp: string;
-                        submittedBy: string;
-                        summary: { totalSKUs: number; discrepancies: number; totalDifference: number };
-                        updates: Array<{ sku: string; previousOnHand: number; newQuantity: number }>;
-                        result: { total: number; success: number; failed: number };
-                      }>;
-                      
-                      return (
-                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-                            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                              <h3 className="text-lg font-semibold text-gray-900">Submission Logs</h3>
-                              <button
-                                onClick={() => setShowWarehouseLogs(false)}
-                                className="text-gray-400 hover:text-gray-600"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-6">
-                              {logs.length === 0 ? (
-                                <p className="text-gray-500 text-center py-8">No submission logs yet.</p>
-                              ) : (
-                                <div className="space-y-4">
-                                  {logs.map((log, index) => (
-                                    <div key={index} className="border border-gray-200 rounded-lg p-4">
-                                      <div className="flex justify-between items-start mb-3">
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-900">
-                                            {new Date(log.timestamp).toLocaleString()}
-                                          </p>
-                                          <p className="text-xs text-gray-500">
-                                            Submitted by: {log.submittedBy}
-                                          </p>
-                                        </div>
-                                        <div className="text-right">
-                                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                            log.result.failed === 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                          }`}>
-                                            {log.result.success}/{log.result.total} success
-                                          </span>
-                                        </div>
+                    {showWarehouseLogs && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+                          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                            <h3 className="text-lg font-semibold text-gray-900">Submission Logs</h3>
+                            <button
+                              onClick={() => setShowWarehouseLogs(false)}
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <div className="flex-1 overflow-y-auto p-6">
+                            {isLoadingLogs ? (
+                              <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                <span className="ml-3 text-gray-600">Loading logs from Google Drive...</span>
+                              </div>
+                            ) : warehouseLogs.length === 0 ? (
+                              <p className="text-gray-500 text-center py-8">No submission logs yet.</p>
+                            ) : (
+                              <div className="space-y-4">
+                                {warehouseLogs.map((log, index) => (
+                                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-start mb-3">
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-900">
+                                          {new Date(log.timestamp).toLocaleString()}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                          Submitted by: {log.submittedBy}
+                                        </p>
                                       </div>
-                                      <div className="grid grid-cols-3 gap-4 text-sm mb-3">
-                                        <div className="bg-gray-50 rounded p-2">
-                                          <span className="text-gray-500">SKUs Updated:</span>
-                                          <span className="ml-2 font-medium">{log.summary.totalSKUs}</span>
-                                        </div>
-                                        <div className="bg-gray-50 rounded p-2">
-                                          <span className="text-gray-500">Discrepancies:</span>
-                                          <span className="ml-2 font-medium">{log.summary.discrepancies}</span>
-                                        </div>
-                                        <div className="bg-gray-50 rounded p-2">
-                                          <span className="text-gray-500">Total Diff:</span>
-                                          <span className={`ml-2 font-medium ${
-                                            log.summary.totalDifference > 0 ? 'text-blue-600' : 
-                                            log.summary.totalDifference < 0 ? 'text-red-600' : 'text-green-600'
-                                          }`}>
-                                            {log.summary.totalDifference > 0 ? '+' : ''}{log.summary.totalDifference}
-                                          </span>
-                                        </div>
+                                      <div className="text-right">
+                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                          log.result.failed === 0 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                          {log.result.success}/{log.result.total} success
+                                        </span>
                                       </div>
-                                      <details className="text-xs">
-                                        <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
-                                          View {log.updates.length} SKU details
-                                        </summary>
-                                        <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded">
-                                          <table className="w-full">
-                                            <thead className="bg-gray-50 sticky top-0">
-                                              <tr>
-                                                <th className="px-2 py-1 text-left text-gray-600">SKU</th>
-                                                <th className="px-2 py-1 text-center text-gray-600">Previous</th>
-                                                <th className="px-2 py-1 text-center text-gray-600">New</th>
-                                                <th className="px-2 py-1 text-center text-gray-600">Change</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {log.updates.map((update, idx) => {
-                                                const diff = update.newQuantity - update.previousOnHand;
-                                                return (
-                                                  <tr key={idx} className="border-t border-gray-100">
-                                                    <td className="px-2 py-1 font-mono">{update.sku}</td>
-                                                    <td className="px-2 py-1 text-center">{update.previousOnHand}</td>
-                                                    <td className="px-2 py-1 text-center">{update.newQuantity}</td>
-                                                    <td className={`px-2 py-1 text-center font-medium ${
-                                                      diff > 0 ? 'text-blue-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'
-                                                    }`}>
-                                                      {diff === 0 ? '—' : diff > 0 ? `+${diff}` : diff}
-                                                    </td>
-                                                  </tr>
-                                                );
-                                              })}
-                                            </tbody>
-                                          </table>
-                                        </div>
-                                      </details>
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
-                              {logs.length > 0 && (
-                                <button
-                                  onClick={() => {
-                                    if (confirm('Are you sure you want to clear all submission logs?')) {
-                                      localStorage.removeItem('warehouseSubmissionLogs');
-                                      setShowWarehouseLogs(false);
-                                      setTimeout(() => setShowWarehouseLogs(true), 0);
-                                    }
-                                  }}
-                                  className="text-sm text-red-600 hover:text-red-800"
-                                >
-                                  Clear all logs
-                                </button>
-                              )}
-                              <button
-                                onClick={() => setShowWarehouseLogs(false)}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium ml-auto"
-                              >
-                                Close
-                              </button>
-                            </div>
+                                    <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+                                      <div className="bg-gray-50 rounded p-2">
+                                        <span className="text-gray-500">SKUs Updated:</span>
+                                        <span className="ml-2 font-medium">{log.summary.totalSKUs}</span>
+                                      </div>
+                                      <div className="bg-gray-50 rounded p-2">
+                                        <span className="text-gray-500">Discrepancies:</span>
+                                        <span className="ml-2 font-medium">{log.summary.discrepancies}</span>
+                                      </div>
+                                      <div className="bg-gray-50 rounded p-2">
+                                        <span className="text-gray-500">Total Diff:</span>
+                                        <span className={`ml-2 font-medium ${
+                                          log.summary.totalDifference > 0 ? 'text-blue-600' : 
+                                          log.summary.totalDifference < 0 ? 'text-red-600' : 'text-green-600'
+                                        }`}>
+                                          {log.summary.totalDifference > 0 ? '+' : ''}{log.summary.totalDifference}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <details className="text-xs">
+                                      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+                                        View {log.updates.length} SKU details
+                                      </summary>
+                                      <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded">
+                                        <table className="w-full">
+                                          <thead className="bg-gray-50 sticky top-0">
+                                            <tr>
+                                              <th className="px-2 py-1 text-left text-gray-600">SKU</th>
+                                              <th className="px-2 py-1 text-center text-gray-600">Previous</th>
+                                              <th className="px-2 py-1 text-center text-gray-600">New</th>
+                                              <th className="px-2 py-1 text-center text-gray-600">Change</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {log.updates.map((update, idx) => {
+                                              const diff = update.newQuantity - update.previousOnHand;
+                                              return (
+                                                <tr key={idx} className="border-t border-gray-100">
+                                                  <td className="px-2 py-1 font-mono">{update.sku}</td>
+                                                  <td className="px-2 py-1 text-center">{update.previousOnHand}</td>
+                                                  <td className="px-2 py-1 text-center">{update.newQuantity}</td>
+                                                  <td className={`px-2 py-1 text-center font-medium ${
+                                                    diff > 0 ? 'text-blue-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'
+                                                  }`}>
+                                                    {diff === 0 ? '—' : diff > 0 ? `+${diff}` : diff}
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </details>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+                            <span className="text-xs text-gray-500 self-center">
+                              Logs are stored in Google Drive
+                            </span>
+                            <button
+                              onClick={() => setShowWarehouseLogs(false)}
+                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                            >
+                              Close
+                            </button>
                           </div>
                         </div>
-                      );
-                    })()}
+                      </div>
+                    )}
                   </>
                 );
               })()
