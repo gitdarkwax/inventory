@@ -228,12 +228,12 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isRemovingPhaseOut, setIsRemovingPhaseOut] = useState<string | null>(null);
 
   // Inventory Tracker state
-  type TrackerLocation = 'LA Office' | 'LA Warehouse' | 'China';
+  type TrackerLocation = 'LA Office' | 'DTLA WH' | 'China WH';
   const [trackerLocation, setTrackerLocation] = useState<TrackerLocation>('LA Office');
   const [trackerCounts, setTrackerCounts] = useState<Record<TrackerLocation, Record<string, number | null>>>({
     'LA Office': {},
-    'LA Warehouse': {},
-    'China': {},
+    'DTLA WH': {},
+    'China WH': {},
   });
   const [trackerSearchTerm, setTrackerSearchTerm] = useState('');
   const [trackerSortBy, setTrackerSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
@@ -257,8 +257,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [trackerDraftInfo, setTrackerDraftInfo] = useState<Record<TrackerLocation, { savedAt: string; savedBy: string } | null>>({
     'LA Office': null,
-    'LA Warehouse': null,
-    'China': null,
+    'DTLA WH': null,
+    'China WH': null,
   });
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [trackerNotification, setTrackerNotification] = useState<{
@@ -717,7 +717,7 @@ export default function Dashboard({ session }: DashboardProps) {
   useEffect(() => {
     const loadAllDrafts = async () => {
       setIsLoadingDraft(true);
-      const locations: TrackerLocation[] = ['LA Office', 'LA Warehouse', 'China'];
+      const locations: TrackerLocation[] = ['LA Office', 'DTLA WH', 'China WH'];
       
       try {
         // First check localStorage for any unsaved work
@@ -3542,7 +3542,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="flex flex-col">
                             <span className="text-[10px] text-gray-400 mb-1">Location</span>
                             <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
-                              {(['LA Office', 'LA Warehouse', 'China'] as const).map(loc => (
+                              {(['LA Office', 'DTLA WH', 'China WH'] as const).map(loc => (
                                 <button
                                   key={loc}
                                   onClick={() => setTrackerLocation(loc)}
