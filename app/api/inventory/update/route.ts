@@ -88,13 +88,13 @@ export async function POST(request: NextRequest) {
         inventoryItemId: `gid://shopify/InventoryItem/${update.inventoryItemId}`,
         locationId: `gid://shopify/Location/${update.locationId}`,
         quantity: update.quantity,
-        compareQuantity: null, // Don't compare, just set
       }));
 
       const input = {
         name: 'on_hand',
         reason: 'correction',
         referenceDocumentUri: `app://inventory-dashboard/physical-count/${new Date().toISOString().split('T')[0]}`,
+        ignoreCompareQuantity: true,
         quantities,
       };
 
@@ -141,12 +141,15 @@ export async function POST(request: NextRequest) {
         const result = data.data?.inventorySetQuantities;
 
         if (result?.userErrors && result.userErrors.length > 0) {
-          console.error('❌ User errors:', result.userErrors);
+          console.error('❌ User errors:', JSON.stringify(result.userErrors, null, 2));
+          console.error('❌ Input that caused error:', JSON.stringify(input, null, 2));
           batch.forEach(update => {
             results.push({
               success: false,
               sku: update.sku,
-              error: result.userErrors.map((e: { message: string }) => e.message).join(', '),
+              error: result.userErrors.map((e: { field?: string[]; message: string }) => 
+                e.field ? `${e.field.join('.')}: ${e.message}` : e.message
+              ).join(', '),
             });
           });
           continue;

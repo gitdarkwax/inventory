@@ -906,6 +906,19 @@ export default function Dashboard({ session }: DashboardProps) {
     URL.revokeObjectURL(link.href);
   };
 
+  // Format date for badges: "Jan 25, 2026, 10:48AM"
+  const formatBadgeDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+    const hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    return `${month} ${day}, ${year}, ${hour12}:${minutes}${ampm}`;
+  };
+
   // Show tracker notification
   const showTrackerNotification = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
     setTrackerNotification({ type, title, message });
@@ -3715,7 +3728,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           {/* Draft/Submission Info */}
                           {currentDraftInfo && (
                             <div className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-                              Draft saved: {new Date(currentDraftInfo.savedAt).toLocaleString()} by {currentDraftInfo.savedBy}
+                              💾 Draft: {formatBadgeDate(currentDraftInfo.savedAt)} by {currentDraftInfo.savedBy}
                             </div>
                           )}
                           {!currentDraftInfo && currentLastSubmission && (
@@ -3725,7 +3738,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 : 'text-green-700 bg-green-100'
                             }`}>
                               {currentLastSubmission.isTest ? '🧪 Test: ' : '✓ Submitted: '}
-                              {new Date(currentLastSubmission.submittedAt).toLocaleString()} by {currentLastSubmission.submittedBy} ({currentLastSubmission.skuCount} SKUs)
+                              {formatBadgeDate(currentLastSubmission.submittedAt)} by {currentLastSubmission.submittedBy}
                             </div>
                           )}
                         </div>
@@ -4127,8 +4140,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                       showTrackerNotification('success', 'Test Submission Logged', 
                                         `${updates.length} SKUs logged (Shopify not updated). Check logs to verify.`);
                                     } else if (result.summary.failed > 0) {
-                                      showTrackerNotification('warning', 'Partial Success', 
-                                        `${result.summary.success} SKUs updated successfully, ${result.summary.failed} failed.`);
+                                      // Get the first error message from failed results
+                                      const failedResults = result.results?.filter((r: { success: boolean }) => !r.success) || [];
+                                      const firstError = failedResults[0]?.error || 'Unknown error';
+                                      showTrackerNotification('warning', 'Update Failed', 
+                                        `${result.summary.success} succeeded, ${result.summary.failed} failed. Error: ${firstError}`);
                                     } else {
                                       showTrackerNotification('success', 'Inventory Updated', 
                                         `Successfully updated ${result.summary.success} SKUs in Shopify.`);
