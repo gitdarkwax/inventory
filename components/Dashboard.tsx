@@ -5,7 +5,7 @@
  * Displays inventory levels and forecasting data
  */
 
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment, startTransition } from 'react';
 import { signOut } from 'next-auth/react';
 import { PRODUCT_CATEGORIES, findProductCategory } from '@/lib/constants';
 
@@ -239,6 +239,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [trackerSortBy, setTrackerSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
   const [trackerSortOrder, setTrackerSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showTrackerConfirm, setShowTrackerConfirm] = useState(false);
+  const [showTrackerClearConfirm, setShowTrackerClearConfirm] = useState(false);
   const [isSubmittingTracker, setIsSubmittingTracker] = useState(false);
   const [trackerFilterProducts, setTrackerFilterProducts] = useState<string[]>([]);
   const [showTrackerProductDropdown, setShowTrackerProductDropdown] = useState(false);
@@ -873,16 +874,18 @@ export default function Dashboard({ session }: DashboardProps) {
     setTimeout(() => setTrackerNotification(null), type === 'error' ? 8000 : 5000);
   };
 
-  // Clear tracker counts for current location
+  // Clear tracker counts for current location (called from modal)
   const clearTrackerCounts = (location: TrackerLocation) => {
-    if (confirm(`Are you sure you want to clear all counted values for ${location}?`)) {
+    // Use startTransition to prevent blocking the UI
+    startTransition(() => {
       setTrackerCounts(prev => ({
         ...prev,
         [location]: {},
       }));
-      const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
-      localStorage.removeItem(localKey);
-    }
+    });
+    const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
+    localStorage.removeItem(localKey);
+    setShowTrackerClearConfirm(false);
   };
 
   // Helper to calculate inventory for selected locations
@@ -3686,7 +3689,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           {/* Clear Button */}
                           {allItemsWithCounts.length > 0 && (
                             <button
-                              onClick={() => clearTrackerCounts(trackerLocation)}
+                              onClick={() => setShowTrackerClearConfirm(true)}
                               className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                             >
                               🗑️ Clear All
@@ -3810,6 +3813,39 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
                       )}
                     </div>
+
+                    {/* Clear Confirmation Modal */}
+                    {showTrackerClearConfirm && (
+                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                          <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold text-gray-900">Clear All Counts</h3>
+                          </div>
+                          <div className="px-6 py-4">
+                            <p className="text-sm text-gray-600">
+                              Are you sure you want to clear all counted values for <strong>{trackerLocation}</strong>?
+                            </p>
+                            <p className="text-sm text-gray-500 mt-2">
+                              This will remove {allItemsWithCounts.length} counted SKUs. This action cannot be undone.
+                            </p>
+                          </div>
+                          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                            <button
+                              onClick={() => setShowTrackerClearConfirm(false)}
+                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => clearTrackerCounts(trackerLocation)}
+                              className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Confirmation Modal */}
                     {showTrackerConfirm && (() => {
