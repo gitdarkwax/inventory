@@ -928,7 +928,7 @@ export default function Dashboard({ session }: DashboardProps) {
   };
 
   // Clear tracker counts for current location (called from modal)
-  const clearTrackerCounts = (location: TrackerLocation) => {
+  const clearTrackerCounts = async (location: TrackerLocation) => {
     // Use startTransition to prevent blocking the UI
     startTransition(() => {
       setTrackerCounts(prev => ({
@@ -939,6 +939,40 @@ export default function Dashboard({ session }: DashboardProps) {
     const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
     localStorage.removeItem(localKey);
     setShowTrackerClearConfirm(false);
+    
+    // Delete draft from Google Drive
+    try {
+      await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}`, { method: 'DELETE' });
+    } catch (error) {
+      console.error('Failed to delete draft:', error);
+    }
+    
+    // Clear draft info
+    setTrackerDraftInfo(prev => ({ ...prev, [location]: null }));
+    
+    // Load the last submission from logs to show in badge
+    try {
+      const logsResponse = await fetch(`/api/warehouse/logs?location=${encodeURIComponent(location)}`);
+      if (logsResponse.ok) {
+        const logsData = await logsResponse.json();
+        const logs = logsData.logs || [];
+        const lastSubmission = logs[0];
+        if (lastSubmission) {
+          const isTest = lastSubmission.testMode || lastSubmission.submittedBy?.startsWith('[TEST]');
+          setTrackerLastSubmission(prev => ({
+            ...prev,
+            [location]: {
+              submittedAt: lastSubmission.timestamp,
+              submittedBy: lastSubmission.submittedBy?.replace('[TEST] ', '') || 'Unknown',
+              skuCount: lastSubmission.updates?.length || 0,
+              isTest: isTest,
+            },
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load last submission:', error);
+    }
   };
 
   // Helper to calculate inventory for selected locations
