@@ -255,6 +255,7 @@ export default function Dashboard({ session }: DashboardProps) {
     title: string;
     message: string;
   } | null>(null);
+  const [warehouseTestMode, setWarehouseTestMode] = useState(false);
 
   // Load phase out SKUs
   const loadPhaseOutSkus = async () => {
@@ -3794,19 +3795,33 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </div>
                               )}
                               
-                              <p className="text-xs text-gray-500 mt-4">
-                                This will update the on-hand quantities in Shopify for all {allItemsWithCounts.length} counted SKUs.
-                              </p>
-                            </div>
-                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                              <button
-                                onClick={() => setShowWarehouseConfirm(false)}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={async () => {
+                            <p className="text-xs text-gray-500 mt-4">
+                              This will update the on-hand quantities in Shopify for all {allItemsWithCounts.length} counted SKUs.
+                            </p>
+                            
+                            {/* Test Mode Toggle */}
+                            <label className="flex items-center gap-2 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={warehouseTestMode}
+                                onChange={(e) => setWarehouseTestMode(e.target.checked)}
+                                className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
+                              />
+                              <div>
+                                <span className="text-sm font-medium text-amber-800">Test Mode</span>
+                                <p className="text-xs text-amber-600">Skip Shopify update, only save to logs</p>
+                              </div>
+                            </label>
+                          </div>
+                          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                            <button
+                              onClick={() => setShowWarehouseConfirm(false)}
+                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={async () => {
                                   setIsSubmittingWarehouse(true);
                                   try {
                                     // Get the LA Office location ID
@@ -3823,23 +3838,36 @@ export default function Dashboard({ session }: DashboardProps) {
                                       locationId: locationId,
                                     }));
                                     
-                                    // Submit to Shopify
-                                    const response = await fetch('/api/inventory/update', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ updates }),
-                                    });
+                                    let result;
                                     
-                                    const result = await response.json();
-                                    
-                                    if (!response.ok) {
-                                      throw new Error(result.error || 'Failed to update inventory');
+                                    if (warehouseTestMode) {
+                                      // Test mode - simulate success without calling Shopify
+                                      result = {
+                                        summary: {
+                                          total: updates.length,
+                                          success: updates.length,
+                                          failed: 0,
+                                        }
+                                      };
+                                    } else {
+                                      // Submit to Shopify
+                                      const response = await fetch('/api/inventory/update', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ updates }),
+                                      });
+                                      
+                                      result = await response.json();
+                                      
+                                      if (!response.ok) {
+                                        throw new Error(result.error || 'Failed to update inventory');
+                                      }
                                     }
                                     
                                     // Save to submission log in Google Drive
                                     const logEntry = {
                                       timestamp: new Date().toISOString(),
-                                      submittedBy: session?.user?.name || 'Unknown',
+                                      submittedBy: (warehouseTestMode ? '[TEST] ' : '') + (session?.user?.name || 'Unknown'),
                                       summary: {
                                         totalSKUs: updates.length,
                                         discrepancies: discrepancies.length,
@@ -3864,19 +3892,25 @@ export default function Dashboard({ session }: DashboardProps) {
                                       console.error('Failed to save log to Google Drive:', logError);
                                     }
                                     
-                                    // Delete draft from Google Drive (data is now in logs)
-                                    try {
-                                      await fetch('/api/warehouse/draft', { method: 'DELETE' });
-                                      setDraftInfo(null);
-                                    } catch (draftError) {
-                                      console.error('Failed to delete draft:', draftError);
+                                    if (!warehouseTestMode) {
+                                      // Only delete draft and clear counts in non-test mode
+                                      // Delete draft from Google Drive (data is now in logs)
+                                      try {
+                                        await fetch('/api/warehouse/draft', { method: 'DELETE' });
+                                        setDraftInfo(null);
+                                      } catch (draftError) {
+                                        console.error('Failed to delete draft:', draftError);
+                                      }
+                                      
+                                      // Clear warehouse counts on success
+                                      setWarehouseCounts({});
+                                      localStorage.removeItem('warehouseCounts');
                                     }
                                     
-                                    // Clear warehouse counts on success
-                                    setWarehouseCounts({});
-                                    localStorage.removeItem('warehouseCounts');
-                                    
-                                    if (result.summary.failed > 0) {
+                                    if (warehouseTestMode) {
+                                      showWarehouseNotification('success', 'Test Submission Logged', 
+                                        `${updates.length} SKUs logged (Shopify not updated). Check logs to verify.`);
+                                    } else if (result.summary.failed > 0) {
                                       showWarehouseNotification('warning', 'Partial Success', 
                                         `${result.summary.success} SKUs updated successfully, ${result.summary.failed} failed.`);
                                     } else {
