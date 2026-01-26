@@ -112,11 +112,11 @@ export async function POST(request: NextRequest) {
     try {
       const cacheService = new InventoryCacheService();
       const inventoryCache = await cacheService.loadCache();
-      if (inventoryCache?.inventory) {
+      if (inventoryCache?.inventory?.inventory) {
         const insufficientStock: { sku: string; requested: number; available: number }[] = [];
         
         for (const item of items) {
-          const inventoryItem = inventoryCache.inventory.find(inv => inv.sku === item.sku);
+          const inventoryItem = inventoryCache.inventory.inventory.find(inv => inv.sku === item.sku);
           const availableAtOrigin = inventoryItem?.locations?.[origin] || 0;
           
           if (availableAtOrigin < item.quantity) {
