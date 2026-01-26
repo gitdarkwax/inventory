@@ -322,6 +322,61 @@ export default function Dashboard({ session }: DashboardProps) {
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
 
+  // Calculate incoming quantities from local transfers (not Shopify)
+  // This returns a map of destination -> SKU -> { inboundAir, inboundSea, airTransfers, seaTransfers }
+  const getIncomingFromTransfers = () => {
+    const result: Record<string, Record<string, {
+      inboundAir: number;
+      inboundSea: number;
+      airTransfers: Array<{ id: string; quantity: number; note: string | null; createdAt: string }>;
+      seaTransfers: Array<{ id: string; quantity: number; note: string | null; createdAt: string }>;
+    }>> = {};
+
+    // Only include transfers that are in_transit (not pending, delivered, partial, or cancelled)
+    const inTransitTransfers = transfers.filter(t => t.status === 'in_transit');
+
+    for (const transfer of inTransitTransfers) {
+      const dest = transfer.destination;
+      if (!result[dest]) {
+        result[dest] = {};
+      }
+
+      const isAir = transfer.transferType === 'Air Express' || transfer.transferType === 'Air Slow';
+      const isSea = transfer.transferType === 'Sea';
+      // Immediate transfers don't count as incoming (they complete instantly)
+
+      if (!isAir && !isSea) continue;
+
+      for (const item of transfer.items) {
+        if (!result[dest][item.sku]) {
+          result[dest][item.sku] = {
+            inboundAir: 0,
+            inboundSea: 0,
+            airTransfers: [],
+            seaTransfers: [],
+          };
+        }
+
+        const transferDetail = {
+          id: transfer.id,
+          quantity: item.quantity,
+          note: transfer.activityLog?.[0]?.action || null,
+          createdAt: transfer.createdAt,
+        };
+
+        if (isAir) {
+          result[dest][item.sku].inboundAir += item.quantity;
+          result[dest][item.sku].airTransfers.push(transferDetail);
+        } else if (isSea) {
+          result[dest][item.sku].inboundSea += item.quantity;
+          result[dest][item.sku].seaTransfers.push(transferDetail);
+        }
+      }
+    }
+
+    return result;
+  };
+
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -637,12 +692,16 @@ export default function Dashboard({ session }: DashboardProps) {
   };
 
   // Confirm Mark In Transit - updates Shopify inventory then transfer status
+  // For Immediate shipments: transfers stock directly (origin -> destination On Hand)
+  // For Air/Sea shipments: subtracts from origin only (incoming tracked in app)
   const confirmMarkInTransit = async () => {
     if (!transferToMarkInTransit || isMarkingInTransit) return;
     
+    const isImmediate = transferToMarkInTransit.transferType === 'Immediate';
+    
     setIsMarkingInTransit(true);
     try {
-      // Step 1: Update Shopify inventory (subtract from origin)
+      // Step 1: Update Shopify inventory
       const inventoryResponse = await fetch('/api/transfers/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -651,24 +710,33 @@ export default function Dashboard({ session }: DashboardProps) {
           transferId: transferToMarkInTransit.id,
           origin: transferToMarkInTransit.origin,
           destination: transferToMarkInTransit.destination,
+          shipmentType: transferToMarkInTransit.transferType,
           items: transferToMarkInTransit.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
         }),
       });
 
-      const inventoryData = await inventoryResponse.json();
+      const inventoryResult = await inventoryResponse.json();
 
       if (!inventoryResponse.ok) {
-        showProdNotification('error', 'Shopify Update Failed', inventoryData.details || inventoryData.error || 'Failed to update Shopify inventory');
+        showProdNotification('error', 'Shopify Update Failed', inventoryResult.details || inventoryResult.error || 'Failed to update Shopify inventory');
         return;
       }
 
       // Step 2: Update transfer status
+      // Immediate transfers are marked as 'delivered' since the stock transfer is instant
+      // Air/Sea transfers are marked as 'in_transit' since stock is incoming
+      const newStatus = isImmediate ? 'delivered' : 'in_transit';
+      
       const statusResponse = await fetch('/api/transfers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transferId: transferToMarkInTransit.id,
-          status: 'in_transit',
+          status: newStatus,
+          // For immediate transfers, also set received items = sent items
+          ...(isImmediate && {
+            receivedItems: transferToMarkInTransit.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
+          }),
         }),
       });
 
@@ -678,13 +746,18 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === transferToMarkInTransit.id ? statusData.transfer : t));
         setShowMarkInTransitConfirm(false);
         setTransferToMarkInTransit(null);
-        showProdNotification('success', 'In Transit', `Transfer ${transferToMarkInTransit.id} marked in transit. Shopify inventory updated.`);
+        
+        if (isImmediate) {
+          showProdNotification('success', 'Transfer Complete', `Transfer ${transferToMarkInTransit.id} completed. Stock moved from ${transferToMarkInTransit.origin} to ${transferToMarkInTransit.destination}.`);
+        } else {
+          showProdNotification('success', 'In Transit', `Transfer ${transferToMarkInTransit.id} marked in transit. Shopify inventory updated.`);
+        }
       } else {
         showProdNotification('error', 'Status Update Failed', statusData.error || 'Shopify updated but failed to update transfer status');
       }
     } catch (err) {
       console.error('Failed to mark in transit:', err);
-      showProdNotification('error', 'Update Failed', 'Failed to mark transfer in transit');
+      showProdNotification('error', 'Update Failed', 'Failed to process transfer');
     } finally {
       setIsMarkingInTransit(false);
     }
@@ -1613,8 +1686,50 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Filter and sort location detail (uses either inventoryLocationFilter for inline view or selectedLocation for modal)
   const activeLocationFilter = inventoryLocationFilter || selectedLocation;
+  
+  // Get incoming data from our local transfers (not Shopify)
+  const incomingFromTransfersData = getIncomingFromTransfers();
+  
   const filteredLocationDetail = activeLocationFilter && inventoryData?.locationDetails?.[activeLocationFilter]
     ? inventoryData.locationDetails[activeLocationFilter]
+        .map(item => {
+          // Override Shopify's incoming/inboundAir/inboundSea with our local transfer data
+          const localIncoming = incomingFromTransfersData[activeLocationFilter]?.[item.sku];
+          if (localIncoming) {
+            const totalLocalIncoming = localIncoming.inboundAir + localIncoming.inboundSea;
+            return {
+              ...item,
+              incoming: totalLocalIncoming, // Total incoming from local transfers
+              inboundAir: localIncoming.inboundAir,
+              inboundSea: localIncoming.inboundSea,
+              airTransfers: localIncoming.airTransfers.map(t => ({
+                id: t.id,
+                name: t.id,
+                quantity: t.quantity,
+                tags: ['Air'],
+                note: t.note,
+                createdAt: t.createdAt,
+              })),
+              seaTransfers: localIncoming.seaTransfers.map(t => ({
+                id: t.id,
+                name: t.id,
+                quantity: t.quantity,
+                tags: ['Sea'],
+                note: t.note,
+                createdAt: t.createdAt,
+              })),
+            };
+          }
+          // No local transfers for this SKU - use zeros (not Shopify data)
+          return {
+            ...item,
+            incoming: 0,
+            inboundAir: 0,
+            inboundSea: 0,
+            airTransfers: [],
+            seaTransfers: [],
+          };
+        })
         .filter(item => {
           // Phase out filter: hide phased out SKUs with zero available in this location
           const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
@@ -3240,20 +3355,17 @@ export default function Dashboard({ session }: DashboardProps) {
                     return laOffice + dtlaWH;
                   };
                   
-                  // Get inbound air to LA Office
+                  // Calculate incoming from our local transfers (not Shopify)
+                  const incomingFromTransfers = getIncomingFromTransfers();
+                  
+                  // Get inbound air to LA Office (from our local transfers)
                   const getLAInboundAir = (sku: string): number => {
-                    const laDetails = inventoryData.locationDetails?.['LA Office'];
-                    if (!laDetails) return 0;
-                    const detail = laDetails.find(d => d.sku === sku);
-                    return detail?.inboundAir || 0;
+                    return incomingFromTransfers['LA Office']?.[sku]?.inboundAir || 0;
                   };
                   
-                  // Get inbound sea to LA Office
+                  // Get inbound sea to LA Office (from our local transfers)
                   const getLAInboundSea = (sku: string): number => {
-                    const laDetails = inventoryData.locationDetails?.['LA Office'];
-                    if (!laDetails) return 0;
-                    const detail = laDetails.find(d => d.sku === sku);
-                    return detail?.inboundSea || 0;
+                    return incomingFromTransfers['LA Office']?.[sku]?.inboundSea || 0;
                   };
                   
                   // Get total incoming to LA Office (air + sea)
@@ -3261,28 +3373,40 @@ export default function Dashboard({ session }: DashboardProps) {
                     return getLAInboundAir(sku) + getLAInboundSea(sku);
                   };
                   
-                  // Get transfer notes for LA Office
+                  // Get transfer notes for LA Office (from our local transfers)
                   const getLATransferNotes = (sku: string): Array<{ id: string; note: string | null }> => {
-                    const laDetails = inventoryData.locationDetails?.['LA Office'];
-                    if (!laDetails) return [];
-                    const detail = laDetails.find(d => d.sku === sku);
-                    return detail?.transferNotes || [];
+                    const data = incomingFromTransfers['LA Office']?.[sku];
+                    if (!data) return [];
+                    const allTransfers = [...data.airTransfers, ...data.seaTransfers];
+                    return allTransfers.map(t => ({ id: t.id, note: t.note }));
                   };
                   
-                  // Get air transfers for LA Office
+                  // Get air transfers for LA Office (from our local transfers)
                   const getLAAirTransfers = (sku: string): TransferDetail[] => {
-                    const laDetails = inventoryData.locationDetails?.['LA Office'];
-                    if (!laDetails) return [];
-                    const detail = laDetails.find(d => d.sku === sku);
-                    return detail?.airTransfers || [];
+                    const data = incomingFromTransfers['LA Office']?.[sku];
+                    if (!data) return [];
+                    return data.airTransfers.map(t => ({
+                      id: t.id,
+                      name: t.id,
+                      quantity: t.quantity,
+                      tags: ['Air'],
+                      note: t.note,
+                      createdAt: t.createdAt,
+                    }));
                   };
                   
-                  // Get sea transfers for LA Office
+                  // Get sea transfers for LA Office (from our local transfers)
                   const getLASeaTransfers = (sku: string): TransferDetail[] => {
-                    const laDetails = inventoryData.locationDetails?.['LA Office'];
-                    if (!laDetails) return [];
-                    const detail = laDetails.find(d => d.sku === sku);
-                    return detail?.seaTransfers || [];
+                    const data = incomingFromTransfers['LA Office']?.[sku];
+                    if (!data) return [];
+                    return data.seaTransfers.map(t => ({
+                      id: t.id,
+                      name: t.id,
+                      quantity: t.quantity,
+                      tags: ['Sea'],
+                      note: t.note,
+                      createdAt: t.createdAt,
+                    }));
                   };
                   
                   // Get committed from LA (LA Office + DTLA WH)
@@ -6980,21 +7104,43 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 )}
 
-                {/* Mark In Transit Confirmation Modal */}
+                {/* Mark In Transit / Immediate Transfer Confirmation Modal */}
                 {showMarkInTransitConfirm && transferToMarkInTransit && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
                       <div className="px-6 py-4 border-b border-gray-200">
-                        <h3 className="text-lg font-semibold text-gray-900">Confirm Mark In Transit</h3>
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {transferToMarkInTransit.transferType === 'Immediate' 
+                            ? 'Confirm Immediate Transfer' 
+                            : 'Confirm Mark In Transit'}
+                        </h3>
                       </div>
                       <div className="px-6 py-4 space-y-4">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
-                          <p className="text-xs text-yellow-700 mt-1">
-                            • Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin}'s "On Hand" quantity<br/>
-                            • Stock will be <strong>added</strong> to {transferToMarkInTransit.destination}'s "Incoming" quantity
-                          </p>
-                        </div>
+                        {transferToMarkInTransit.transferType === 'Immediate' ? (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer - Updates Shopify</p>
+                            <p className="text-xs text-blue-700 mt-1">
+                              • Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin}'s "On Hand"<br/>
+                              • Stock will be <strong>added</strong> to {transferToMarkInTransit.destination}'s "On Hand"
+                            </p>
+                            <p className="text-xs text-blue-600 mt-2 italic">
+                              This is an instant inter-location transfer. No transit period.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                            <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
+                            <p className="text-xs text-yellow-700 mt-1">
+                              • Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin}'s "On Hand"<br/>
+                              • Incoming quantities will be tracked in this app (not in Shopify)
+                            </p>
+                            <p className="text-xs text-yellow-600 mt-2 italic">
+                              {transferToMarkInTransit.transferType === 'Sea' 
+                                ? 'Sea shipment - will appear in "In Sea" column' 
+                                : 'Air shipment - will appear in "In Air" column'}
+                            </p>
+                          </div>
+                        )}
                         
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
@@ -7016,7 +7162,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
 
                         <div className="border-t pt-3">
-                          <p className="text-sm font-medium text-gray-700 mb-2">Items to be shipped:</p>
+                          <p className="text-sm font-medium text-gray-700 mb-2">
+                            {transferToMarkInTransit.transferType === 'Immediate' ? 'Items to be transferred:' : 'Items to be shipped:'}
+                          </p>
                           <div className="bg-gray-50 rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
                             {transferToMarkInTransit.items.map((item, idx) => (
                               <div key={idx} className="flex justify-between text-sm">
@@ -7048,10 +7196,16 @@ export default function Dashboard({ session }: DashboardProps) {
                           className={`px-4 py-2 rounded-md text-sm font-medium ${
                             isMarkingInTransit
                               ? 'bg-green-400 text-white cursor-not-allowed'
-                              : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                              : transferToMarkInTransit.transferType === 'Immediate'
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                                : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                           }`}
                         >
-                          {isMarkingInTransit ? 'Updating Shopify...' : 'Confirm & Update Shopify'}
+                          {isMarkingInTransit 
+                            ? 'Updating Shopify...' 
+                            : transferToMarkInTransit.transferType === 'Immediate'
+                              ? 'Confirm Immediate Transfer'
+                              : 'Confirm & Update Shopify'}
                         </button>
                       </div>
                     </div>
@@ -7069,8 +7223,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                           <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
                           <p className="text-xs text-yellow-700 mt-1">
-                            • Stock will be <strong>subtracted</strong> from {selectedTransfer.destination}'s "Incoming" quantity<br/>
-                            • Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand" quantity
+                            • Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand" quantity<br/>
+                            • Transfer will be removed from incoming tracking in this app
                           </p>
                         </div>
                         

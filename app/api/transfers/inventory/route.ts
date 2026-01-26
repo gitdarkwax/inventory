@@ -1,6 +1,13 @@
 /**
  * Transfer Inventory API Route
  * Adjusts inventory quantities in Shopify when transfers change status
+ * 
+ * Note: Shopify doesn't allow API writes to the "incoming" field, so we track
+ * incoming quantities locally in our app based on in-transit transfers.
+ * 
+ * Shipment Types:
+ * - Air Express / Air Slow / Sea: Subtract from origin On Hand only (incoming tracked in app)
+ * - Immediate: Full inter-location transfer (subtract origin, add destination On Hand)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -9,6 +16,8 @@ import { InventoryCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+type ShipmentType = 'Air Express' | 'Air Slow' | 'Sea' | 'Immediate';
 
 interface TransferItem {
   sku: string;
@@ -20,6 +29,7 @@ interface MarkInTransitRequest {
   transferId: string;
   origin: string;
   destination: string;
+  shipmentType: ShipmentType;
   items: TransferItem[];
 }
 
@@ -56,7 +66,6 @@ const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
 async function adjustInventory(
   graphqlUrl: string,
   accessToken: string,
-  inventoryName: 'available' | 'incoming', // 'available' affects on_hand, 'incoming' is in-transit stock
   adjustments: Array<{
     inventoryItemId: string;
     locationId: string;
@@ -66,7 +75,7 @@ async function adjustInventory(
   reason: string
 ) {
   const input = {
-    name: inventoryName,
+    name: 'available', // Always adjust 'available' which affects on_hand
     reason: reason,
     changes: adjustments.map(adj => ({
       inventoryItemId: adj.inventoryItemId,
@@ -136,9 +145,10 @@ export async function POST(request: NextRequest) {
     const { locationIds, locationDetails } = inventoryCache.inventory;
 
     if (body.action === 'mark_in_transit') {
-      const { transferId, origin, destination, items } = body;
+      const { transferId, origin, destination, shipmentType, items } = body;
       
-      console.log(`📦 Marking transfer ${transferId} in transit: ${origin} → ${destination}`);
+      const isImmediate = shipmentType === 'Immediate';
+      console.log(`📦 ${isImmediate ? 'Processing immediate transfer' : 'Marking transfer in transit'} ${transferId}: ${origin} → ${destination} [${shipmentType}]`);
       
       const originLocationId = locationIds[origin];
       const destLocationId = locationIds[destination];
@@ -158,7 +168,7 @@ export async function POST(request: NextRequest) {
         delta: number;
         ledgerDocumentUri: string;
       }> = [];
-      const destIncomingAdjustments: Array<{
+      const destAdjustments: Array<{
         inventoryItemId: string;
         locationId: string;
         delta: number;
@@ -174,7 +184,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Subtract from origin's available (on_hand)
+        // Subtract from origin's On Hand
         originAdjustments.push({
           inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
           locationId: `gid://shopify/Location/${originLocationId}`,
@@ -182,30 +192,34 @@ export async function POST(request: NextRequest) {
           ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/origin`,
         });
 
-        // Add to destination's incoming
-        destIncomingAdjustments.push({
-          inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-          locationId: `gid://shopify/Location/${destLocationId}`,
-          delta: item.quantity,
-          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/incoming`,
-        });
+        // For Immediate transfers: also add to destination's On Hand
+        if (isImmediate) {
+          destAdjustments.push({
+            inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+            locationId: `gid://shopify/Location/${destLocationId}`,
+            delta: item.quantity,
+            ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/destination`,
+          });
+        }
+        // For Air/Sea transfers: incoming is tracked locally in our app, not in Shopify
       }
 
       if (errors.length > 0 && originAdjustments.length === 0) {
         return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
       }
 
-      // Execute the adjustments (two separate calls - one for available, one for incoming)
       try {
-        // Step 1: Subtract from origin's available (on_hand)
-        await adjustInventory(graphqlUrl, accessToken, 'available', originAdjustments, 'movement_updated');
+        // Step 1: Subtract from origin's On Hand
+        await adjustInventory(graphqlUrl, accessToken, originAdjustments, 'movement_updated');
         console.log(`✅ Subtracted from origin ${origin}: ${originAdjustments.length} SKUs`);
 
-        // Step 2: Add to destination's incoming
-        await adjustInventory(graphqlUrl, accessToken, 'incoming', destIncomingAdjustments, 'movement_created');
-        console.log(`✅ Added to destination ${destination} incoming: ${destIncomingAdjustments.length} SKUs`);
+        // Step 2 (Immediate only): Add to destination's On Hand
+        if (isImmediate && destAdjustments.length > 0) {
+          await adjustInventory(graphqlUrl, accessToken, destAdjustments, 'received');
+          console.log(`✅ Added to destination ${destination}: ${destAdjustments.length} SKUs`);
+        }
 
-        console.log(`✅ Transfer ${transferId} fully adjusted`);
+        console.log(`✅ Transfer ${transferId} Shopify adjustment complete`);
       } catch (error) {
         console.error('❌ Shopify adjustment failed:', error);
         return NextResponse.json({ 
@@ -219,6 +233,8 @@ export async function POST(request: NextRequest) {
         success: true,
         action: 'mark_in_transit',
         transferId,
+        shipmentType,
+        isImmediate,
         itemsAdjusted: items.length,
         warnings: errors.length > 0 ? errors : undefined,
       });
@@ -236,12 +252,6 @@ export async function POST(request: NextRequest) {
 
       // Get inventoryItemIds for each SKU from destination location details
       const destDetails = locationDetails[destination] || [];
-      const incomingAdjustments: Array<{
-        inventoryItemId: string;
-        locationId: string;
-        delta: number;
-        ledgerDocumentUri: string;
-      }> = [];
       const availableAdjustments: Array<{
         inventoryItemId: string;
         locationId: string;
@@ -265,20 +275,14 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Subtract from destination's incoming
-        incomingAdjustments.push({
-          inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-          locationId: `gid://shopify/Location/${destLocationId}`,
-          delta: -item.quantity,
-          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery-incoming`,
-        });
-
-        // Add to destination's available (on_hand)
+        // Add to destination's On Hand
+        // Note: Incoming is tracked locally in our app (not in Shopify)
+        // so we only need to add to On Hand when delivery is logged
         availableAdjustments.push({
           inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
           locationId: `gid://shopify/Location/${destLocationId}`,
           delta: item.quantity,
-          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery-onhand`,
+          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery`,
         });
       }
 
@@ -286,15 +290,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
       }
 
-      // Execute the adjustments (two separate calls)
       try {
-        // Step 1: Subtract from incoming
-        await adjustInventory(graphqlUrl, accessToken, 'incoming', incomingAdjustments, 'movement_updated');
-        console.log(`✅ Subtracted from ${destination} incoming: ${incomingAdjustments.length} SKUs`);
-
-        // Step 2: Add to available (on_hand)
-        await adjustInventory(graphqlUrl, accessToken, 'available', availableAdjustments, 'received');
-        console.log(`✅ Added to ${destination} on_hand: ${availableAdjustments.length} SKUs`);
+        // Add to destination's On Hand
+        await adjustInventory(graphqlUrl, accessToken, availableAdjustments, 'received');
+        console.log(`✅ Added to ${destination} On Hand: ${availableAdjustments.length} SKUs`);
 
         console.log(`✅ Delivery logged for transfer ${transferId}`);
       } catch (error) {
