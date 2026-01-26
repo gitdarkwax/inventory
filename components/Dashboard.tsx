@@ -257,6 +257,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editOrderVendor, setEditOrderVendor] = useState('');
   const [editOrderEta, setEditOrderEta] = useState('');
   const [editOrderNotes, setEditOrderNotes] = useState('');
+  const [editOrderSkuSuggestionIndex, setEditOrderSkuSuggestionIndex] = useState<number | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [duplicatePoError, setDuplicatePoError] = useState<string | null>(null); // PO# that's duplicate
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
@@ -302,6 +303,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editTransferTracking, setEditTransferTracking] = useState('');
   const [editTransferEta, setEditTransferEta] = useState('');
   const [editTransferNotes, setEditTransferNotes] = useState('');
+  const [editTransferSkuSuggestionIndex, setEditTransferSkuSuggestionIndex] = useState<number | null>(null);
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
   const [showCancelTransferConfirm, setShowCancelTransferConfirm] = useState(false);
   const [isCancellingTransfer, setIsCancellingTransfer] = useState(false);
@@ -5720,40 +5722,75 @@ export default function Dashboard({ session }: DashboardProps) {
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
-                      {editOrderItems.map((item, index) => (
-                        <div key={index} className="flex gap-2 mb-2">
-                          <input
-                            type="text"
-                            placeholder="SKU"
-                            value={item.sku}
-                            onChange={(e) => {
-                              const updated = [...editOrderItems];
-                              updated[index].sku = e.target.value.toUpperCase();
-                              setEditOrderItems(updated);
-                            }}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          />
-                          <input
-                            type="number"
-                            placeholder="Qty"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const updated = [...editOrderItems];
-                              updated[index].quantity = e.target.value;
-                              setEditOrderItems(updated);
-                            }}
-                            className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          />
-                          {editOrderItems.length > 1 && (
-                            <button
-                              onClick={() => setEditOrderItems(editOrderItems.filter((_, i) => i !== index))}
-                              className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      {editOrderItems.map((item, index) => {
+                        const inputValue = item.sku.toUpperCase();
+                        const skuSuggestions = inputValue.length >= 2 && inventoryData
+                          ? inventoryData.inventory
+                              .filter(inv => inv.sku.toUpperCase().includes(inputValue))
+                              .slice(0, 8)
+                              .map(inv => inv.sku)
+                          : [];
+                        
+                        return (
+                          <div key={index} className="flex gap-2 mb-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                placeholder="SKU"
+                                value={item.sku}
+                                onChange={(e) => {
+                                  const updated = [...editOrderItems];
+                                  updated[index].sku = e.target.value.toUpperCase();
+                                  setEditOrderItems(updated);
+                                  setEditOrderSkuSuggestionIndex(index);
+                                }}
+                                onFocus={() => setEditOrderSkuSuggestionIndex(index)}
+                                onBlur={() => setTimeout(() => setEditOrderSkuSuggestionIndex(null), 150)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              {editOrderSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                  {skuSuggestions.map((sku) => (
+                                    <button
+                                      key={sku}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        const updated = [...editOrderItems];
+                                        updated[index].sku = sku;
+                                        setEditOrderItems(updated);
+                                        setEditOrderSkuSuggestionIndex(null);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700"
+                                    >
+                                      {sku}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              placeholder="Qty"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const updated = [...editOrderItems];
+                                updated[index].quantity = e.target.value;
+                                setEditOrderItems(updated);
+                              }}
+                              className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            />
+                            {editOrderItems.length > 1 && (
+                              <button
+                                onClick={() => setEditOrderItems(editOrderItems.filter((_, i) => i !== index))}
+                                className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                       <button
                         onClick={() => setEditOrderItems([...editOrderItems, { sku: '', quantity: '' }])}
                         className="text-sm text-blue-600 hover:text-blue-800"
@@ -6518,11 +6555,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                       const updated = [...editTransferItems];
                                       updated[index].sku = e.target.value.toUpperCase();
                                       setEditTransferItems(updated);
+                                      setEditTransferSkuSuggestionIndex(index);
                                     }}
+                                    onFocus={() => setEditTransferSkuSuggestionIndex(index)}
+                                    onBlur={() => setTimeout(() => setEditTransferSkuSuggestionIndex(null), 150)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                   />
-                                  {skuSuggestions.length > 0 && (
-                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
+                                  {editTransferSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                                       {skuSuggestions.map((sku) => (
                                         <button
                                           key={sku}
@@ -6532,6 +6572,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                             const updated = [...editTransferItems];
                                             updated[index].sku = sku;
                                             setEditTransferItems(updated);
+                                            setEditTransferSkuSuggestionIndex(null);
                                           }}
                                           className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700"
                                         >
