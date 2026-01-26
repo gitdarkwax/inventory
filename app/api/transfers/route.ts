@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { TransfersService, CarrierType, TransferType } from '@/lib/transfers';
-import { AnalyticsCacheService } from '@/lib/inventory-cache';
+import { InventoryCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Check stock availability at origin location
     try {
-      const inventoryCache = await AnalyticsCacheService.loadFromCache();
+      const inventoryCache = await InventoryCacheService.loadFromCache();
       if (inventoryCache?.inventory) {
         const insufficientStock: { sku: string; requested: number; available: number }[] = [];
         
