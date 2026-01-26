@@ -262,6 +262,13 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [isLoggingDelivery, setIsLoggingDelivery] = useState(false);
+  
+  // Toast notification state for Production/Transfers
+  const [prodNotification, setProdNotification] = useState<{
+    type: 'success' | 'error' | 'warning';
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Production tab view toggle (Production Orders vs Transfers)
   const [productionViewType, setProductionViewType] = useState<ProductionViewType>('orders');
@@ -504,17 +511,17 @@ export default function Dashboard({ session }: DashboardProps) {
     if (isCreatingTransfer) return; // Prevent double-clicks
     
     if (!newTransferOrigin) {
-      alert('Please select an origin location');
+      showProdNotification('error', 'Missing Origin', 'Please select an origin location');
       return;
     }
     
     if (!newTransferDestination) {
-      alert('Please select a destination location');
+      showProdNotification('error', 'Missing Destination', 'Please select a destination location');
       return;
     }
     
     if (newTransferOrigin === newTransferDestination) {
-      alert('Origin and destination cannot be the same');
+      showProdNotification('error', 'Invalid Locations', 'Origin and destination cannot be the same');
       return;
     }
     
@@ -523,7 +530,7 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
 
     if (validItems.length === 0) {
-      alert('Please add at least one SKU with quantity');
+      showProdNotification('error', 'Missing Items', 'Please add at least one SKU with quantity');
       return;
     }
 
@@ -556,13 +563,13 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferTracking('');
         setNewTransferEta('');
         setNewTransferNotes('');
-        // Transfer created successfully
+        showProdNotification('success', 'Transfer Created', `Transfer ${data.transfer.id} created successfully`);
       } else {
-        alert(data.error || 'Failed to create transfer');
+        showProdNotification('error', 'Create Failed', data.error || 'Failed to create transfer');
       }
     } catch (err) {
       console.error('Failed to create transfer:', err);
-      alert('Failed to create transfer');
+      showProdNotification('error', 'Create Failed', 'Failed to create transfer');
     } finally {
       setIsCreatingTransfer(false);
     }
@@ -584,13 +591,14 @@ export default function Dashboard({ session }: DashboardProps) {
 
       if (response.ok) {
         setTransfers(prev => prev.map(t => t.id === transferId ? data.transfer : t));
-        // Status updated successfully
+        const statusLabel = newStatus === 'in_transit' ? 'In Transit' : newStatus === 'delivered' ? 'Delivered' : newStatus;
+        showProdNotification('success', 'Status Updated', `Transfer ${transferId} marked as ${statusLabel}`);
       } else {
-        alert(data.error || 'Failed to update transfer');
+        showProdNotification('error', 'Update Failed', data.error || 'Failed to update transfer');
       }
     } catch (err) {
       console.error('Failed to update transfer:', err);
-      alert('Failed to update transfer');
+      showProdNotification('error', 'Update Failed', 'Failed to update transfer status');
     }
   };
 
@@ -603,12 +611,12 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
 
     if (validItems.length === 0) {
-      alert('Please add at least one SKU with quantity');
+      showProdNotification('error', 'Missing Items', 'Please add at least one SKU with quantity');
       return;
     }
 
     if (editTransferOrigin === editTransferDestination) {
-      alert('Origin and destination cannot be the same');
+      showProdNotification('error', 'Invalid Locations', 'Origin and destination cannot be the same');
       return;
     }
 
@@ -636,13 +644,13 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowEditTransferForm(false);
         setSelectedTransfer(data.transfer);
-        // Transfer updated successfully
+        showProdNotification('success', 'Transfer Updated', 'Transfer updated successfully');
       } else {
-        alert(data.error || 'Failed to update transfer');
+        showProdNotification('error', 'Update Failed', data.error || 'Failed to update transfer');
       }
     } catch (err) {
       console.error('Failed to update transfer:', err);
-      alert('Failed to update transfer');
+      showProdNotification('error', 'Update Failed', 'Failed to update transfer');
     } finally {
       setIsSavingTransfer(false);
     }
@@ -670,13 +678,13 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowCancelTransferConfirm(false);
         setSelectedTransfer(null);
-        // Transfer cancelled successfully
+        showProdNotification('success', 'Transfer Cancelled', `Transfer ${selectedTransfer.id} has been cancelled`);
       } else {
-        alert(data.error || 'Failed to cancel transfer');
+        showProdNotification('error', 'Cancel Failed', data.error || 'Failed to cancel transfer');
       }
     } catch (err) {
       console.error('Failed to cancel transfer:', err);
-      alert('Failed to cancel transfer');
+      showProdNotification('error', 'Cancel Failed', 'Failed to cancel transfer');
     } finally {
       setIsCancellingTransfer(false);
     }
@@ -705,13 +713,13 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
 
     if (validItems.length === 0) {
-      alert('Please add at least one item with a valid SKU and quantity');
+      showProdNotification('error', 'Missing Items', 'Please add at least one item with a valid SKU and quantity');
       return;
     }
 
     // Validate PO number (must be more than just "PO")
     if (!newOrderPoNumber || newOrderPoNumber.trim() === 'PO') {
-      alert('Please enter a PO number');
+      showProdNotification('error', 'Missing PO Number', 'Please enter a PO number');
       return;
     }
 
@@ -747,7 +755,7 @@ export default function Dashboard({ session }: DashboardProps) {
         alert(data.error || 'Failed to create order');
       }
     } catch (err) {
-      alert('Failed to create order');
+      showProdNotification('error', 'Create Failed', 'Failed to create production order');
     } finally {
       setIsCreatingOrder(false);
     }
@@ -765,12 +773,13 @@ export default function Dashboard({ session }: DashboardProps) {
       if (response.ok) {
         await loadProductionOrders();
         setSelectedOrder(null);
+        showProdNotification('success', 'Order Updated', 'Production order updated successfully');
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to update order');
+        showProdNotification('error', 'Update Failed', data.error || 'Failed to update order');
       }
     } catch (err) {
-      alert('Failed to update order');
+      showProdNotification('error', 'Update Failed', 'Failed to update order');
     }
   };
 
@@ -783,7 +792,7 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
 
     if (validDeliveries.length === 0) {
-      alert('Please enter at least one delivery quantity');
+      showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
       return;
     }
 
@@ -801,12 +810,13 @@ export default function Dashboard({ session }: DashboardProps) {
         setDeliveryItems([]);
         setSelectedOrder(data.order);
         await loadProductionOrders();
+        showProdNotification('success', 'Delivery Logged', 'Delivery has been recorded successfully');
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to log delivery');
+        showProdNotification('error', 'Log Failed', data.error || 'Failed to log delivery');
       }
     } catch (err) {
-      alert('Failed to log delivery');
+      showProdNotification('error', 'Log Failed', 'Failed to log delivery');
     } finally {
       setIsLoggingDelivery(false);
     }
@@ -821,7 +831,7 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
 
     if (validItems.length === 0) {
-      alert('Please add at least one item with a valid SKU and quantity');
+      showProdNotification('error', 'Missing Items', 'Please add at least one item with a valid SKU and quantity');
       return;
     }
 
@@ -850,12 +860,13 @@ export default function Dashboard({ session }: DashboardProps) {
         setShowEditForm(false);
         setSelectedOrder(data.order);
         await loadProductionOrders();
+        showProdNotification('success', 'Order Updated', 'Production order updated successfully');
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to update order');
+        showProdNotification('error', 'Update Failed', data.error || 'Failed to update order');
       }
     } catch (err) {
-      alert('Failed to update order');
+      showProdNotification('error', 'Update Failed', 'Failed to update order');
     } finally {
       setIsSavingOrder(false);
     }
@@ -877,12 +888,13 @@ export default function Dashboard({ session }: DashboardProps) {
         setShowCancelConfirm(false);
         setSelectedOrder(null);
         await loadProductionOrders();
+        showProdNotification('success', 'Order Cancelled', 'Production order has been cancelled');
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to cancel order');
+        showProdNotification('error', 'Cancel Failed', data.error || 'Failed to cancel order');
       }
     } catch (err) {
-      alert('Failed to cancel order');
+      showProdNotification('error', 'Cancel Failed', 'Failed to cancel order');
     } finally {
       setIsCancellingOrder(false);
     }
@@ -1209,6 +1221,13 @@ export default function Dashboard({ session }: DashboardProps) {
     setTrackerNotification({ type, title, message });
     // Auto-dismiss after 5 seconds for success, 8 seconds for errors
     setTimeout(() => setTrackerNotification(null), type === 'error' ? 8000 : 5000);
+  };
+
+  // Show production/transfers notification
+  const showProdNotification = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+    setProdNotification({ type, title, message });
+    // Auto-dismiss after 5 seconds for success, 8 seconds for errors
+    setTimeout(() => setProdNotification(null), type === 'error' ? 8000 : 5000);
   };
 
   // Clear tracker counts for current location (called from modal)
@@ -6580,6 +6599,62 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 )}
               </>
+            )}
+            
+            {/* Toast Notification for Production/Transfers */}
+            {prodNotification && (
+              <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+                <div className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border ${
+                  prodNotification.type === 'success' 
+                    ? 'bg-green-50 border-green-200' 
+                    : prodNotification.type === 'warning'
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                    prodNotification.type === 'success'
+                      ? 'bg-green-100 text-green-600'
+                      : prodNotification.type === 'warning'
+                      ? 'bg-amber-100 text-amber-600'
+                      : 'bg-red-100 text-red-600'
+                  }`}>
+                    {prodNotification.type === 'success' ? '✓' : 
+                     prodNotification.type === 'warning' ? '!' : '✕'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${
+                      prodNotification.type === 'success'
+                        ? 'text-green-800'
+                        : prodNotification.type === 'warning'
+                        ? 'text-amber-800'
+                        : 'text-red-800'
+                    }`}>
+                      {prodNotification.title}
+                    </p>
+                    <p className={`text-sm mt-0.5 ${
+                      prodNotification.type === 'success'
+                        ? 'text-green-600'
+                        : prodNotification.type === 'warning'
+                        ? 'text-amber-600'
+                        : 'text-red-600'
+                    }`}>
+                      {prodNotification.message}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setProdNotification(null)}
+                    className={`flex-shrink-0 p-1 rounded hover:bg-opacity-20 ${
+                      prodNotification.type === 'success'
+                        ? 'text-green-500 hover:bg-green-500'
+                        : prodNotification.type === 'warning'
+                        ? 'text-amber-500 hover:bg-amber-500'
+                        : 'text-red-500 hover:bg-red-500'
+                    }`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
