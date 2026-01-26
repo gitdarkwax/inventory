@@ -132,7 +132,7 @@ export async function PATCH(request: NextRequest) {
       trackingNumber?: string;
       eta?: string;
       notes?: string;
-      status?: 'pending' | 'in_transit' | 'delivered' | 'cancelled';
+      status?: 'draft' | 'in_transit' | 'delivered' | 'cancelled';
     };
 
     if (!transferId) {

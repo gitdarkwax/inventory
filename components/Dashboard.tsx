@@ -130,7 +130,7 @@ interface TransferItem {
   quantity: number;
 }
 
-type TransferStatus = 'pending' | 'in_transit' | 'delivered' | 'cancelled';
+type TransferStatus = 'draft' | 'in_transit' | 'delivered' | 'cancelled';
 type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
 
 interface Transfer {
@@ -278,7 +278,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
   const [newTransferEta, setNewTransferEta] = useState('');
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'in_transit' | 'completed'>('in_transit');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'draft' | 'in_transit' | 'completed'>('in_transit');
   const [transferDateFilter, setTransferDateFilter] = useState('all');
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
@@ -4877,10 +4877,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
                     <select
                       value={transferFilterStatus}
-                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'in_transit' | 'completed')}
+                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'draft' | 'in_transit' | 'completed')}
                       className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
                     >
                       <option value="all">All Transfers</option>
+                      <option value="draft">Draft</option>
                       <option value="in_transit">In Transit</option>
                       <option value="completed">Completed</option>
                     </select>
@@ -5809,7 +5810,8 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Apply filters
                   const filteredTransfers = transfers.filter(transfer => {
                     // Status filter
-                    if (transferFilterStatus === 'in_transit' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
+                    if (transferFilterStatus === 'draft' && transfer.status !== 'draft') return false;
+                    if (transferFilterStatus === 'in_transit' && transfer.status !== 'in_transit') return false;
                     if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
                     
                     // SKU search filter
@@ -5874,12 +5876,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       <table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: '70px' }} />
+                          <col style={{ width: '110px' }} />
+                          <col style={{ width: '110px' }} />
                           <col style={{ width: '100px' }} />
-                          <col style={{ width: '100px' }} />
-                          <col style={{ width: '90px' }} />
-                          <col style={{ width: '140px' }} />
-                          <col style={{ width: '100px' }} />
-                          <col style={{ width: '100px' }} />
+                          <col style={{ width: '160px' }} />
+                          <col style={{ width: '120px' }} />
                           <col style={{ width: '90px' }} />
                         </colgroup>
                         <thead className="bg-gray-50 border-b border-gray-200">
@@ -5890,7 +5891,6 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrier / Tracking</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Est. Arrival</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                           </tr>
                         </thead>
@@ -5947,14 +5947,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                     ) : '—'}
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-500">
-                                    {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-500">
-                                    {new Date(transfer.createdAt).toLocaleDateString()}
+                                    {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                   </td>
                                   <td className="px-4 py-3">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                      transfer.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                      transfer.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
                                       transfer.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
                                       transfer.status === 'delivered' ? 'bg-green-100 text-green-800' :
                                       'bg-gray-100 text-gray-800'
@@ -5967,7 +5964,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 {/* Expanded Details Row */}
                                 {isExpanded && (
                                   <tr>
-                                    <td colSpan={8} className="bg-gray-50 px-4 py-4">
+                                    <td colSpan={7} className="bg-gray-50 px-4 py-4">
                                       <div className="space-y-4">
                                         {/* Meta info */}
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -6081,7 +6078,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <div className="flex gap-2 pt-2">
                                           {!['delivered', 'cancelled'].includes(transfer.status) ? (
                                             <>
-                                              {['pending', 'in_transit'].includes(transfer.status) && (
+                                              {/* Draft status: show Mark In Transit green button */}
+                                              {transfer.status === 'draft' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
+                                                  className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                                                >
+                                                  Mark In Transit
+                                                </button>
+                                              )}
+                                              {/* In Transit status: show Log Delivery green button */}
+                                              {transfer.status === 'in_transit' && (
                                                 <button
                                                   type="button"
                                                   onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'delivered'); }}
@@ -6107,15 +6115,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                               >
                                                 Edit
                                               </button>
-                                              {transfer.status === 'pending' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
-                                                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
-                                                >
-                                                  Mark In Transit
-                                                </button>
-                                              )}
                                               <button
                                                 type="button"
                                                 onClick={(e) => { e.stopPropagation(); setShowCancelTransferConfirm(true); }}

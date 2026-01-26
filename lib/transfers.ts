@@ -17,7 +17,7 @@ export interface ActivityLogEntry {
   details?: string;
 }
 
-export type TransferStatus = 'pending' | 'in_transit' | 'delivered' | 'cancelled';
+export type TransferStatus = 'draft' | 'in_transit' | 'delivered' | 'cancelled';
 export type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
 
 export interface Transfer {
@@ -285,7 +285,7 @@ export class TransfersService {
       trackingNumber: trackingNumber || '',
       eta: eta || undefined,
       notes: notes || '',
-      status: 'pending',
+      status: 'draft',
       createdBy,
       createdByEmail,
       createdAt: now,
@@ -365,7 +365,7 @@ export class TransfersService {
     }
     if (updates.status && updates.status !== transfer.status) {
       const statusLabels: Record<string, string> = {
-        'pending': 'Pending',
+        'draft': 'Draft',
         'in_transit': 'In Transit',
         'delivered': 'Delivered',
         'cancelled': 'Cancelled',
