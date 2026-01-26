@@ -110,7 +110,8 @@ export async function POST(request: NextRequest) {
 
     // Check stock availability at origin location
     try {
-      const inventoryCache = await InventoryCacheService.loadFromCache();
+      const cacheService = new InventoryCacheService();
+      const inventoryCache = await cacheService.loadCache();
       if (inventoryCache?.inventory) {
         const insufficientStock: { sku: string; requested: number; available: number }[] = [];
         
