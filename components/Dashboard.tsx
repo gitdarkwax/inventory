@@ -140,6 +140,7 @@ interface Transfer {
   items: TransferItem[];
   carrier?: CarrierType;
   trackingNumber?: string;
+  eta?: string;
   notes: string;
   status: TransferStatus;
   createdBy: string;
@@ -276,7 +277,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferCarrier, setNewTransferCarrier] = useState<CarrierType>('');
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
+  const [newTransferEta, setNewTransferEta] = useState('');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'in_transit' | 'completed'>('in_transit');
+  const [transferDateFilter, setTransferDateFilter] = useState('all');
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
   const [showTransferSkuSearchSuggestions, setShowTransferSkuSearchSuggestions] = useState(false);
@@ -289,6 +292,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string }[]>([]);
   const [editTransferCarrier, setEditTransferCarrier] = useState<CarrierType>('');
   const [editTransferTracking, setEditTransferTracking] = useState('');
+  const [editTransferEta, setEditTransferEta] = useState('');
   const [editTransferNotes, setEditTransferNotes] = useState('');
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
   const [showCancelTransferConfirm, setShowCancelTransferConfirm] = useState(false);
@@ -535,6 +539,7 @@ export default function Dashboard({ session }: DashboardProps) {
           items: validItems,
           carrier: newTransferCarrier || undefined,
           trackingNumber: newTransferTracking.trim() || undefined,
+          eta: newTransferEta || undefined,
           notes: newTransferNotes.trim(),
         }),
       });
@@ -549,6 +554,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferItems([{ sku: '', quantity: '' }]);
         setNewTransferCarrier('');
         setNewTransferTracking('');
+        setNewTransferEta('');
         setNewTransferNotes('');
         // Transfer created successfully
       } else {
@@ -619,6 +625,7 @@ export default function Dashboard({ session }: DashboardProps) {
           items: validItems,
           carrier: editTransferCarrier || undefined,
           trackingNumber: editTransferTracking.trim() || undefined,
+          eta: editTransferEta || undefined,
           notes: editTransferNotes.trim(),
         }),
       });
@@ -4762,7 +4769,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     onClick={() => setShowNewTransferForm(true)}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                   >
-                    + Create New Transfer
+                    + New Transfer
                   </button>
                 )}
               </div>
@@ -4870,11 +4877,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
                     <select
                       value={transferFilterStatus}
-                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
+                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'in_transit' | 'completed')}
                       className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
                     >
                       <option value="all">All Transfers</option>
-                      <option value="active">Active</option>
+                      <option value="in_transit">In Transit</option>
                       <option value="completed">Completed</option>
                     </select>
                   </div>
@@ -4931,13 +4938,29 @@ export default function Dashboard({ session }: DashboardProps) {
                       })()}
                     </div>
                   </div>
-                  {(transferSkuSearchSelected || transferFilterStatus !== 'active') && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                    <select
+                      value={transferDateFilter}
+                      onChange={(e) => setTransferDateFilter(e.target.value)}
+                      className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="1m">Last 1 Month</option>
+                      <option value="3m">Last 3 Months</option>
+                      <option value="6m">Last 6 Months</option>
+                      <option value="1y">Last 1 Year</option>
+                      <option value="2y">Last 2 Years</option>
+                    </select>
+                  </div>
+                  {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'in_transit') && (
                     <button
                       type="button"
                       onClick={() => {
                         setTransferSkuSearchQuery('');
                         setTransferSkuSearchSelected('');
-                        setTransferFilterStatus('active');
+                        setTransferFilterStatus('in_transit');
+                        setTransferDateFilter('all');
                       }}
                       className="text-sm text-gray-500 hover:text-gray-700"
                     >
@@ -5786,7 +5809,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Apply filters
                   const filteredTransfers = transfers.filter(transfer => {
                     // Status filter
-                    if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
+                    if (transferFilterStatus === 'in_transit' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
                     if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
                     
                     // SKU search filter
@@ -5795,6 +5818,23 @@ export default function Dashboard({ session }: DashboardProps) {
                         item.sku.toUpperCase() === transferSkuSearchSelected.toUpperCase()
                       );
                       if (!hasMatchingSku) return false;
+                    }
+                    
+                    // Date filter (based on createdAt)
+                    if (transferDateFilter !== 'all') {
+                      const transferDate = new Date(transfer.createdAt);
+                      const now = new Date();
+                      let cutoffDate = new Date();
+                      
+                      switch (transferDateFilter) {
+                        case '1m': cutoffDate.setMonth(now.getMonth() - 1); break;
+                        case '3m': cutoffDate.setMonth(now.getMonth() - 3); break;
+                        case '6m': cutoffDate.setMonth(now.getMonth() - 6); break;
+                        case '1y': cutoffDate.setFullYear(now.getFullYear() - 1); break;
+                        case '2y': cutoffDate.setFullYear(now.getFullYear() - 2); break;
+                      }
+                      
+                      if (transferDate < cutoffDate) return false;
                     }
                     
                     return true;
@@ -5916,6 +5956,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                               <p><span className="text-gray-500">Destination:</span> {transfer.destination}</p>
                                               {transfer.carrier && <p><span className="text-gray-500">Carrier:</span> {transfer.carrier}</p>}
                                               {transfer.trackingNumber && <p><span className="text-gray-500">Tracking:</span> {transfer.trackingNumber}</p>}
+                                              {transfer.eta && <p><span className="text-gray-500">Est. Delivery:</span> {new Date(transfer.eta).toLocaleDateString()}</p>}
                                               {transfer.notes && <p><span className="text-gray-500">Notes:</span> {transfer.notes}</p>}
                                               <p><span className="text-gray-500">Created:</span> {new Date(transfer.createdAt).toLocaleString()} by {transfer.createdBy}</p>
                                               {transfer.deliveredAt && <p><span className="text-gray-500">Delivered:</span> {new Date(transfer.deliveredAt).toLocaleString()}</p>}
@@ -5949,6 +5990,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   setEditTransferItems(transfer.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
                                                   setEditTransferCarrier(transfer.carrier || '');
                                                   setEditTransferTracking(transfer.trackingNumber || '');
+                                                  setEditTransferEta(transfer.eta || '');
                                                   setEditTransferNotes(transfer.notes || '');
                                                   setShowEditTransferForm(true);
                                                 }}
@@ -6112,8 +6154,8 @@ export default function Dashboard({ session }: DashboardProps) {
                           </button>
                         </div>
                         
-                        {/* Carrier & Tracking */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Carrier, Tracking & Est. Delivery */}
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Carrier (optional)</label>
                             <select
@@ -6128,13 +6170,22 @@ export default function Dashboard({ session }: DashboardProps) {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Tracking Number (optional)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Tracking # (optional)</label>
                             <input
                               type="text"
                               value={newTransferTracking}
                               onChange={(e) => setNewTransferTracking(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                              placeholder="e.g. 1Z999AA10123456784"
+                              placeholder="e.g. 1Z999AA1012345"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Est. Delivery (optional)</label>
+                            <input
+                              type="date"
+                              value={newTransferEta}
+                              onChange={(e) => setNewTransferEta(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             />
                           </div>
                         </div>
@@ -6161,6 +6212,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             setNewTransferItems([{ sku: '', quantity: '' }]);
                             setNewTransferCarrier('');
                             setNewTransferTracking('');
+                            setNewTransferEta('');
                             setNewTransferNotes('');
                           }}
                           className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
@@ -6296,8 +6348,8 @@ export default function Dashboard({ session }: DashboardProps) {
                           </button>
                         </div>
                         
-                        {/* Carrier & Tracking */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Carrier, Tracking & Est. Delivery */}
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Carrier (optional)</label>
                             <select
@@ -6312,13 +6364,22 @@ export default function Dashboard({ session }: DashboardProps) {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Tracking Number (optional)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Tracking # (optional)</label>
                             <input
                               type="text"
                               value={editTransferTracking}
                               onChange={(e) => setEditTransferTracking(e.target.value)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                              placeholder="e.g. 1Z999AA10123456784"
+                              placeholder="e.g. 1Z999AA1012345"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Est. Delivery (optional)</label>
+                            <input
+                              type="date"
+                              value={editTransferEta}
+                              onChange={(e) => setEditTransferEta(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             />
                           </div>
                         </div>

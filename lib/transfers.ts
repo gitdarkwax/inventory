@@ -27,6 +27,7 @@ export interface Transfer {
   items: TransferItem[];
   carrier?: CarrierType;
   trackingNumber?: string;
+  eta?: string;
   notes: string;
   status: TransferStatus;
   createdBy: string;
@@ -262,6 +263,7 @@ export class TransfersService {
     createdByEmail: string,
     carrier?: CarrierType,
     trackingNumber?: string,
+    eta?: string,
     notes?: string
   ): Promise<Transfer> {
     const cache = await TransfersService.loadTransfers();
@@ -281,6 +283,7 @@ export class TransfersService {
       items,
       carrier: carrier || '',
       trackingNumber: trackingNumber || '',
+      eta: eta || undefined,
       notes: notes || '',
       status: 'pending',
       createdBy,
@@ -309,7 +312,7 @@ export class TransfersService {
    */
   static async updateTransfer(
     transferId: string,
-    updates: Partial<Pick<Transfer, 'origin' | 'destination' | 'items' | 'carrier' | 'trackingNumber' | 'notes' | 'status'>>,
+    updates: Partial<Pick<Transfer, 'origin' | 'destination' | 'items' | 'carrier' | 'trackingNumber' | 'eta' | 'notes' | 'status'>>,
     changedBy?: string,
     changedByEmail?: string
   ): Promise<Transfer | null> {
@@ -351,6 +354,10 @@ export class TransfersService {
     if (updates.trackingNumber !== undefined && updates.trackingNumber !== transfer.trackingNumber) {
       changes.push(`Tracking: ${updates.trackingNumber || 'cleared'}`);
       transfer.trackingNumber = updates.trackingNumber;
+    }
+    if (updates.eta !== undefined && updates.eta !== transfer.eta) {
+      changes.push(`ETA: ${updates.eta ? new Date(updates.eta).toLocaleDateString() : 'cleared'}`);
+      transfer.eta = updates.eta;
     }
     if (updates.notes !== undefined && updates.notes !== transfer.notes) {
       changes.push('Notes updated');

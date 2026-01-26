@@ -42,12 +42,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { origin, destination, items, carrier, trackingNumber, notes } = body as { 
+    const { origin, destination, items, carrier, trackingNumber, eta, notes } = body as { 
       origin: string;
       destination: string;
       items: { sku: string; quantity: number }[]; 
       carrier?: CarrierType;
       trackingNumber?: string;
+      eta?: string;
       notes?: string;
     };
 
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
       session.user.email || 'unknown@example.com',
       carrier,
       trackingNumber,
+      eta,
       notes
     );
 
@@ -121,13 +123,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transferId, origin, destination, items, carrier, trackingNumber, notes, status } = body as {
+    const { transferId, origin, destination, items, carrier, trackingNumber, eta, notes, status } = body as {
       transferId: string;
       origin?: string;
       destination?: string;
       items?: { sku: string; quantity: number }[];
       carrier?: CarrierType;
       trackingNumber?: string;
+      eta?: string;
       notes?: string;
       status?: 'pending' | 'in_transit' | 'delivered' | 'cancelled';
     };
@@ -158,6 +161,7 @@ export async function PATCH(request: NextRequest) {
         items,
         carrier,
         trackingNumber,
+        eta,
         notes,
         status,
       },
