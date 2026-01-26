@@ -127,12 +127,12 @@ export async function PATCH(request: NextRequest) {
       transferId: string;
       origin?: string;
       destination?: string;
-      items?: { sku: string; quantity: number }[];
+      items?: { sku: string; quantity: number; receivedQuantity?: number }[];
       carrier?: CarrierType;
       trackingNumber?: string;
       eta?: string;
       notes?: string;
-      status?: 'draft' | 'in_transit' | 'delivered' | 'cancelled';
+      status?: 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
     };
 
     if (!transferId) {

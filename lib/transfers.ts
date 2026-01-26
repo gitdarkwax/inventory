@@ -7,6 +7,7 @@ import { google } from 'googleapis';
 export interface TransferItem {
   sku: string;
   quantity: number;
+  receivedQuantity?: number;
 }
 
 export interface ActivityLogEntry {
@@ -17,7 +18,7 @@ export interface ActivityLogEntry {
   details?: string;
 }
 
-export type TransferStatus = 'draft' | 'in_transit' | 'delivered' | 'cancelled';
+export type TransferStatus = 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
 export type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
 
 export interface Transfer {
@@ -367,6 +368,7 @@ export class TransfersService {
       const statusLabels: Record<string, string> = {
         'draft': 'Draft',
         'in_transit': 'In Transit',
+        'partial': 'Partial',
         'delivered': 'Delivered',
         'cancelled': 'Cancelled',
       };

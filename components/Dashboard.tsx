@@ -128,9 +128,10 @@ interface ProductionOrder {
 interface TransferItem {
   sku: string;
   quantity: number;
+  receivedQuantity?: number;
 }
 
-type TransferStatus = 'draft' | 'in_transit' | 'delivered' | 'cancelled';
+type TransferStatus = 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
 type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
 
 interface Transfer {
@@ -271,7 +272,7 @@ export default function Dashboard({ session }: DashboardProps) {
   } | null>(null);
 
   // Production tab view toggle (Production Orders vs Transfers)
-  const [productionViewType, setProductionViewType] = useState<ProductionViewType>('orders');
+  const [productionViewType, setProductionViewType] = useState<ProductionViewType>('transfers');
 
   // Transfers state
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -304,6 +305,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isSavingTransfer, setIsSavingTransfer] = useState(false);
   const [showCancelTransferConfirm, setShowCancelTransferConfirm] = useState(false);
   const [isCancellingTransfer, setIsCancellingTransfer] = useState(false);
+  const [isUpdatingTransferStatus, setIsUpdatingTransferStatus] = useState(false);
+  const [showTransferDeliveryForm, setShowTransferDeliveryForm] = useState(false);
+  const [transferDeliveryItems, setTransferDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
@@ -577,6 +581,8 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Update transfer status
   const updateTransferStatus = async (transferId: string, newStatus: TransferStatus) => {
+    if (isUpdatingTransferStatus) return;
+    setIsUpdatingTransferStatus(true);
     try {
       const response = await fetch('/api/transfers', {
         method: 'PATCH',
@@ -591,7 +597,7 @@ export default function Dashboard({ session }: DashboardProps) {
 
       if (response.ok) {
         setTransfers(prev => prev.map(t => t.id === transferId ? data.transfer : t));
-        const statusLabel = newStatus === 'in_transit' ? 'In Transit' : newStatus === 'delivered' ? 'Delivered' : newStatus;
+        const statusLabel = newStatus === 'in_transit' ? 'In Transit' : newStatus === 'delivered' ? 'Delivered' : newStatus === 'partial' ? 'Partial' : newStatus;
         showProdNotification('success', 'Status Updated', `Transfer ${transferId} marked as ${statusLabel}`);
       } else {
         showProdNotification('error', 'Update Failed', data.error || 'Failed to update transfer');
@@ -599,6 +605,68 @@ export default function Dashboard({ session }: DashboardProps) {
     } catch (err) {
       console.error('Failed to update transfer:', err);
       showProdNotification('error', 'Update Failed', 'Failed to update transfer status');
+    } finally {
+      setIsUpdatingTransferStatus(false);
+    }
+  };
+
+  // Log transfer delivery with quantities
+  const logTransferDelivery = async (transferId: string) => {
+    if (isUpdatingTransferStatus || !selectedTransfer) return;
+    
+    const validDeliveries = transferDeliveryItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validDeliveries.length === 0) {
+      showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
+      return;
+    }
+
+    setIsUpdatingTransferStatus(true);
+    try {
+      // Update items with received quantities
+      const updatedItems = selectedTransfer.items.map(item => {
+        const delivery = validDeliveries.find(d => d.sku === item.sku);
+        const currentReceived = item.receivedQuantity || 0;
+        const newReceived = delivery ? currentReceived + delivery.quantity : currentReceived;
+        return {
+          ...item,
+          receivedQuantity: newReceived,
+        };
+      });
+
+      // Determine if fully delivered or partial
+      const allDelivered = updatedItems.every(item => (item.receivedQuantity || 0) >= item.quantity);
+      const newStatus: TransferStatus = allDelivered ? 'delivered' : 'partial';
+
+      const response = await fetch('/api/transfers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transferId,
+          items: updatedItems,
+          status: newStatus,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTransfers(prev => prev.map(t => t.id === transferId ? data.transfer : t));
+        setShowTransferDeliveryForm(false);
+        setTransferDeliveryItems([]);
+        setSelectedTransfer(data.transfer);
+        const statusLabel = allDelivered ? 'Delivered' : 'Partial Delivery';
+        showProdNotification('success', statusLabel, `Transfer ${transferId} delivery logged successfully`);
+      } else {
+        showProdNotification('error', 'Log Failed', data.error || 'Failed to log delivery');
+      }
+    } catch (err) {
+      console.error('Failed to log transfer delivery:', err);
+      showProdNotification('error', 'Log Failed', 'Failed to log delivery');
+    } finally {
+      setIsUpdatingTransferStatus(false);
     }
   };
 
@@ -5827,7 +5895,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 ) : (() => {
                   // Apply filters
                   const filteredTransfers = transfers.filter(transfer => {
-                    // Status filter
+                    // Status filter - 'active' includes draft, in_transit, and partial
                     if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
                     if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
                     
@@ -5970,10 +6038,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                       transfer.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
                                       transfer.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                                      transfer.status === 'partial' ? 'bg-orange-100 text-orange-800' :
                                       transfer.status === 'delivered' ? 'bg-green-100 text-green-800' :
                                       'bg-gray-100 text-gray-800'
                                     }`}>
                                       {transfer.status === 'in_transit' ? 'In Transit' : 
+                                       transfer.status === 'partial' ? 'Partial' :
                                        transfer.status.charAt(0).toUpperCase() + transfer.status.slice(1)}
                                     </span>
                                   </td>
@@ -6100,16 +6170,31 @@ export default function Dashboard({ session }: DashboardProps) {
                                                 <button
                                                   type="button"
                                                   onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
-                                                  className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                                                  disabled={isUpdatingTransferStatus}
+                                                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                                                    isUpdatingTransferStatus
+                                                      ? 'bg-green-400 text-white cursor-not-allowed'
+                                                      : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                                                  }`}
                                                 >
-                                                  Mark In Transit
+                                                  {isUpdatingTransferStatus ? 'Updating...' : 'Mark In Transit'}
                                                 </button>
                                               )}
-                                              {/* In Transit status: show Log Delivery green button */}
-                                              {transfer.status === 'in_transit' && (
+                                              {/* In Transit or Partial status: show Log Delivery green button */}
+                                              {['in_transit', 'partial'].includes(transfer.status) && (
                                                 <button
                                                   type="button"
-                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'delivered'); }}
+                                                  onClick={(e) => { 
+                                                    e.stopPropagation();
+                                                    setSelectedTransfer(transfer);
+                                                    setTransferDeliveryItems(
+                                                      transfer.items.map(item => ({
+                                                        sku: item.sku,
+                                                        quantity: '',
+                                                      }))
+                                                    );
+                                                    setShowTransferDeliveryForm(true);
+                                                  }}
                                                   className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
                                                 >
                                                   Log Delivery
@@ -6591,6 +6676,74 @@ export default function Dashboard({ session }: DashboardProps) {
                           }`}
                         >
                           {isCancellingTransfer ? 'Cancelling...' : 'Yes, Cancel Transfer'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Transfer Delivery Modal */}
+                {showTransferDeliveryForm && selectedTransfer && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Log Delivery - {selectedTransfer.id}</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {selectedTransfer.origin} → {selectedTransfer.destination}
+                        </p>
+                      </div>
+                      <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                        {transferDeliveryItems.map((item, index) => {
+                          const transferItem = selectedTransfer.items.find(i => i.sku === item.sku);
+                          const totalQty = transferItem?.quantity || 0;
+                          const alreadyReceived = transferItem?.receivedQuantity || 0;
+                          const remaining = totalQty - alreadyReceived;
+                          return (
+                            <div key={index} className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-gray-900 w-32 font-mono">{item.sku}</span>
+                              <input
+                                type="number"
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const updated = [...transferDeliveryItems];
+                                  updated[index].quantity = e.target.value;
+                                  setTransferDeliveryItems(updated);
+                                }}
+                                min="0"
+                                max={remaining}
+                                placeholder="0"
+                                className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              <span className="text-sm text-gray-500">of {remaining} remaining</span>
+                              {alreadyReceived > 0 && (
+                                <span className="text-xs text-green-600">({alreadyReceived} already received)</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowTransferDeliveryForm(false);
+                            setTransferDeliveryItems([]);
+                          }}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => logTransferDelivery(selectedTransfer.id)}
+                          disabled={isUpdatingTransferStatus}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isUpdatingTransferStatus
+                              ? 'bg-green-400 text-white cursor-not-allowed'
+                              : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                          }`}
+                        >
+                          {isUpdatingTransferStatus ? 'Saving...' : 'Confirm Delivery'}
                         </button>
                       </div>
                     </div>
