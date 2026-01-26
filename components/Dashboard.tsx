@@ -6091,7 +6091,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <td colSpan={7} className="bg-gray-50 px-4 py-4">
                                       <div className="space-y-4">
                                         {/* Meta info */}
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                           <div>
                                             <span className="text-gray-500">Created by:</span>
                                             <span className="ml-2 text-gray-900">{transfer.createdBy}</span>
@@ -6110,6 +6110,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                             <span className="text-gray-500">Est. Arrival:</span>
                                             <span className="ml-2 text-gray-900">
                                               {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Delivered:</span>
+                                            <span className="ml-2 text-gray-900">
+                                              {transfer.deliveredAt ? new Date(transfer.deliveredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                             </span>
                                           </div>
                                         </div>
