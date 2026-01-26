@@ -6118,11 +6118,12 @@ export default function Dashboard({ session }: DashboardProps) {
                       <table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                         <colgroup>
                           <col style={{ width: '70px' }} />
-                          <col style={{ width: '110px' }} />
-                          <col style={{ width: '110px' }} />
                           <col style={{ width: '100px' }} />
-                          <col style={{ width: '160px' }} />
-                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '100px' }} />
+                          <col style={{ width: '85px' }} />
+                          <col style={{ width: '95px' }} />
+                          <col style={{ width: '150px' }} />
+                          <col style={{ width: '100px' }} />
                           <col style={{ width: '90px' }} />
                         </colgroup>
                         <thead className="bg-gray-50 border-b border-gray-200">
@@ -6130,6 +6131,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Origin</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destination</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrier / Tracking</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Est. Arrival</th>
@@ -6160,6 +6162,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-600">{transfer.origin}</td>
                                   <td className="px-4 py-3 text-sm text-gray-600">{transfer.destination}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{transfer.transferType || '—'}</td>
                                   <td className="px-4 py-3 text-sm text-gray-500" title={skuPreview}>
                                     {transfer.items.length} SKU{transfer.items.length !== 1 ? 's' : ''} ({totalItems.toLocaleString()})
                                   </td>
@@ -6432,8 +6435,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         <h3 className="text-lg font-semibold text-gray-900">Create New Transfer</h3>
                       </div>
                       <div className="px-6 py-4 space-y-4">
-                        {/* Origin & Destination */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Origin, Destination & Transfer Type */}
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Origin <span className="text-red-500">*</span></label>
                             <select
@@ -6460,22 +6463,20 @@ export default function Dashboard({ session }: DashboardProps) {
                               ))}
                             </select>
                           </div>
-                        </div>
-
-                        {/* Transfer Type */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Transfer Type <span className="text-red-500">*</span></label>
-                          <select
-                            value={newTransferType}
-                            onChange={(e) => setNewTransferType(e.target.value as TransferType)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          >
-                            <option value="">Select transfer type...</option>
-                            <option value="Air Express">Air Express</option>
-                            <option value="Air Slow">Air Slow</option>
-                            <option value="Sea">Sea</option>
-                            <option value="Immediate">Immediate</option>
-                          </select>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Type <span className="text-red-500">*</span></label>
+                            <select
+                              value={newTransferType}
+                              onChange={(e) => setNewTransferType(e.target.value as TransferType)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select type...</option>
+                              <option value="Air Express">Air Express</option>
+                              <option value="Air Slow">Air Slow</option>
+                              <option value="Sea">Sea</option>
+                              <option value="Immediate">Immediate</option>
+                            </select>
+                          </div>
                         </div>
                         
                         {/* Items */}
@@ -6648,8 +6649,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         <h3 className="text-lg font-semibold text-gray-900">Edit Transfer {selectedTransfer.id}</h3>
                       </div>
                       <div className="px-6 py-4 space-y-4">
-                        {/* Origin & Destination */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Origin, Destination & Transfer Type */}
+                        <div className="grid grid-cols-3 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Origin <span className="text-red-500">*</span></label>
                             <select
@@ -6674,22 +6675,20 @@ export default function Dashboard({ session }: DashboardProps) {
                               ))}
                             </select>
                           </div>
-                        </div>
-
-                        {/* Transfer Type */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Transfer Type <span className="text-red-500">*</span></label>
-                          <select
-                            value={editTransferType}
-                            onChange={(e) => setEditTransferType(e.target.value as TransferType)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          >
-                            <option value="">Select transfer type...</option>
-                            <option value="Air Express">Air Express</option>
-                            <option value="Air Slow">Air Slow</option>
-                            <option value="Sea">Sea</option>
-                            <option value="Immediate">Immediate</option>
-                          </select>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Type <span className="text-red-500">*</span></label>
+                            <select
+                              value={editTransferType}
+                              onChange={(e) => setEditTransferType(e.target.value as TransferType)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select type...</option>
+                              <option value="Air Express">Air Express</option>
+                              <option value="Air Slow">Air Slow</option>
+                              <option value="Sea">Sea</option>
+                              <option value="Immediate">Immediate</option>
+                            </select>
+                          </div>
                         </div>
                         
                         {/* Items */}
