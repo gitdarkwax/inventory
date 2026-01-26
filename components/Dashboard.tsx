@@ -1693,8 +1693,18 @@ export default function Dashboard({ session }: DashboardProps) {
       } else if (sortBy === 'total') {
         comparison = a.totalAvailable - b.totalAvailable;
       } else if (sortBy === 'inTransit') {
-        // Sort by total in transit (from GraphQL transfer data)
-        comparison = ((a as any).inTransit || 0) - ((b as any).inTransit || 0);
+        // Sort by total in transit (In Air + In Sea from local transfers)
+        const getInTransit = (sku: string) => {
+          let total = 0;
+          for (const [, skuData] of Object.entries(incomingFromTransfersData)) {
+            const skuIncoming = skuData[sku];
+            if (skuIncoming) {
+              total += skuIncoming.inboundAir + skuIncoming.inboundSea;
+            }
+          }
+          return total;
+        };
+        comparison = getInTransit(a.sku) - getInTransit(b.sku);
       } else {
         // Sort by location quantity
         const aQty = a.locations[sortBy] || 0;
@@ -2599,10 +2609,17 @@ export default function Dashboard({ session }: DashboardProps) {
                           ) : (
                             // All Locations View
                             filteredInventory.map((item, index) => {
-                              // Get total in transit for this SKU (from GraphQL transfer data)
-                              const inTransit = (item as any).inTransit || 0;
-                              const transferDetails = (item as any).transferDetails || [];
-                              const transferTooltip = formatTransferTooltip(transferDetails);
+                              // Calculate total in transit from our local transfers (In Air + In Sea across all destinations)
+                              let inTransit = 0;
+                              const allTransferDetails: TransferDetail[] = [];
+                              for (const [, skuData] of Object.entries(incomingFromTransfersData)) {
+                                const skuIncoming = skuData[item.sku];
+                                if (skuIncoming) {
+                                  inTransit += skuIncoming.inboundAir + skuIncoming.inboundSea;
+                                  allTransferDetails.push(...skuIncoming.airTransfers, ...skuIncoming.seaTransfers);
+                                }
+                              }
+                              const transferTooltip = formatTransferTooltip(allTransferDetails);
                               // Get pending PO quantity for this SKU
                               const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
                               
@@ -2773,10 +2790,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
                                     {items.map((item, index) => {
-                                      // Get total in transit for this SKU (from GraphQL transfer data)
-                                      const inTransit = (item as any).inTransit || 0;
-                                      const transferDetails = (item as any).transferDetails || [];
-                                      const transferTooltip = formatTransferTooltip(transferDetails);
+                                      // Calculate total in transit from our local transfers (In Air + In Sea across all destinations)
+                                      let inTransit = 0;
+                                      const allTransferDetails: TransferDetail[] = [];
+                                      for (const [, skuData] of Object.entries(incomingFromTransfersData)) {
+                                        const skuIncoming = skuData[item.sku];
+                                        if (skuIncoming) {
+                                          inTransit += skuIncoming.inboundAir + skuIncoming.inboundSea;
+                                          allTransferDetails.push(...skuIncoming.airTransfers, ...skuIncoming.seaTransfers);
+                                        }
+                                      }
+                                      const transferTooltip = formatTransferTooltip(allTransferDetails);
                                       // Get pending PO quantity for this SKU
                                       const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
                                       
