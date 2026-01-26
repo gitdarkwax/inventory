@@ -643,6 +643,38 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Validate inventory levels at origin for Immediate transfers
+    if (newTransferType === 'Immediate') {
+      const originDetails = inventoryData?.locationDetails?.[newTransferOrigin];
+      if (!originDetails) {
+        showProdNotification('error', 'Validation Error', `Could not find inventory data for ${newTransferOrigin}`);
+        return;
+      }
+
+      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+      
+      for (const item of validItems) {
+        const detail = originDetails.find(d => d.sku.toUpperCase() === item.sku.toUpperCase());
+        const availableAtOrigin = detail?.onHand || 0;
+        
+        if (availableAtOrigin < item.quantity) {
+          insufficientStock.push({
+            sku: item.sku,
+            requested: item.quantity,
+            available: availableAtOrigin,
+          });
+        }
+      }
+
+      if (insufficientStock.length > 0) {
+        const stockDetails = insufficientStock
+          .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${newTransferOrigin}`)
+          .join('\n');
+        showProdNotification('error', 'Insufficient Stock', stockDetails);
+        return;
+      }
+    }
+
     // For Immediate transfers, show confirmation modal first
     if (newTransferType === 'Immediate') {
       setPendingImmediateTransfer({
@@ -850,6 +882,43 @@ export default function Dashboard({ session }: DashboardProps) {
     } finally {
       setIsUpdatingTransferStatus(false);
     }
+  };
+
+  // Validate inventory at origin before allowing Mark In Transit
+  const validateAndShowMarkInTransit = (transfer: Transfer) => {
+    // Check inventory levels at origin
+    const originDetails = inventoryData?.locationDetails?.[transfer.origin];
+    if (!originDetails) {
+      showProdNotification('error', 'Validation Error', `Could not find inventory data for ${transfer.origin}`);
+      return;
+    }
+
+    const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+    
+    for (const item of transfer.items) {
+      const detail = originDetails.find(d => d.sku === item.sku);
+      const availableAtOrigin = detail?.onHand || 0;
+      
+      if (availableAtOrigin < item.quantity) {
+        insufficientStock.push({
+          sku: item.sku,
+          requested: item.quantity,
+          available: availableAtOrigin,
+        });
+      }
+    }
+
+    if (insufficientStock.length > 0) {
+      const stockDetails = insufficientStock
+        .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${transfer.origin}`)
+        .join('\n');
+      showProdNotification('error', 'Insufficient Stock', stockDetails);
+      return;
+    }
+
+    // Validation passed - show confirmation modal
+    setTransferToMarkInTransit(transfer);
+    setShowMarkInTransitConfirm(true);
   };
 
   // Confirm Mark In Transit - updates Shopify inventory then transfer status
@@ -6779,8 +6848,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   type="button"
                                                   onClick={(e) => { 
                                                     e.stopPropagation(); 
-                                                    setTransferToMarkInTransit(transfer);
-                                                    setShowMarkInTransitConfirm(true);
+                                                    validateAndShowMarkInTransit(transfer);
                                                   }}
                                                   disabled={isMarkingInTransit}
                                                   className={`px-3 py-1.5 rounded-md text-sm font-medium ${
@@ -7341,20 +7409,19 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="px-6 py-4 space-y-4">
                         {transferToMarkInTransit.transferType === 'Immediate' ? (
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer - Updates Shopify</p>
-                            <p className="text-xs text-blue-700 mt-1">
-                              • Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin}'s "On Hand"<br/>
-                              • Stock will be <strong>added</strong> to {transferToMarkInTransit.destination}'s "On Hand"
-                            </p>
-                            <p className="text-xs text-blue-600 mt-2 italic">
-                              This is an instant inter-location transfer. No transit period.
+                            <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer</p>
+                            <p className="text-sm text-blue-700 mt-1">
+                              • Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong><br/>
+                              {transferToMarkInTransit.destination === 'ShipBob'
+                                ? '• ShipBob manages its own inventory'
+                                : `• Stock will be added to <strong>${transferToMarkInTransit.destination}</strong>`}
                             </p>
                           </div>
                         ) : (
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                            <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
-                            <p className="text-xs text-yellow-700 mt-1">
-                              Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin} and put In Transit.
+                            <p className="text-sm text-yellow-800 font-medium">⚠️ Mark In Transit</p>
+                            <p className="text-sm text-yellow-700 mt-1">
+                              Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong> and put In Transit.
                             </p>
                           </div>
                         )}
@@ -7438,27 +7505,13 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                       <div className="px-6 py-4 space-y-4">
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                          <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer - Updates Shopify</p>
-                          <p className="text-xs text-blue-700 mt-1">
-                            • Stock will be <strong>subtracted</strong> from {pendingImmediateTransfer.origin}'s "On Hand"<br/>
+                          <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer</p>
+                          <p className="text-sm text-blue-700 mt-1">
+                            • Stock will be subtracted from <strong>{pendingImmediateTransfer.origin}</strong><br/>
                             {pendingImmediateTransfer.destination === 'ShipBob' 
-                              ? '• ShipBob manages its own inventory - no Shopify update for destination'
-                              : `• Stock will be <strong>added</strong> to ${pendingImmediateTransfer.destination}'s "On Hand"`}
+                              ? '• ShipBob manages its own inventory'
+                              : `• Stock will be added to <strong>${pendingImmediateTransfer.destination}</strong>`}
                           </p>
-                          <p className="text-xs text-blue-600 mt-2 italic">
-                            This is an instant inter-location transfer. No transit period.
-                          </p>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Origin:</span>
-                            <span className="font-medium text-gray-900">{pendingImmediateTransfer.origin}</span>
-                          </div>
-                          <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Destination:</span>
-                            <span className="font-medium text-gray-900">{pendingImmediateTransfer.destination}</span>
-                          </div>
                         </div>
 
                         <div className="border-t pt-3">
