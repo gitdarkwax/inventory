@@ -260,7 +260,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editOrderNotes, setEditOrderNotes] = useState('');
   const [editOrderSkuSuggestionIndex, setEditOrderSkuSuggestionIndex] = useState<number | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [duplicatePoError, setDuplicatePoError] = useState<string | null>(null); // PO# that's duplicate
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -759,20 +758,6 @@ export default function Dashboard({ session }: DashboardProps) {
     } finally {
       setIsCancellingTransfer(false);
     }
-  };
-
-  // Check if PO number is duplicate (returns true if duplicate found)
-  const checkDuplicatePO = (poNumber: string, excludeOrderId?: string): boolean => {
-    if (!poNumber || poNumber.trim() === '' || poNumber.trim() === 'PO') return false;
-    const poNumberTrimmed = poNumber.trim().toUpperCase();
-    const existingPO = productionOrders.find(order => 
-      order.poNumber?.toUpperCase() === poNumberTrimmed && order.id !== excludeOrderId
-    );
-    if (existingPO) {
-      setDuplicatePoError(poNumber.trim());
-      return true;
-    }
-    return false;
   };
 
   // Create new production order
@@ -6033,30 +6018,6 @@ export default function Dashboard({ session }: DashboardProps) {
               </div>
             )}
 
-            {/* Duplicate PO Error Modal */}
-            {duplicatePoError && (
-              <div className="fixed inset-0 flex items-center justify-center z-[60] pointer-events-none">
-                <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 border border-gray-200 pointer-events-auto">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">Duplicate PO Number</h3>
-                  </div>
-                  <div className="px-6 py-4">
-                    <p className="text-sm text-red-600">
-                      This PO Number ({duplicatePoError}) already exists. Please double check to make sure it is not already in the tracker and that it is the matching PO Number from Shopify.
-                    </p>
-                  </div>
-                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setDuplicatePoError(null)}
-                      className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 rounded-md text-sm font-medium"
-                    >
-                      OK
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
               </>
             )}
 
