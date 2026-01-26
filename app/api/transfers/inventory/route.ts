@@ -145,6 +145,10 @@ export async function POST(request: NextRequest) {
 
     const { locationIds, locationDetails } = inventoryCache.inventory;
 
+    if (!locationIds || !locationDetails) {
+      return NextResponse.json({ error: 'Inventory cache incomplete. Please refresh inventory first.' }, { status: 400 });
+    }
+
     if (body.action === 'mark_in_transit') {
       const { transferId, origin, destination, shipmentType, items } = body;
       

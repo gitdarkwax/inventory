@@ -623,6 +623,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Validate all SKUs exist in inventory
+    const invalidSkus = validItems.filter(item => 
+      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+    );
+    if (invalidSkus.length > 0) {
+      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+      return;
+    }
+
     setIsCreatingTransfer(true);
 
     try {
@@ -793,6 +802,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Validate all SKUs exist in inventory
+    const invalidSkus = validDeliveries.filter(item => 
+      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+    );
+    if (invalidSkus.length > 0) {
+      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+      return;
+    }
+
     setShowLogDeliveryConfirm(true);
   };
 
@@ -892,6 +910,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Validate all SKUs exist in inventory
+    const invalidSkus = validItems.filter(item => 
+      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+    );
+    if (invalidSkus.length > 0) {
+      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+      return;
+    }
+
     if (!editTransferType) {
       showProdNotification('error', 'Missing Shipment Type', 'Please select a shipment type');
       return;
@@ -986,6 +1013,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Validate all SKUs exist in inventory
+    const invalidSkus = validItems.filter(item => 
+      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+    );
+    if (invalidSkus.length > 0) {
+      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+      return;
+    }
+
     setIsCreatingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
@@ -1052,6 +1088,15 @@ export default function Dashboard({ session }: DashboardProps) {
 
     if (validDeliveries.length === 0) {
       showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
+      return;
+    }
+
+    // Validate all SKUs exist in inventory
+    const invalidSkus = validDeliveries.filter(item => 
+      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+    );
+    if (invalidSkus.length > 0) {
+      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
       return;
     }
 
@@ -1178,6 +1223,15 @@ export default function Dashboard({ session }: DashboardProps) {
 
     if (validItems.length === 0) {
       showProdNotification('error', 'Missing Items', 'Please add at least one item with a valid SKU and quantity');
+      return;
+    }
+
+    // Validate all SKUs exist in inventory
+    const invalidSkus = validItems.filter(item => 
+      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+    );
+    if (invalidSkus.length > 0) {
+      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
       return;
     }
 
@@ -7147,13 +7201,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                             <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
                             <p className="text-xs text-yellow-700 mt-1">
-                              • Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin}'s "On Hand"<br/>
-                              • Incoming quantities will be tracked in this app (not in Shopify)
-                            </p>
-                            <p className="text-xs text-yellow-600 mt-2 italic">
-                              {transferToMarkInTransit.transferType === 'Sea' 
-                                ? 'Sea shipment - will appear in "In Sea" column' 
-                                : 'Air shipment - will appear in "In Air" column'}
+                              Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin} and put In Transit.
                             </p>
                           </div>
                         )}
