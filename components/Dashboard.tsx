@@ -238,7 +238,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showNewOrderForm, setShowNewOrderForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
   const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
-  const [newOrderPoNumber, setNewOrderPoNumber] = useState('PO');
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderVendor, setNewOrderVendor] = useState('');
   const [newOrderEta, setNewOrderEta] = useState('');
@@ -251,6 +250,9 @@ export default function Dashboard({ session }: DashboardProps) {
   const skuSearchRef = useRef<HTMLDivElement>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [deliveryLocation, setDeliveryLocation] = useState<'LA Office' | 'DTLA WH' | 'ShipBob' | 'China WH'>('China WH');
+  const [showDeliveryConfirm, setShowDeliveryConfirm] = useState(false);
+  const [isUpdatingShopify, setIsUpdatingShopify] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editOrderItems, setEditOrderItems] = useState<{ sku: string; quantity: string }[]>([]);
   const [editOrderPoNumber, setEditOrderPoNumber] = useState('');
@@ -787,17 +789,6 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate PO number (must be more than just "PO")
-    if (!newOrderPoNumber || newOrderPoNumber.trim() === 'PO') {
-      showProdNotification('error', 'Missing PO Number', 'Please enter a PO number');
-      return;
-    }
-
-    // Check if PO number already exists
-    if (checkDuplicatePO(newOrderPoNumber)) {
-      return;
-    }
-
     setIsCreatingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
@@ -808,21 +799,19 @@ export default function Dashboard({ session }: DashboardProps) {
           notes: newOrderNotes,
           vendor: newOrderVendor || undefined,
           eta: newOrderEta || undefined,
-          poNumber: newOrderPoNumber || undefined,
         }),
       });
 
       if (response.ok) {
         setShowNewOrderForm(false);
         setNewOrderItems([{ sku: '', quantity: '' }]);
-        setNewOrderPoNumber('PO');
         setNewOrderNotes('');
         setNewOrderVendor('');
         setNewOrderEta('');
         await loadProductionOrders();
       } else {
         const data = await response.json();
-        alert(data.error || 'Failed to create order');
+        showProdNotification('error', 'Create Failed', data.error || 'Failed to create order');
       }
     } catch (err) {
       showProdNotification('error', 'Create Failed', 'Failed to create production order');
@@ -853,42 +842,132 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
-  // Log delivery for production order
-  const logDelivery = async (orderId: string) => {
-    if (isLoggingDelivery) return; // Prevent double-clicks
-    
-    const validDeliveries = deliveryItems
+  // Get valid deliveries for production order
+  const getValidDeliveries = () => {
+    return deliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+  };
+
+  // Show delivery confirmation (first step - validates and shows confirmation modal)
+  const showDeliveryConfirmation = () => {
+    const validDeliveries = getValidDeliveries();
 
     if (validDeliveries.length === 0) {
       showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
       return;
     }
 
+    setShowDeliveryConfirm(true);
+  };
+
+  // Confirm delivery and update Shopify (second step - actually processes the delivery)
+  const confirmDeliveryAndUpdateShopify = async () => {
+    if (isLoggingDelivery || !selectedOrder) return;
+    
+    const validDeliveries = getValidDeliveries();
+    
     setIsLoggingDelivery(true);
+    setIsUpdatingShopify(true);
+    
     try {
+      // Step 1: Get location ID for the delivery location
+      const locationId = inventoryData?.locationIds?.[deliveryLocation];
+      if (!locationId) {
+        throw new Error(`${deliveryLocation} location ID not found. Please refresh the data.`);
+      }
+
+      // Step 2: Build Shopify inventory updates using locationDetails for inventoryItemId
+      const locationDetails = inventoryData?.locationDetails?.[deliveryLocation] || [];
+      
+      const shopifyUpdates = validDeliveries.map(delivery => {
+        // Find the item in locationDetails to get inventoryItemId
+        const detailItem = locationDetails.find(d => d.sku === delivery.sku);
+        if (!detailItem) {
+          // Try to find in any location's details
+          const allLocations = Object.keys(inventoryData?.locationDetails || {});
+          let foundItem = null;
+          for (const loc of allLocations) {
+            foundItem = inventoryData?.locationDetails?.[loc]?.find(d => d.sku === delivery.sku);
+            if (foundItem) break;
+          }
+          if (!foundItem) {
+            throw new Error(`SKU ${delivery.sku} not found in inventory data. Please refresh the data.`);
+          }
+          // Use the found item's inventoryItemId
+          const currentQty = inventoryData?.inventory.find(i => i.sku === delivery.sku)?.locations[deliveryLocation] || 0;
+          return {
+            sku: delivery.sku,
+            inventoryItemId: foundItem.inventoryItemId,
+            quantity: currentQty + delivery.quantity,
+            locationId,
+          };
+        }
+        
+        // Get current quantity at the delivery location
+        const currentQty = detailItem.onHand || 0;
+        
+        return {
+          sku: delivery.sku,
+          inventoryItemId: detailItem.inventoryItemId,
+          quantity: currentQty + delivery.quantity, // Add to existing quantity
+          locationId,
+        };
+      });
+
+      // Step 3: Update Shopify inventory
+      const shopifyResponse = await fetch('/api/inventory/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updates: shopifyUpdates,
+          reason: `PO Delivery - ${selectedOrder.id}`,
+        }),
+      });
+
+      if (!shopifyResponse.ok) {
+        const shopifyError = await shopifyResponse.json();
+        throw new Error(shopifyError.error || 'Failed to update Shopify inventory');
+      }
+
+      const shopifyResult = await shopifyResponse.json();
+      
+      if (shopifyResult.summary.failed > 0) {
+        showProdNotification('warning', 'Partial Update', 
+          `${shopifyResult.summary.success} SKUs updated in Shopify, ${shopifyResult.summary.failed} failed`);
+      }
+
+      // Step 4: Update production order in our system
       const response = await fetch('/api/production-orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, deliveries: validDeliveries }),
+        body: JSON.stringify({ 
+          orderId: selectedOrder.id, 
+          deliveries: validDeliveries,
+          deliveryLocation,
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        setShowDeliveryConfirm(false);
         setShowDeliveryForm(false);
         setDeliveryItems([]);
+        setDeliveryLocation('China WH');
         setSelectedOrder(data.order);
         await loadProductionOrders();
-        showProdNotification('success', 'Delivery Logged', 'Delivery has been recorded successfully');
+        showProdNotification('success', 'Delivery Logged', 
+          `Delivery recorded and ${shopifyResult.summary.success} SKUs updated in Shopify at ${deliveryLocation}`);
       } else {
         const data = await response.json();
         showProdNotification('error', 'Log Failed', data.error || 'Failed to log delivery');
       }
     } catch (err) {
-      showProdNotification('error', 'Log Failed', 'Failed to log delivery');
+      console.error('Delivery error:', err);
+      showProdNotification('error', 'Delivery Failed', err instanceof Error ? err.message : 'Failed to process delivery');
     } finally {
       setIsLoggingDelivery(false);
+      setIsUpdatingShopify(false);
     }
   };
 
@@ -5192,7 +5271,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
-                                  {order.poNumber || order.id.split('-').slice(0, 2).join('-')}
+                                  {order.id}
                                 </span>
                               </td>
                               <td className="w-[10%] px-4 py-3 text-sm text-gray-600">
@@ -5426,7 +5505,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
                           const skuList = order.items.map(i => `${i.sku} (${i.quantity})`).join('; ');
                           return [
-                            order.poNumber || order.id.split('-').slice(0, 2).join('-'),
+                            order.id,
                             new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
                             `"${skuList.replace(/"/g, '""')}"`,
                             totalOrdered,
@@ -5473,26 +5552,8 @@ export default function Dashboard({ session }: DashboardProps) {
                     <h3 className="text-lg font-semibold text-gray-900">New Production Order</h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
-                    {/* PO Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# <span className="text-xs text-gray-400 font-normal">(from Shopify)</span></label>
-                      <input
-                        type="text"
-                        value={newOrderPoNumber}
-                        onChange={(e) => {
-                          // Ensure it always starts with "PO"
-                          const value = e.target.value.toUpperCase();
-                          if (value.startsWith('PO')) {
-                            setNewOrderPoNumber(value);
-                          } else if (value === 'P' || value === '') {
-                            setNewOrderPoNumber('PO');
-                          }
-                        }}
-                        onBlur={() => checkDuplicatePO(newOrderPoNumber)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="PO12345"
-                      />
-                    </div>
+                    {/* Note: PO# is auto-assigned */}
+                    <p className="text-xs text-gray-500 italic">PO number will be auto-assigned (e.g., PO-001, PO-002, etc.)</p>
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
@@ -5644,16 +5705,39 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">Log Delivery</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Log Delivery - {selectedOrder.id}</h3>
                     <p className="text-sm text-gray-500 mt-1">Enter quantities received for each SKU</p>
                   </div>
-                  <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
+                  <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+                    {/* Receiving Warehouse Selection */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Receiving Warehouse <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={deliveryLocation}
+                        onChange={(e) => setDeliveryLocation(e.target.value as typeof deliveryLocation)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+                      >
+                        <option value="China WH">China WH</option>
+                        <option value="LA Office">LA Office</option>
+                        <option value="DTLA WH">DTLA WH</option>
+                        <option value="ShipBob">ShipBob</option>
+                      </select>
+                    </div>
+                    
+                    {/* Divider */}
+                    <div className="border-t border-gray-200 pt-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Quantities Received</label>
+                    </div>
+                    
+                    {/* SKU quantities */}
                     {deliveryItems.map((item, index) => {
                       const orderItem = selectedOrder.items.find(i => i.sku === item.sku);
                       const remaining = orderItem ? orderItem.quantity - (orderItem.receivedQuantity || 0) : 0;
                       return (
                         <div key={index} className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-gray-900 w-32">{item.sku}</span>
+                          <span className="text-sm font-medium text-gray-900 w-32 font-mono">{item.sku}</span>
                           <input
                             type="number"
                             value={item.quantity}
@@ -5664,6 +5748,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             }}
                             min="0"
                             max={remaining}
+                            placeholder="0"
                             className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
                           <span className="text-sm text-gray-500">of {remaining} remaining</span>
@@ -5677,6 +5762,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       onClick={() => {
                         setShowDeliveryForm(false);
                         setDeliveryItems([]);
+                        setDeliveryLocation('China WH');
                       }}
                       className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                     >
@@ -5684,7 +5770,74 @@ export default function Dashboard({ session }: DashboardProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => logDelivery(selectedOrder.id)}
+                      onClick={showDeliveryConfirmation}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                    >
+                      Confirm Delivery
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Delivery Confirmation Modal */}
+            {showDeliveryConfirm && selectedOrder && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900">Confirm Delivery to Shopify</h3>
+                  </div>
+                  <div className="px-6 py-4 space-y-4">
+                    {/* Warning Banner */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <div className="flex gap-2">
+                        <span className="text-amber-600">⚠️</span>
+                        <p className="text-sm text-amber-800">
+                          Clicking the Confirm button below will update the inventory counts for <strong>{deliveryLocation}</strong> in Shopify.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Delivery Summary */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Delivery Summary</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">PO:</span>
+                          <span className="font-medium">{selectedOrder.id}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Receiving Location:</span>
+                          <span className="font-medium">{deliveryLocation}</span>
+                        </div>
+                        <div className="border-t border-gray-200 pt-2 mt-2">
+                          <span className="text-gray-500 block mb-2">Items:</span>
+                          {getValidDeliveries().map((item, idx) => (
+                            <div key={idx} className="flex justify-between pl-4">
+                              <span className="font-mono text-gray-700">{item.sku}</span>
+                              <span className="font-medium">+{item.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="border-t border-gray-200 pt-2 mt-2 flex justify-between font-medium">
+                          <span>Total Units:</span>
+                          <span>{getValidDeliveries().reduce((sum, item) => sum + item.quantity, 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeliveryConfirm(false)}
+                      disabled={isLoggingDelivery}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmDeliveryAndUpdateShopify}
                       disabled={isLoggingDelivery}
                       className={`px-4 py-2 rounded-md text-sm font-medium ${
                         isLoggingDelivery
@@ -5692,7 +5845,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                       }`}
                     >
-                      {isLoggingDelivery ? 'Saving...' : 'Confirm Delivery'}
+                      {isLoggingDelivery ? (isUpdatingShopify ? 'Updating Shopify...' : 'Processing...') : 'Confirm & Update Shopify'}
                     </button>
                   </div>
                 </div>
@@ -5704,7 +5857,7 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.poNumber || selectedOrder.id}</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.id}</h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
                     {/* PO Number */}
