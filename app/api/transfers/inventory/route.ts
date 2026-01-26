@@ -71,10 +71,10 @@ async function adjustInventory(
     inventoryItemId: string;
     locationId: string;
     delta: number;
-    ledgerDocumentUri: string;
   }>,
   reason: string
 ) {
+  // Note: ledgerDocumentUri is NOT allowed when adjusting 'available' inventory
   const input = {
     name: 'available', // Always adjust 'available' which affects on_hand
     reason: reason,
@@ -82,7 +82,6 @@ async function adjustInventory(
       inventoryItemId: adj.inventoryItemId,
       locationId: adj.locationId,
       delta: adj.delta,
-      ledgerDocumentUri: adj.ledgerDocumentUri,
     })),
   };
 
@@ -171,13 +170,11 @@ export async function POST(request: NextRequest) {
         inventoryItemId: string;
         locationId: string;
         delta: number;
-        ledgerDocumentUri: string;
       }> = [];
       const destAdjustments: Array<{
         inventoryItemId: string;
         locationId: string;
         delta: number;
-        ledgerDocumentUri: string;
       }> = [];
       
       const errors: string[] = [];
@@ -194,7 +191,6 @@ export async function POST(request: NextRequest) {
           inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
           locationId: `gid://shopify/Location/${originLocationId}`,
           delta: -item.quantity,
-          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/origin`,
         });
 
         // For Immediate transfers: also add to destination's On Hand
@@ -203,7 +199,6 @@ export async function POST(request: NextRequest) {
             inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
             locationId: `gid://shopify/Location/${destLocationId}`,
             delta: item.quantity,
-            ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/destination`,
           });
         }
         // For Air/Sea transfers: incoming is tracked locally in our app, not in Shopify
@@ -273,7 +268,6 @@ export async function POST(request: NextRequest) {
         inventoryItemId: string;
         locationId: string;
         delta: number;
-        ledgerDocumentUri: string;
       }> = [];
       
       const errors: string[] = [];
@@ -297,7 +291,6 @@ export async function POST(request: NextRequest) {
           inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
           locationId: `gid://shopify/Location/${destLocationId}`,
           delta: item.quantity,
-          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery`,
         });
       }
 
