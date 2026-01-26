@@ -285,7 +285,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
   const [newTransferEta, setNewTransferEta] = useState('');
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'draft' | 'in_transit' | 'completed'>('all');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
   const [transferDateFilter, setTransferDateFilter] = useState('all');
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
@@ -4896,12 +4896,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
                     <select
                       value={transferFilterStatus}
-                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'draft' | 'in_transit' | 'completed')}
+                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
                       className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
                     >
                       <option value="all">All Transfers</option>
-                      <option value="draft">Draft</option>
-                      <option value="in_transit">In Transit</option>
+                      <option value="active">Active</option>
                       <option value="completed">Completed</option>
                     </select>
                   </div>
@@ -4973,13 +4972,13 @@ export default function Dashboard({ session }: DashboardProps) {
                       <option value="2y">Last 2 Years</option>
                     </select>
                   </div>
-                  {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'in_transit') && (
+                  {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'active') && (
                     <button
                       type="button"
                       onClick={() => {
                         setTransferSkuSearchQuery('');
                         setTransferSkuSearchSelected('');
-                        setTransferFilterStatus('in_transit');
+                        setTransferFilterStatus('active');
                         setTransferDateFilter('all');
                       }}
                       className="text-sm text-gray-500 hover:text-gray-700"
@@ -5829,8 +5828,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Apply filters
                   const filteredTransfers = transfers.filter(transfer => {
                     // Status filter
-                    if (transferFilterStatus === 'draft' && transfer.status !== 'draft') return false;
-                    if (transferFilterStatus === 'in_transit' && transfer.status !== 'in_transit') return false;
+                    if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
                     if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
                     
                     // SKU search filter
