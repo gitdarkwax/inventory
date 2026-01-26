@@ -285,7 +285,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
   const [newTransferEta, setNewTransferEta] = useState('');
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'draft' | 'in_transit' | 'completed'>('in_transit');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'draft' | 'in_transit' | 'completed'>('all');
   const [transferDateFilter, setTransferDateFilter] = useState('all');
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
