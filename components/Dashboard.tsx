@@ -124,7 +124,35 @@ interface ProductionOrder {
   activityLog?: ActivityLogEntry[];
 }
 
+// Transfer types
+interface TransferItem {
+  sku: string;
+  quantity: number;
+}
+
+type TransferStatus = 'pending' | 'in_transit' | 'delivered' | 'cancelled';
+type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
+
+interface Transfer {
+  id: string;
+  origin: string;
+  destination: string;
+  items: TransferItem[];
+  carrier?: CarrierType;
+  trackingNumber?: string;
+  notes: string;
+  status: TransferStatus;
+  createdBy: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  deliveredAt?: string;
+  cancelledAt?: string;
+  activityLog?: ActivityLogEntry[];
+}
+
 type TabType = 'inventory' | 'forecasting' | 'planning' | 'production' | 'warehouse';
+type ProductionViewType = 'orders' | 'transfers';
 
 export default function Dashboard({ session }: DashboardProps) {
   // Tab state - persist to localStorage
@@ -233,6 +261,41 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [isLoggingDelivery, setIsLoggingDelivery] = useState(false);
+
+  // Production tab view toggle (Production Orders vs Transfers)
+  const [productionViewType, setProductionViewType] = useState<ProductionViewType>('orders');
+
+  // Transfers state
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [transfersLoading, setTransfersLoading] = useState(false);
+  const [showNewTransferForm, setShowNewTransferForm] = useState(false);
+  const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
+  const [newTransferOrigin, setNewTransferOrigin] = useState<string>('');
+  const [newTransferDestination, setNewTransferDestination] = useState<string>('');
+  const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
+  const [newTransferCarrier, setNewTransferCarrier] = useState<CarrierType>('');
+  const [newTransferTracking, setNewTransferTracking] = useState('');
+  const [newTransferNotes, setNewTransferNotes] = useState('');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
+  const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
+  const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
+  const [showTransferSkuSearchSuggestions, setShowTransferSkuSearchSuggestions] = useState(false);
+  const transferSkuSearchRef = useRef<HTMLDivElement>(null);
+  const [transferSkuSuggestionIndex, setTransferSkuSuggestionIndex] = useState<number | null>(null);
+  const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
+  const [showEditTransferForm, setShowEditTransferForm] = useState(false);
+  const [editTransferOrigin, setEditTransferOrigin] = useState('');
+  const [editTransferDestination, setEditTransferDestination] = useState('');
+  const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [editTransferCarrier, setEditTransferCarrier] = useState<CarrierType>('');
+  const [editTransferTracking, setEditTransferTracking] = useState('');
+  const [editTransferNotes, setEditTransferNotes] = useState('');
+  const [isSavingTransfer, setIsSavingTransfer] = useState(false);
+  const [showCancelTransferConfirm, setShowCancelTransferConfirm] = useState(false);
+  const [isCancellingTransfer, setIsCancellingTransfer] = useState(false);
+
+  // Available locations for transfers
+  const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
 
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -413,6 +476,202 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Failed to load production orders:', err);
     } finally {
       setProductionOrdersLoading(false);
+    }
+  };
+
+  // Load transfers
+  const loadTransfers = async () => {
+    setTransfersLoading(true);
+    try {
+      const response = await fetch('/api/transfers');
+      const data = await response.json();
+      if (response.ok) {
+        setTransfers(data.transfers || []);
+      }
+    } catch (err) {
+      console.error('Failed to load transfers:', err);
+    } finally {
+      setTransfersLoading(false);
+    }
+  };
+
+  // Create new transfer
+  const createTransfer = async () => {
+    if (isCreatingTransfer) return; // Prevent double-clicks
+    
+    if (!newTransferOrigin) {
+      alert('Please select an origin location');
+      return;
+    }
+    
+    if (!newTransferDestination) {
+      alert('Please select a destination location');
+      return;
+    }
+    
+    if (newTransferOrigin === newTransferDestination) {
+      alert('Origin and destination cannot be the same');
+      return;
+    }
+    
+    const validItems = newTransferItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validItems.length === 0) {
+      alert('Please add at least one SKU with quantity');
+      return;
+    }
+
+    setIsCreatingTransfer(true);
+
+    try {
+      const response = await fetch('/api/transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: newTransferOrigin,
+          destination: newTransferDestination,
+          items: validItems,
+          carrier: newTransferCarrier || undefined,
+          trackingNumber: newTransferTracking.trim() || undefined,
+          notes: newTransferNotes.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTransfers(prev => [data.transfer, ...prev]);
+        setShowNewTransferForm(false);
+        setNewTransferOrigin('');
+        setNewTransferDestination('');
+        setNewTransferItems([{ sku: '', quantity: '' }]);
+        setNewTransferCarrier('');
+        setNewTransferTracking('');
+        setNewTransferNotes('');
+        // Transfer created successfully
+      } else {
+        alert(data.error || 'Failed to create transfer');
+      }
+    } catch (err) {
+      console.error('Failed to create transfer:', err);
+      alert('Failed to create transfer');
+    } finally {
+      setIsCreatingTransfer(false);
+    }
+  };
+
+  // Update transfer status
+  const updateTransferStatus = async (transferId: string, newStatus: TransferStatus) => {
+    try {
+      const response = await fetch('/api/transfers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transferId,
+          status: newStatus,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTransfers(prev => prev.map(t => t.id === transferId ? data.transfer : t));
+        // Status updated successfully
+      } else {
+        alert(data.error || 'Failed to update transfer');
+      }
+    } catch (err) {
+      console.error('Failed to update transfer:', err);
+      alert('Failed to update transfer');
+    }
+  };
+
+  // Save transfer edits
+  const saveTransferEdits = async () => {
+    if (!selectedTransfer || isSavingTransfer) return;
+    
+    const validItems = editTransferItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validItems.length === 0) {
+      alert('Please add at least one SKU with quantity');
+      return;
+    }
+
+    if (editTransferOrigin === editTransferDestination) {
+      alert('Origin and destination cannot be the same');
+      return;
+    }
+
+    setIsSavingTransfer(true);
+
+    try {
+      const response = await fetch('/api/transfers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transferId: selectedTransfer.id,
+          origin: editTransferOrigin,
+          destination: editTransferDestination,
+          items: validItems,
+          carrier: editTransferCarrier || undefined,
+          trackingNumber: editTransferTracking.trim() || undefined,
+          notes: editTransferNotes.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
+        setShowEditTransferForm(false);
+        setSelectedTransfer(data.transfer);
+        // Transfer updated successfully
+      } else {
+        alert(data.error || 'Failed to update transfer');
+      }
+    } catch (err) {
+      console.error('Failed to update transfer:', err);
+      alert('Failed to update transfer');
+    } finally {
+      setIsSavingTransfer(false);
+    }
+  };
+
+  // Cancel transfer
+  const cancelTransfer = async () => {
+    if (!selectedTransfer || isCancellingTransfer) return;
+
+    setIsCancellingTransfer(true);
+
+    try {
+      const response = await fetch('/api/transfers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transferId: selectedTransfer.id,
+          status: 'cancelled',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
+        setShowCancelTransferConfirm(false);
+        setSelectedTransfer(null);
+        // Transfer cancelled successfully
+      } else {
+        alert(data.error || 'Failed to cancel transfer');
+      }
+    } catch (err) {
+      console.error('Failed to cancel transfer:', err);
+      alert('Failed to cancel transfer');
+    } finally {
+      setIsCancellingTransfer(false);
     }
   };
 
@@ -661,6 +920,7 @@ export default function Dashboard({ session }: DashboardProps) {
       if (productionOrders.length === 0 && !productionOrdersLoading) loadProductionOrders();
     } else if (activeTab === 'production') {
       if (productionOrders.length === 0 && !productionOrdersLoading) loadProductionOrders();
+      if (transfers.length === 0 && !transfersLoading) loadTransfers();
     }
   }, [activeTab]);
 
@@ -4463,119 +4723,234 @@ export default function Dashboard({ session }: DashboardProps) {
         {/* Production Tab */}
         {activeTab === 'production' && (
           <div className="space-y-4">
-            {/* Header with New Order button */}
-            <div className="flex flex-col gap-4">
-              {/* Top Row: Status Filter + New Order Button */}
+            {/* Filtering Block */}
+            <div className="bg-white shadow rounded-lg p-4 space-y-4">
+              {/* View Toggle + Action Button Row */}
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <select
-                    value={productionFilterStatus}
-                    onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                    className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+                {/* View Toggle */}
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                  <button
+                    onClick={() => setProductionViewType('orders')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    <option value="all">All Orders</option>
-                    <option value="open">Open Orders</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowNewOrderForm(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                >
-                  + New Production Order
-                </button>
-              </div>
-              
-              {/* SKU Search Row */}
-              <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
-                <div className="flex items-center gap-2 relative" ref={skuSearchRef}>
-                  <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={skuSearchQuery}
-                      onChange={(e) => {
-                        const value = e.target.value.toUpperCase();
-                        setSkuSearchQuery(value);
-                        setShowSkuSearchSuggestions(value.length >= 2);
-                        // Clear selected if user is typing something different
-                        if (skuSearchSelected && value !== skuSearchSelected) {
-                          setSkuSearchSelected('');
-                        }
-                      }}
-                      onFocus={() => {
-                        if (skuSearchQuery.length >= 2) {
-                          setShowSkuSearchSuggestions(true);
-                        }
-                      }}
-                      placeholder="e.g. EC-IP17PM"
-                      className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-40 font-mono"
-                    />
-                    {/* SKU Suggestions Dropdown */}
-                    {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && (() => {
-                      // Get unique SKUs from all production orders that match the search
-                      const matchingSkus = [...new Set(
-                        productionOrders
-                          .flatMap(order => order.items.map(item => item.sku))
-                          .filter(sku => sku.toUpperCase().includes(skuSearchQuery))
-                      )].slice(0, 10);
-                      
-                      if (matchingSkus.length === 0) return null;
-                      
-                      return (
-                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-full max-h-48 overflow-y-auto">
-                          {matchingSkus.map(sku => (
-                            <button
-                              key={sku}
-                              type="button"
-                              onClick={() => {
-                                setSkuSearchQuery(sku);
-                                setSkuSearchSelected(sku);
-                                setShowSkuSearchSuggestions(false);
-                                setProductionFilterStatus('all'); // Show all orders when searching
-                              }}
-                              className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
-                            >
-                              {sku}
-                            </button>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
-                  <select
-                    value={poDateFilter}
-                    onChange={(e) => setPoDateFilter(e.target.value)}
-                    className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                    Production Orders
+                  </button>
+                  <button
+                    onClick={() => setProductionViewType('transfers')}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                      productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    <option value="all">All Time</option>
-                    <option value="1m">Last 1 Month</option>
-                    <option value="3m">Last 3 Months</option>
-                    <option value="6m">Last 6 Months</option>
-                    <option value="1y">Last 1 Year</option>
-                    <option value="2y">Last 2 Years</option>
-                  </select>
+                    Transfers
+                  </button>
                 </div>
-                {(skuSearchSelected || poDateFilter !== 'all') && (
+                
+                {/* Action Button */}
+                {productionViewType === 'orders' ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      setSkuSearchQuery('');
-                      setSkuSearchSelected('');
-                      setPoDateFilter('all');
-                    }}
-                    className="text-sm text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowNewOrderForm(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                   >
-                    Clear
+                    + New Production Order
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewTransferForm(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                  >
+                    + Create New Transfer
                   </button>
                 )}
               </div>
+              
+              {/* Filters Row */}
+              {productionViewType === 'orders' ? (
+                <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                    <select
+                      value={productionFilterStatus}
+                      onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
+                      className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                    >
+                      <option value="all">All Orders</option>
+                      <option value="open">Open Orders</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 relative" ref={skuSearchRef}>
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={skuSearchQuery}
+                        onChange={(e) => {
+                          const value = e.target.value.toUpperCase();
+                          setSkuSearchQuery(value);
+                          setShowSkuSearchSuggestions(value.length >= 2);
+                          if (skuSearchSelected && value !== skuSearchSelected) {
+                            setSkuSearchSelected('');
+                          }
+                        }}
+                        onFocus={() => {
+                          if (skuSearchQuery.length >= 2) {
+                            setShowSkuSearchSuggestions(true);
+                          }
+                        }}
+                        placeholder="e.g. EC-IP17PM"
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-40 font-mono"
+                      />
+                      {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && (() => {
+                        const matchingSkus = [...new Set(
+                          productionOrders
+                            .flatMap(order => order.items.map(item => item.sku))
+                            .filter(sku => sku.toUpperCase().includes(skuSearchQuery))
+                        )].slice(0, 10);
+                        
+                        if (matchingSkus.length === 0) return null;
+                        
+                        return (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-full max-h-48 overflow-y-auto">
+                            {matchingSkus.map(sku => (
+                              <button
+                                key={sku}
+                                type="button"
+                                onClick={() => {
+                                  setSkuSearchQuery(sku);
+                                  setSkuSearchSelected(sku);
+                                  setShowSkuSearchSuggestions(false);
+                                  setProductionFilterStatus('all');
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
+                              >
+                                {sku}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                    <select
+                      value={poDateFilter}
+                      onChange={(e) => setPoDateFilter(e.target.value)}
+                      className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="1m">Last 1 Month</option>
+                      <option value="3m">Last 3 Months</option>
+                      <option value="6m">Last 6 Months</option>
+                      <option value="1y">Last 1 Year</option>
+                      <option value="2y">Last 2 Years</option>
+                    </select>
+                  </div>
+                  {(skuSearchSelected || poDateFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSkuSearchQuery('');
+                        setSkuSearchSelected('');
+                        setPoDateFilter('all');
+                      }}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                    <select
+                      value={transferFilterStatus}
+                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
+                      className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                    >
+                      <option value="all">All Transfers</option>
+                      <option value="active">Active</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 relative" ref={transferSkuSearchRef}>
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={transferSkuSearchQuery}
+                        onChange={(e) => {
+                          const value = e.target.value.toUpperCase();
+                          setTransferSkuSearchQuery(value);
+                          setShowTransferSkuSearchSuggestions(value.length >= 2);
+                          if (transferSkuSearchSelected && value !== transferSkuSearchSelected) {
+                            setTransferSkuSearchSelected('');
+                          }
+                        }}
+                        onFocus={() => {
+                          if (transferSkuSearchQuery.length >= 2) {
+                            setShowTransferSkuSearchSuggestions(true);
+                          }
+                        }}
+                        placeholder="e.g. EC-IP17PM"
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-40 font-mono"
+                      />
+                      {showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && (() => {
+                        const matchingSkus = [...new Set(
+                          transfers
+                            .flatMap(transfer => transfer.items.map(item => item.sku))
+                            .filter(sku => sku.toUpperCase().includes(transferSkuSearchQuery))
+                        )].slice(0, 10);
+                        
+                        if (matchingSkus.length === 0) return null;
+                        
+                        return (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-full max-h-48 overflow-y-auto">
+                            {matchingSkus.map(sku => (
+                              <button
+                                key={sku}
+                                type="button"
+                                onClick={() => {
+                                  setTransferSkuSearchQuery(sku);
+                                  setTransferSkuSearchSelected(sku);
+                                  setShowTransferSkuSearchSuggestions(false);
+                                  setTransferFilterStatus('all');
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
+                              >
+                                {sku}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                  {(transferSkuSearchSelected || transferFilterStatus !== 'active') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTransferSkuSearchQuery('');
+                        setTransferSkuSearchSelected('');
+                        setTransferFilterStatus('active');
+                      }}
+                      className="text-sm text-gray-500 hover:text-gray-700"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
+            {/* Production Orders View */}
+            {productionViewType === 'orders' && (
+              <>
             {/* Orders List */}
             {productionOrdersLoading ? (
               <div className="bg-white shadow rounded-lg p-8 text-center">
@@ -5394,6 +5769,635 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 </div>
               </div>
+            )}
+              </>
+            )}
+
+            {/* Transfers View */}
+            {productionViewType === 'transfers' && (
+              <>
+                {/* Transfers List */}
+                {transfersLoading ? (
+                  <div className="bg-white shadow rounded-lg p-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Loading transfers...</p>
+                  </div>
+                ) : (() => {
+                  // Apply filters
+                  const filteredTransfers = transfers.filter(transfer => {
+                    // Status filter
+                    if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
+                    if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
+                    
+                    // SKU search filter
+                    if (transferSkuSearchSelected) {
+                      const hasMatchingSku = transfer.items.some(item => 
+                        item.sku.toUpperCase() === transferSkuSearchSelected.toUpperCase()
+                      );
+                      if (!hasMatchingSku) return false;
+                    }
+                    
+                    return true;
+                  });
+
+                  if (filteredTransfers.length === 0) {
+                    return (
+                      <div className="bg-white shadow rounded-lg p-8 text-center">
+                        <p className="text-gray-500">No transfers found</p>
+                        <button
+                          onClick={() => setShowNewTransferForm(true)}
+                          className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          Create your first transfer
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="bg-white shadow rounded-lg overflow-hidden">
+                      <table className="min-w-full" style={{ tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '80px' }} />
+                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '100px' }} />
+                          <col style={{ width: '100px' }} />
+                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '100px' }} />
+                        </colgroup>
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Origin</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destination</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrier</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {filteredTransfers.map(transfer => {
+                            const isExpanded = selectedTransfer?.id === transfer.id;
+                            const totalItems = transfer.items.reduce((sum, i) => sum + i.quantity, 0);
+                            const skuPreview = transfer.items.map(i => i.sku).join(', ');
+                            const displaySkus = skuPreview.length > 20 ? skuPreview.substring(0, 20) + '...' : skuPreview;
+                            
+                            return (
+                              <Fragment key={transfer.id}>
+                                <tr 
+                                  className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                                  onClick={() => setSelectedTransfer(isExpanded ? null : transfer)}
+                                >
+                                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                                    <span className="flex items-center gap-2">
+                                      <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                      {transfer.id}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-600">{transfer.origin}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-600">{transfer.destination}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500" title={skuPreview}>
+                                    {transfer.items.length} SKU{transfer.items.length !== 1 ? 's' : ''} ({totalItems.toLocaleString()})
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">{transfer.carrier || '—'}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">
+                                    {new Date(transfer.createdAt).toLocaleDateString()}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                      transfer.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                      transfer.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                                      transfer.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {transfer.status === 'in_transit' ? 'In Transit' : 
+                                       transfer.status.charAt(0).toUpperCase() + transfer.status.slice(1)}
+                                    </span>
+                                  </td>
+                                </tr>
+                                {/* Expanded Details Row */}
+                                {isExpanded && (
+                                  <tr>
+                                    <td colSpan={7} className="bg-gray-50 px-4 py-4">
+                                      <div className="grid grid-cols-2 gap-6">
+                                        {/* Left Column - Items */}
+                                        <div>
+                                          <h4 className="text-sm font-medium text-gray-700 mb-3">Items</h4>
+                                          <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
+                                            <table className="min-w-full">
+                                              <thead className="bg-gray-50">
+                                                <tr>
+                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">SKU</th>
+                                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Qty</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody className="divide-y divide-gray-200">
+                                                {transfer.items.map((item, idx) => (
+                                                  <tr key={idx}>
+                                                    <td className="px-3 py-2 text-sm font-mono text-gray-900">{item.sku}</td>
+                                                    <td className="px-3 py-2 text-sm text-right text-gray-600">{item.quantity.toLocaleString()}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Right Column - Details & Actions */}
+                                        <div className="space-y-4">
+                                          <div>
+                                            <h4 className="text-sm font-medium text-gray-700 mb-2">Details</h4>
+                                            <div className="text-sm text-gray-600 space-y-1">
+                                              <p><span className="text-gray-500">Origin:</span> {transfer.origin}</p>
+                                              <p><span className="text-gray-500">Destination:</span> {transfer.destination}</p>
+                                              {transfer.carrier && <p><span className="text-gray-500">Carrier:</span> {transfer.carrier}</p>}
+                                              {transfer.trackingNumber && <p><span className="text-gray-500">Tracking:</span> {transfer.trackingNumber}</p>}
+                                              {transfer.notes && <p><span className="text-gray-500">Notes:</span> {transfer.notes}</p>}
+                                              <p><span className="text-gray-500">Created:</span> {new Date(transfer.createdAt).toLocaleString()} by {transfer.createdBy}</p>
+                                              {transfer.deliveredAt && <p><span className="text-gray-500">Delivered:</span> {new Date(transfer.deliveredAt).toLocaleString()}</p>}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Actions */}
+                                          {!['delivered', 'cancelled'].includes(transfer.status) && (
+                                            <div className="flex gap-2 pt-2">
+                                              {transfer.status === 'pending' && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
+                                                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                                                >
+                                                  Mark In Transit
+                                                </button>
+                                              )}
+                                              {['pending', 'in_transit'].includes(transfer.status) && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'delivered'); }}
+                                                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                                                >
+                                                  Mark Delivered
+                                                </button>
+                                              )}
+                                              <button
+                                                onClick={(e) => { 
+                                                  e.stopPropagation(); 
+                                                  setEditTransferOrigin(transfer.origin);
+                                                  setEditTransferDestination(transfer.destination);
+                                                  setEditTransferItems(transfer.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                                  setEditTransferCarrier(transfer.carrier || '');
+                                                  setEditTransferTracking(transfer.trackingNumber || '');
+                                                  setEditTransferNotes(transfer.notes || '');
+                                                  setShowEditTransferForm(true);
+                                                }}
+                                                className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200"
+                                              >
+                                                Edit
+                                              </button>
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); setShowCancelTransferConfirm(true); }}
+                                                className="px-3 py-1.5 text-red-600 text-sm rounded-md hover:bg-red-50"
+                                              >
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Activity Log */}
+                                          {transfer.activityLog && transfer.activityLog.length > 0 && (
+                                            <div className="pt-2">
+                                              <h4 className="text-sm font-medium text-gray-700 mb-2">Activity Log</h4>
+                                              <div className="text-xs text-gray-500 space-y-1 max-h-32 overflow-y-auto">
+                                                {transfer.activityLog.map((log, idx) => (
+                                                  <p key={idx}>
+                                                    <span className="text-gray-400">{new Date(log.timestamp).toLocaleString()}</span>
+                                                    {' • '}{log.action} by {log.changedBy}
+                                                    {log.details && <span className="text-gray-400"> — {log.details}</span>}
+                                                  </p>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+
+                {/* New Transfer Modal */}
+                {showNewTransferForm && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Create New Transfer</h3>
+                      </div>
+                      <div className="px-6 py-4 space-y-4">
+                        {/* Origin & Destination */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Origin <span className="text-red-500">*</span></label>
+                            <select
+                              value={newTransferOrigin}
+                              onChange={(e) => setNewTransferOrigin(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select origin...</option>
+                              {transferLocations.map(loc => (
+                                <option key={loc} value={loc} disabled={loc === newTransferDestination}>{loc}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Destination <span className="text-red-500">*</span></label>
+                            <select
+                              value={newTransferDestination}
+                              onChange={(e) => setNewTransferDestination(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select destination...</option>
+                              {transferLocations.filter(loc => loc !== newTransferOrigin).map(loc => (
+                                <option key={loc} value={loc}>{loc}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        
+                        {/* Items */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Items <span className="text-red-500">*</span></label>
+                          {newTransferItems.map((item, index) => {
+                            const inputValue = item.sku.toUpperCase();
+                            const skuSuggestions = inputValue.length >= 2 && inventoryData
+                              ? inventoryData.inventory
+                                  .filter(inv => inv.sku.toUpperCase().includes(inputValue))
+                                  .slice(0, 8)
+                                  .map(inv => inv.sku)
+                              : [];
+                            
+                            return (
+                              <div key={index} className="flex gap-2 mb-2">
+                                <div className="relative flex-1">
+                                  <input
+                                    type="text"
+                                    placeholder="SKU"
+                                    value={item.sku}
+                                    onChange={(e) => {
+                                      const updated = [...newTransferItems];
+                                      updated[index].sku = e.target.value.toUpperCase();
+                                      setNewTransferItems(updated);
+                                      setTransferSkuSuggestionIndex(index);
+                                    }}
+                                    onFocus={() => setTransferSkuSuggestionIndex(index)}
+                                    onBlur={() => setTimeout(() => setTransferSkuSuggestionIndex(null), 150)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  />
+                                  {transferSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                      {skuSuggestions.map((sku) => (
+                                        <button
+                                          key={sku}
+                                          type="button"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            const updated = [...newTransferItems];
+                                            updated[index].sku = sku;
+                                            setNewTransferItems(updated);
+                                            setTransferSkuSuggestionIndex(null);
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700"
+                                        >
+                                          {sku}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <input
+                                  type="number"
+                                  placeholder="Qty"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const updated = [...newTransferItems];
+                                    updated[index].quantity = e.target.value;
+                                    setNewTransferItems(updated);
+                                  }}
+                                  className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                                {newTransferItems.length > 1 && (
+                                  <button
+                                    onClick={() => setNewTransferItems(newTransferItems.filter((_, i) => i !== index))}
+                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <button
+                            onClick={() => setNewTransferItems([...newTransferItems, { sku: '', quantity: '' }])}
+                            className="text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            + Add another SKU
+                          </button>
+                        </div>
+                        
+                        {/* Carrier & Tracking */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Carrier (optional)</label>
+                            <select
+                              value={newTransferCarrier}
+                              onChange={(e) => setNewTransferCarrier(e.target.value as CarrierType)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select carrier...</option>
+                              <option value="FedEx">FedEx</option>
+                              <option value="DHL">DHL</option>
+                              <option value="UPS">UPS</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Tracking Number (optional)</label>
+                            <input
+                              type="text"
+                              value={newTransferTracking}
+                              onChange={(e) => setNewTransferTracking(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              placeholder="e.g. 1Z999AA10123456784"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Notes */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Notes (optional)</label>
+                          <textarea
+                            value={newTransferNotes}
+                            onChange={(e) => setNewTransferNotes(e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            placeholder="Additional notes..."
+                          />
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowNewTransferForm(false);
+                            setNewTransferOrigin('');
+                            setNewTransferDestination('');
+                            setNewTransferItems([{ sku: '', quantity: '' }]);
+                            setNewTransferCarrier('');
+                            setNewTransferTracking('');
+                            setNewTransferNotes('');
+                          }}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={createTransfer}
+                          disabled={isCreatingTransfer}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isCreatingTransfer 
+                              ? 'bg-blue-400 text-white cursor-not-allowed' 
+                              : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                          }`}
+                        >
+                          {isCreatingTransfer ? 'Creating...' : 'Create Transfer'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit Transfer Modal */}
+                {showEditTransferForm && selectedTransfer && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Edit Transfer {selectedTransfer.id}</h3>
+                      </div>
+                      <div className="px-6 py-4 space-y-4">
+                        {/* Origin & Destination */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Origin <span className="text-red-500">*</span></label>
+                            <select
+                              value={editTransferOrigin}
+                              onChange={(e) => setEditTransferOrigin(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              {transferLocations.map(loc => (
+                                <option key={loc} value={loc} disabled={loc === editTransferDestination}>{loc}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Destination <span className="text-red-500">*</span></label>
+                            <select
+                              value={editTransferDestination}
+                              onChange={(e) => setEditTransferDestination(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              {transferLocations.filter(loc => loc !== editTransferOrigin).map(loc => (
+                                <option key={loc} value={loc}>{loc}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        
+                        {/* Items */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Items <span className="text-red-500">*</span></label>
+                          {editTransferItems.map((item, index) => {
+                            const inputValue = item.sku.toUpperCase();
+                            const skuSuggestions = inputValue.length >= 2 && inventoryData
+                              ? inventoryData.inventory
+                                  .filter(inv => inv.sku.toUpperCase().includes(inputValue))
+                                  .slice(0, 8)
+                                  .map(inv => inv.sku)
+                              : [];
+                            
+                            return (
+                              <div key={index} className="flex gap-2 mb-2">
+                                <div className="relative flex-1">
+                                  <input
+                                    type="text"
+                                    placeholder="SKU"
+                                    value={item.sku}
+                                    onChange={(e) => {
+                                      const updated = [...editTransferItems];
+                                      updated[index].sku = e.target.value.toUpperCase();
+                                      setEditTransferItems(updated);
+                                    }}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  />
+                                  {skuSuggestions.length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto hidden">
+                                      {skuSuggestions.map((sku) => (
+                                        <button
+                                          key={sku}
+                                          type="button"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            const updated = [...editTransferItems];
+                                            updated[index].sku = sku;
+                                            setEditTransferItems(updated);
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700"
+                                        >
+                                          {sku}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <input
+                                  type="number"
+                                  placeholder="Qty"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const updated = [...editTransferItems];
+                                    updated[index].quantity = e.target.value;
+                                    setEditTransferItems(updated);
+                                  }}
+                                  className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                                {editTransferItems.length > 1 && (
+                                  <button
+                                    onClick={() => setEditTransferItems(editTransferItems.filter((_, i) => i !== index))}
+                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                          <button
+                            onClick={() => setEditTransferItems([...editTransferItems, { sku: '', quantity: '' }])}
+                            className="text-sm text-blue-600 hover:text-blue-800"
+                          >
+                            + Add another SKU
+                          </button>
+                        </div>
+                        
+                        {/* Carrier & Tracking */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Carrier (optional)</label>
+                            <select
+                              value={editTransferCarrier}
+                              onChange={(e) => setEditTransferCarrier(e.target.value as CarrierType)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select carrier...</option>
+                              <option value="FedEx">FedEx</option>
+                              <option value="DHL">DHL</option>
+                              <option value="UPS">UPS</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Tracking Number (optional)</label>
+                            <input
+                              type="text"
+                              value={editTransferTracking}
+                              onChange={(e) => setEditTransferTracking(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              placeholder="e.g. 1Z999AA10123456784"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Notes */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Notes (optional)</label>
+                          <textarea
+                            value={editTransferNotes}
+                            onChange={(e) => setEditTransferNotes(e.target.value)}
+                            rows={2}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            placeholder="Additional notes..."
+                          />
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowEditTransferForm(false)}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={saveTransferEdits}
+                          disabled={isSavingTransfer}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isSavingTransfer 
+                              ? 'bg-blue-400 text-white cursor-not-allowed' 
+                              : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                          }`}
+                        >
+                          {isSavingTransfer ? 'Saving...' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cancel Transfer Confirmation Modal */}
+                {showCancelTransferConfirm && selectedTransfer && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Cancel Transfer?</h3>
+                      </div>
+                      <div className="px-6 py-4">
+                        <p className="text-gray-600">
+                          Are you sure you want to cancel <span className="font-medium">{selectedTransfer.id}</span>? 
+                          This action cannot be undone.
+                        </p>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowCancelTransferConfirm(false)}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Keep Transfer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelTransfer}
+                          disabled={isCancellingTransfer}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isCancellingTransfer
+                              ? 'bg-red-400 text-white cursor-not-allowed'
+                              : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+                          }`}
+                        >
+                          {isCancellingTransfer ? 'Cancelling...' : 'Yes, Cancel Transfer'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
