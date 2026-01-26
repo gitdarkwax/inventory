@@ -152,7 +152,13 @@ export async function POST(request: NextRequest) {
       const { transferId, origin, destination, shipmentType, items } = body;
       
       const isImmediate = shipmentType === 'Immediate';
+      // ShipBob manages its own inventory - skip Shopify destination update for ShipBob
+      const isShipBobDestination = destination === 'ShipBob';
+      
       console.log(`📦 ${isImmediate ? 'Processing immediate transfer' : 'Marking transfer in transit'} ${transferId}: ${origin} → ${destination} [${shipmentType}]`);
+      if (isShipBobDestination && isImmediate) {
+        console.log(`📦 ShipBob destination - will only subtract from origin (ShipBob syncs separately)`);
+      }
       
       const originLocationId = locationIds[origin];
       const destLocationId = locationIds[destination];
@@ -160,7 +166,8 @@ export async function POST(request: NextRequest) {
       if (!originLocationId) {
         return NextResponse.json({ error: `Origin location "${origin}" not found in Shopify` }, { status: 400 });
       }
-      if (!destLocationId) {
+      // Only require dest location ID if we're going to use it (immediate + not ShipBob)
+      if (!destLocationId && isImmediate && !isShipBobDestination) {
         return NextResponse.json({ error: `Destination location "${destination}" not found in Shopify` }, { status: 400 });
       }
 
@@ -193,8 +200,8 @@ export async function POST(request: NextRequest) {
           delta: -item.quantity,
         });
 
-        // For Immediate transfers: also add to destination's On Hand
-        if (isImmediate) {
+        // For Immediate transfers: add to destination's On Hand (skip ShipBob - syncs separately)
+        if (isImmediate && !isShipBobDestination) {
           destAdjustments.push({
             inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
             locationId: `gid://shopify/Location/${destLocationId}`,
@@ -213,10 +220,12 @@ export async function POST(request: NextRequest) {
         await adjustInventory(graphqlUrl, accessToken, originAdjustments, 'movement_updated');
         console.log(`✅ Subtracted from origin ${origin}: ${originAdjustments.length} SKUs`);
 
-        // Step 2 (Immediate only): Add to destination's On Hand in Shopify
-        if (isImmediate && destAdjustments.length > 0) {
+        // Step 2 (Immediate only, skip ShipBob): Add to destination's On Hand in Shopify
+        if (isImmediate && destAdjustments.length > 0 && !isShipBobDestination) {
           await adjustInventory(graphqlUrl, accessToken, destAdjustments, 'received');
           console.log(`✅ Added to destination ${destination}: ${destAdjustments.length} SKUs`);
+        } else if (isImmediate && isShipBobDestination) {
+          console.log(`⏭️ Skipped ShipBob destination Shopify update (syncs separately)`);
         }
 
         // Step 3 (Air/Sea only): Add to incoming cache in our app
@@ -256,52 +265,61 @@ export async function POST(request: NextRequest) {
       
       console.log(`📦 Logging delivery for transfer ${transferId} at ${destination} [${shipmentType}]`);
       
-      const destLocationId = locationIds[destination];
+      // ShipBob manages its own inventory - skip Shopify update for ShipBob destination
+      const isShipBob = destination === 'ShipBob';
       
-      if (!destLocationId) {
-        return NextResponse.json({ error: `Destination location "${destination}" not found in Shopify` }, { status: 400 });
+      if (isShipBob) {
+        console.log(`📦 ShipBob destination - skipping Shopify On Hand update (ShipBob syncs separately)`);
       }
 
-      // Get inventoryItemIds for each SKU from destination location details
-      const destDetails = locationDetails[destination] || [];
-      const availableAdjustments: Array<{
-        inventoryItemId: string;
-        locationId: string;
-        delta: number;
-      }> = [];
-      
       const errors: string[] = [];
 
-      for (const item of items) {
-        let detail = destDetails.find(d => d.sku === item.sku);
-        if (!detail) {
-          // Try to find in any location
-          for (const loc of Object.keys(locationDetails)) {
-            detail = locationDetails[loc]?.find(d => d.sku === item.sku);
-            if (detail) break;
-          }
-          if (!detail) {
-            errors.push(`SKU ${item.sku} not found in inventory`);
-            continue;
-          }
-        }
-
-        // Add to destination's On Hand
-        availableAdjustments.push({
-          inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-          locationId: `gid://shopify/Location/${destLocationId}`,
-          delta: item.quantity,
-        });
-      }
-
-      if (errors.length > 0 && availableAdjustments.length === 0) {
-        return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
-      }
-
       try {
-        // Step 1: Add to destination's On Hand in Shopify
-        await adjustInventory(graphqlUrl, accessToken, availableAdjustments, 'received');
-        console.log(`✅ Added to ${destination} On Hand: ${availableAdjustments.length} SKUs`);
+        // Step 1: Add to destination's On Hand in Shopify (skip for ShipBob)
+        if (!isShipBob) {
+          const destLocationId = locationIds[destination];
+          
+          if (!destLocationId) {
+            return NextResponse.json({ error: `Destination location "${destination}" not found in Shopify` }, { status: 400 });
+          }
+
+          // Get inventoryItemIds for each SKU from destination location details
+          const destDetails = locationDetails[destination] || [];
+          const availableAdjustments: Array<{
+            inventoryItemId: string;
+            locationId: string;
+            delta: number;
+          }> = [];
+
+          for (const item of items) {
+            let detail = destDetails.find(d => d.sku === item.sku);
+            if (!detail) {
+              // Try to find in any location
+              for (const loc of Object.keys(locationDetails)) {
+                detail = locationDetails[loc]?.find(d => d.sku === item.sku);
+                if (detail) break;
+              }
+              if (!detail) {
+                errors.push(`SKU ${item.sku} not found in inventory`);
+                continue;
+              }
+            }
+
+            // Add to destination's On Hand
+            availableAdjustments.push({
+              inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+              locationId: `gid://shopify/Location/${destLocationId}`,
+              delta: item.quantity,
+            });
+          }
+
+          if (errors.length > 0 && availableAdjustments.length === 0) {
+            return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
+          }
+
+          await adjustInventory(graphqlUrl, accessToken, availableAdjustments, 'received');
+          console.log(`✅ Added to ${destination} On Hand: ${availableAdjustments.length} SKUs`);
+        }
 
         // Step 2: Subtract from incoming cache in our app (Air/Sea only)
         if (shipmentType === 'Air Express' || shipmentType === 'Air Slow' || shipmentType === 'Sea') {
@@ -329,6 +347,7 @@ export async function POST(request: NextRequest) {
         action: 'log_delivery',
         transferId,
         itemsAdjusted: items.length,
+        skippedShopify: isShipBob,
         warnings: errors.length > 0 ? errors : undefined,
       });
     }

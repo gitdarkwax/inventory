@@ -327,6 +327,17 @@ export default function Dashboard({ session }: DashboardProps) {
   const [transferToMarkInTransit, setTransferToMarkInTransit] = useState<Transfer | null>(null);
   const [isMarkingInTransit, setIsMarkingInTransit] = useState(false);
   const [showLogDeliveryConfirm, setShowLogDeliveryConfirm] = useState(false);
+  const [showImmediateTransferConfirm, setShowImmediateTransferConfirm] = useState(false);
+  const [pendingImmediateTransfer, setPendingImmediateTransfer] = useState<{
+    origin: string;
+    destination: string;
+    items: { sku: string; quantity: number }[];
+    carrier?: string;
+    trackingNumber?: string;
+    eta?: string;
+    notes?: string;
+  } | null>(null);
+  const [isExecutingImmediateTransfer, setIsExecutingImmediateTransfer] = useState(false);
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
@@ -632,6 +643,27 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // For Immediate transfers, show confirmation modal first
+    if (newTransferType === 'Immediate') {
+      setPendingImmediateTransfer({
+        origin: newTransferOrigin,
+        destination: newTransferDestination,
+        items: validItems,
+        carrier: newTransferCarrier || undefined,
+        trackingNumber: newTransferTracking.trim() || undefined,
+        eta: newTransferEta || undefined,
+        notes: newTransferNotes.trim() || undefined,
+      });
+      setShowImmediateTransferConfirm(true);
+      return;
+    }
+
+    // For Air/Sea transfers, create as draft
+    await executeCreateTransfer(validItems);
+  };
+
+  // Execute the actual transfer creation (for non-immediate or after confirmation)
+  const executeCreateTransfer = async (validItems: { sku: string; quantity: number }[]) => {
     setIsCreatingTransfer(true);
 
     try {
@@ -681,6 +713,111 @@ export default function Dashboard({ session }: DashboardProps) {
       showProdNotification('error', 'Create Failed', 'Failed to create transfer');
     } finally {
       setIsCreatingTransfer(false);
+    }
+  };
+
+  // Confirm and execute immediate transfer (creates + executes in one step)
+  const confirmImmediateTransfer = async () => {
+    if (!pendingImmediateTransfer || isExecutingImmediateTransfer) return;
+    
+    setIsExecutingImmediateTransfer(true);
+
+    try {
+      // Step 1: Create the transfer
+      const createResponse = await fetch('/api/transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: pendingImmediateTransfer.origin,
+          destination: pendingImmediateTransfer.destination,
+          transferType: 'Immediate',
+          items: pendingImmediateTransfer.items,
+          carrier: pendingImmediateTransfer.carrier,
+          trackingNumber: pendingImmediateTransfer.trackingNumber,
+          eta: pendingImmediateTransfer.eta,
+          notes: pendingImmediateTransfer.notes,
+        }),
+      });
+
+      const createData = await createResponse.json();
+
+      if (!createResponse.ok) {
+        if (createData.insufficientStock) {
+          const stockDetails = createData.insufficientStock
+            .map((s: { sku: string; requested: number; available: number }) => 
+              `${s.sku}: need ${s.requested}, only ${s.available} at ${pendingImmediateTransfer.origin}`)
+            .join('\n');
+          showProdNotification('error', 'Insufficient Stock', stockDetails);
+        } else {
+          showProdNotification('error', 'Create Failed', createData.error || 'Failed to create transfer');
+        }
+        return;
+      }
+
+      const newTransfer = createData.transfer;
+
+      // Step 2: Update Shopify inventory (subtract from origin, add to destination)
+      const inventoryResponse = await fetch('/api/transfers/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_in_transit',
+          transferId: newTransfer.id,
+          origin: pendingImmediateTransfer.origin,
+          destination: pendingImmediateTransfer.destination,
+          shipmentType: 'Immediate',
+          items: pendingImmediateTransfer.items,
+        }),
+      });
+
+      const inventoryResult = await inventoryResponse.json();
+
+      if (!inventoryResponse.ok) {
+        showProdNotification('error', 'Shopify Update Failed', inventoryResult.error || 'Failed to update Shopify inventory');
+        // Still update UI with the created transfer
+        setTransfers(prev => [newTransfer, ...prev]);
+        return;
+      }
+
+      // Step 3: Update transfer status to 'delivered'
+      const statusResponse = await fetch('/api/transfers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transferId: newTransfer.id,
+          status: 'delivered',
+          receivedItems: pendingImmediateTransfer.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
+        }),
+      });
+
+      const statusData = await statusResponse.json();
+
+      if (statusResponse.ok) {
+        setTransfers(prev => [statusData.transfer, ...prev]);
+        showProdNotification('success', 'Transfer Complete', `Stock moved from ${pendingImmediateTransfer.origin} to ${pendingImmediateTransfer.destination}`);
+      } else {
+        setTransfers(prev => [newTransfer, ...prev]);
+        showProdNotification('error', 'Status Update Failed', statusData.error || 'Transfer created but status update failed');
+      }
+
+      // Reset form
+      setShowNewTransferForm(false);
+      setNewTransferOrigin('');
+      setNewTransferDestination('');
+      setNewTransferType('');
+      setNewTransferItems([{ sku: '', quantity: '' }]);
+      setNewTransferCarrier('');
+      setNewTransferTracking('');
+      setNewTransferEta('');
+      setNewTransferNotes('');
+      setShowImmediateTransferConfirm(false);
+      setPendingImmediateTransfer(null);
+
+    } catch (err) {
+      console.error('Failed to execute immediate transfer:', err);
+      showProdNotification('error', 'Transfer Failed', 'Failed to complete immediate transfer');
+    } finally {
+      setIsExecutingImmediateTransfer(false);
     }
   };
 
@@ -6942,7 +7079,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
                           }`}
                         >
-                          {isCreatingTransfer ? 'Creating...' : 'Create Transfer'}
+                          {isCreatingTransfer ? 'Creating...' : (newTransferType === 'Immediate' ? 'Transfer Now' : 'Create Transfer')}
                         </button>
                       </div>
                     </div>
@@ -7292,6 +7429,81 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 )}
 
+                {/* Immediate Transfer Confirmation Modal (from New Transfer form) */}
+                {showImmediateTransferConfirm && pendingImmediateTransfer && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Confirm Immediate Transfer</h3>
+                      </div>
+                      <div className="px-6 py-4 space-y-4">
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer - Updates Shopify</p>
+                          <p className="text-xs text-blue-700 mt-1">
+                            • Stock will be <strong>subtracted</strong> from {pendingImmediateTransfer.origin}'s "On Hand"<br/>
+                            {pendingImmediateTransfer.destination === 'ShipBob' 
+                              ? '• ShipBob manages its own inventory - no Shopify update for destination'
+                              : `• Stock will be <strong>added</strong> to ${pendingImmediateTransfer.destination}'s "On Hand"`}
+                          </p>
+                          <p className="text-xs text-blue-600 mt-2 italic">
+                            This is an instant inter-location transfer. No transit period.
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Origin:</span>
+                            <span className="font-medium text-gray-900">{pendingImmediateTransfer.origin}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Destination:</span>
+                            <span className="font-medium text-gray-900">{pendingImmediateTransfer.destination}</span>
+                          </div>
+                        </div>
+
+                        <div className="border-t pt-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Items to be transferred:</p>
+                          <div className="bg-gray-50 rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
+                            {pendingImmediateTransfer.items.map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-sm">
+                                <span className="font-mono text-gray-600">{item.sku}</span>
+                                <span className="text-gray-900">{item.quantity.toLocaleString()} units</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Total: {pendingImmediateTransfer.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()} units
+                          </p>
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowImmediateTransferConfirm(false);
+                            setPendingImmediateTransfer(null);
+                          }}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmImmediateTransfer}
+                          disabled={isExecutingImmediateTransfer}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isExecutingImmediateTransfer
+                              ? 'bg-blue-400 text-white cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                          }`}
+                        >
+                          {isExecutingImmediateTransfer ? 'Transferring...' : 'Confirm Transfer'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Log Delivery Confirmation Modal */}
                 {showLogDeliveryConfirm && selectedTransfer && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -7303,10 +7515,21 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                           <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update inventory</p>
                           <p className="text-xs text-yellow-700 mt-1">
-                            <strong>Shopify:</strong> Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand"<br/>
-                            <strong>This App:</strong> Received quantities will be <strong>subtracted</strong> from "{
-                              selectedTransfer.transferType === 'Sea' ? 'In Sea' : 'In Air'
-                            }" incoming
+                            {selectedTransfer.destination === 'ShipBob' ? (
+                              <>
+                                <strong>ShipBob:</strong> Manages its own inventory - no Shopify update<br/>
+                                <strong>This App:</strong> Received quantities will be <strong>subtracted</strong> from "{
+                                  selectedTransfer.transferType === 'Sea' ? 'In Sea' : 'In Air'
+                                }" incoming
+                              </>
+                            ) : (
+                              <>
+                                <strong>Shopify:</strong> Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand"<br/>
+                                <strong>This App:</strong> Received quantities will be <strong>subtracted</strong> from "{
+                                  selectedTransfer.transferType === 'Sea' ? 'In Sea' : 'In Air'
+                                }" incoming
+                              </>
+                            )}
                           </p>
                         </div>
                         
