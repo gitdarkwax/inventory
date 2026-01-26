@@ -3442,41 +3442,57 @@ export default function Dashboard({ session }: DashboardProps) {
                   // Calculate incoming from our local transfers (not Shopify)
                   const incomingFromTransfers = getIncomingFromTransfers();
                   
-                  // Get inbound air to LA Office (from our local transfers)
+                  // Get inbound air to LA area (LA Office + DTLA WH)
                   const getLAInboundAir = (sku: string): number => {
-                    return incomingFromTransfers['LA Office']?.[sku]?.inboundAir || 0;
+                    const laOffice = incomingFromTransfers['LA Office']?.[sku]?.inboundAir || 0;
+                    const dtlaWH = incomingFromTransfers['DTLA WH']?.[sku]?.inboundAir || 0;
+                    return laOffice + dtlaWH;
                   };
                   
-                  // Get inbound sea to LA Office (from our local transfers)
+                  // Get inbound sea to LA area (LA Office + DTLA WH)
                   const getLAInboundSea = (sku: string): number => {
-                    return incomingFromTransfers['LA Office']?.[sku]?.inboundSea || 0;
+                    const laOffice = incomingFromTransfers['LA Office']?.[sku]?.inboundSea || 0;
+                    const dtlaWH = incomingFromTransfers['DTLA WH']?.[sku]?.inboundSea || 0;
+                    return laOffice + dtlaWH;
                   };
                   
-                  // Get total incoming to LA Office (air + sea)
+                  // Get total incoming to LA area (air + sea)
                   const getLAIncoming = (sku: string): number => {
                     return getLAInboundAir(sku) + getLAInboundSea(sku);
                   };
                   
-                  // Get transfer notes for LA Office (from our local transfers)
+                  // Get transfer notes for LA area (LA Office + DTLA WH)
                   const getLATransferNotes = (sku: string): Array<{ id: string; note: string | null }> => {
-                    const data = incomingFromTransfers['LA Office']?.[sku];
-                    if (!data) return [];
-                    const allTransfers = [...data.airTransfers, ...data.seaTransfers];
-                    return allTransfers.map(t => ({ id: t.id, note: t.note }));
+                    const laData = incomingFromTransfers['LA Office']?.[sku];
+                    const dtlaData = incomingFromTransfers['DTLA WH']?.[sku];
+                    const notes: Array<{ id: string; note: string | null }> = [];
+                    if (laData) {
+                      notes.push(...[...laData.airTransfers, ...laData.seaTransfers].map(t => ({ id: t.id, note: t.note })));
+                    }
+                    if (dtlaData) {
+                      notes.push(...[...dtlaData.airTransfers, ...dtlaData.seaTransfers].map(t => ({ id: t.id, note: t.note })));
+                    }
+                    return notes;
                   };
                   
-                  // Get air transfers for LA Office (from our local transfers)
+                  // Get air transfers for LA area (LA Office + DTLA WH)
                   const getLAAirTransfers = (sku: string): TransferDetail[] => {
-                    const data = incomingFromTransfers['LA Office']?.[sku];
-                    if (!data) return [];
-                    return data.airTransfers;
+                    const laData = incomingFromTransfers['LA Office']?.[sku];
+                    const dtlaData = incomingFromTransfers['DTLA WH']?.[sku];
+                    const transfers: TransferDetail[] = [];
+                    if (laData) transfers.push(...laData.airTransfers);
+                    if (dtlaData) transfers.push(...dtlaData.airTransfers);
+                    return transfers;
                   };
                   
-                  // Get sea transfers for LA Office (from our local transfers)
+                  // Get sea transfers for LA area (LA Office + DTLA WH)
                   const getLASeaTransfers = (sku: string): TransferDetail[] => {
-                    const data = incomingFromTransfers['LA Office']?.[sku];
-                    if (!data) return [];
-                    return data.seaTransfers;
+                    const laData = incomingFromTransfers['LA Office']?.[sku];
+                    const dtlaData = incomingFromTransfers['DTLA WH']?.[sku];
+                    const transfers: TransferDetail[] = [];
+                    if (laData) transfers.push(...laData.seaTransfers);
+                    if (dtlaData) transfers.push(...dtlaData.seaTransfers);
+                    return transfers;
                   };
                   
                   // Get committed from LA (LA Office + DTLA WH)

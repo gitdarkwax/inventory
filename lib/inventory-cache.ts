@@ -124,10 +124,16 @@ export class InventoryCacheService {
 
   /**
    * Save inventory data to cache
+   * IMPORTANT: This preserves existing incomingInventory if not provided in data
    */
   async saveCache(data: Omit<CachedInventoryData, 'lastUpdated' | 'refreshedBy'>, refreshedBy?: string): Promise<void> {
+    // Load existing cache to preserve incomingInventory
+    const existingCache = await this.loadCache();
+    
     const cacheData: CachedInventoryData = {
       ...data,
+      // Preserve existing incomingInventory if not being explicitly updated
+      incomingInventory: data.incomingInventory || existingCache?.incomingInventory || {},
       lastUpdated: new Date().toISOString(),
       refreshedBy: refreshedBy || 'unknown',
     };
