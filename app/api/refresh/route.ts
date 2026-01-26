@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { ShopifyClient } from '@/lib/shopify';
 import { ShopifyQLService } from '@/lib/shopifyql';
-import { ShopifyGraphQLTransferService } from '@/lib/shopify-graphql-transfers';
+// Note: Shopify transfer data is no longer fetched here
+// Incoming quantities are now tracked locally from transfers created in our app
 import { InventoryCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
@@ -146,52 +147,9 @@ export async function fetchInventoryData() {
   
   console.log(`📦 Found ${variantMap.size} variants from products tagged "inventoried"`);
   
-  // Fetch transfers via GraphQL Admin API (2026-01)
-  // This is separate from ShopifyQL queries
-  const graphqlTransferService = new ShopifyGraphQLTransferService();
-  const transferDataBySku = await graphqlTransferService.getTransferDataBySku();
-  console.log(`📦 Fetched transfer data for ${transferDataBySku.size} SKUs via GraphQL`);
-  
-  // Build transfer data by SKU (for LA Office destination)
-  interface TransferInfo {
-    transferName: string;
-    note: string | null;
-    quantity: number;
-    type: 'air' | 'sea' | 'unknown';
-  }
-  
-  const skuTransfers = new Map<string, TransferInfo[]>();
-  
-  // Process GraphQL transfer data
-  for (const [sku, transferData] of transferDataBySku) {
-    for (const transfer of transferData.transfers) {
-      // Map destination name to display name
-      const destName = locationDisplayNames[transfer.destinationLocationName] || transfer.destinationLocationName;
-      
-      // Only track transfers to LA Office
-      if (destName !== 'LA Office') continue;
-      
-      // Determine transfer type from tags (tags is an array from GraphQL)
-      const tagsLower = transfer.tags.join(',').toLowerCase();
-      let transferType: 'air' | 'sea' | 'unknown' = 'unknown';
-      if (tagsLower.includes('air')) {
-        transferType = 'air';
-      } else if (tagsLower.includes('sea')) {
-        transferType = 'sea';
-      }
-      
-      if (!skuTransfers.has(sku)) {
-        skuTransfers.set(sku, []);
-      }
-      
-      skuTransfers.get(sku)!.push({
-        transferName: transfer.transferName,
-        note: transfer.note,
-        quantity: transfer.quantity,
-        type: transferType,
-      });
-    }
-  }
+  // Note: Shopify transfer data is no longer fetched
+  // Incoming quantities (In Air, In Sea) are tracked locally from transfers created in our app
+  // The Dashboard merges local transfer data with this inventory data
   
   // Fetch detailed inventory levels for each location
   interface DetailedLevel {
@@ -268,27 +226,16 @@ export async function fetchInventoryData() {
     // Main view data
     let skuData = skuMap.get(variantInfo.sku);
     if (!skuData) {
-      // Get total in-transit for this SKU from GraphQL transfer data
-      const transferData = transferDataBySku.get(variantInfo.sku);
-      const inTransit = transferData?.totalInTransit || 0;
-      const transferDetails: TransferDetailInfo[] = (transferData?.transfers || []).map(t => ({
-        id: t.transferId,
-        name: t.transferName,
-        quantity: t.quantity,
-        tags: t.tags,
-        note: t.note,
-        createdAt: t.createdAt,
-        expectedArrivalAt: t.expectedArrivalAt,
-      }));
-      
+      // Note: inTransit and transferDetails are now set to 0/empty
+      // Incoming is tracked locally from transfers created in our app
       skuData = {
         sku: variantInfo.sku,
         productTitle: variantInfo.productTitle,
         variantTitle: variantInfo.variantTitle,
         locations: {},
         totalAvailable: 0,
-        inTransit,
-        transferDetails,
+        inTransit: 0, // Now tracked locally from app transfers
+        transferDetails: [], // Now tracked locally from app transfers
       };
       skuMap.set(variantInfo.sku, skuData);
     }
@@ -299,38 +246,8 @@ export async function fetchInventoryData() {
     // Location detail data
     const locDetailMap = locationDetailMap.get(level.displayName);
     if (locDetailMap) {
-      // Get transfer info for this SKU from GraphQL data
-      const transferData = transferDataBySku.get(variantInfo.sku);
-      const allTransfers = transferData?.transfers || [];
-      
-      // Separate transfers by air/sea tag
-      const airTransfers: TransferDetailInfo[] = [];
-      const seaTransfers: TransferDetailInfo[] = [];
-      let inboundAir = 0;
-      let inboundSea = 0;
-      
-      for (const t of allTransfers) {
-        const tagsLower = (t.tags || []).map(tag => tag.toLowerCase());
-        const transferDetail: TransferDetailInfo = {
-          id: t.transferId,
-          name: t.transferName,
-          quantity: t.quantity,
-          tags: t.tags,
-          note: t.note,
-          createdAt: t.createdAt,
-          expectedArrivalAt: t.expectedArrivalAt,
-        };
-        
-        if (tagsLower.includes('air')) {
-          airTransfers.push(transferDetail);
-          inboundAir += t.quantity;
-        } else if (tagsLower.includes('sea')) {
-          seaTransfers.push(transferDetail);
-          inboundSea += t.quantity;
-        }
-      }
-      
-      const transferNotes = allTransfers.map(t => ({ id: t.transferName, note: t.note }));
+      // Note: inboundAir, inboundSea, airTransfers, seaTransfers are now set to 0/empty
+      // These are tracked locally from transfers created in our app and merged in the Dashboard
       
       const existing = locDetailMap.get(variantInfo.sku);
       if (existing) {
@@ -338,14 +255,7 @@ export async function fetchInventoryData() {
         existing.onHand += level.onHand;
         existing.committed += level.committed;
         existing.incoming += level.incoming;
-        // Only update air/sea for LA Office
-        if (level.displayName === 'LA Office') {
-          existing.inboundAir = inboundAir;
-          existing.inboundSea = inboundSea;
-          existing.transferNotes = transferNotes;
-          existing.airTransfers = airTransfers;
-          existing.seaTransfers = seaTransfers;
-        }
+        // inboundAir, inboundSea, transferNotes, airTransfers, seaTransfers stay at 0/[]
       } else {
         locDetailMap.set(variantInfo.sku, {
           sku: variantInfo.sku,
@@ -356,11 +266,11 @@ export async function fetchInventoryData() {
           onHand: level.onHand,
           committed: level.committed,
           incoming: level.incoming,
-          inboundAir: level.displayName === 'LA Office' ? inboundAir : 0,
-          inboundSea: level.displayName === 'LA Office' ? inboundSea : 0,
-          transferNotes: level.displayName === 'LA Office' ? transferNotes : [],
-          airTransfers: level.displayName === 'LA Office' ? airTransfers : [],
-          seaTransfers: level.displayName === 'LA Office' ? seaTransfers : [],
+          inboundAir: 0, // Tracked locally from app transfers
+          inboundSea: 0, // Tracked locally from app transfers
+          transferNotes: [], // Tracked locally from app transfers
+          airTransfers: [], // Tracked locally from app transfers
+          seaTransfers: [], // Tracked locally from app transfers
         });
       }
     }
