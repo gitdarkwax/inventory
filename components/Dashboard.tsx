@@ -314,6 +314,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isUpdatingTransferStatus, setIsUpdatingTransferStatus] = useState(false);
   const [showTransferDeliveryForm, setShowTransferDeliveryForm] = useState(false);
   const [transferDeliveryItems, setTransferDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [showMarkInTransitConfirm, setShowMarkInTransitConfirm] = useState(false);
+  const [transferToMarkInTransit, setTransferToMarkInTransit] = useState<Transfer | null>(null);
+  const [isMarkingInTransit, setIsMarkingInTransit] = useState(false);
+  const [showLogDeliveryConfirm, setShowLogDeliveryConfirm] = useState(false);
+  const [isLoggingDelivery, setIsLoggingDelivery] = useState(false);
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
@@ -601,7 +606,7 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
-  // Update transfer status
+  // Update transfer status (for non-Shopify status changes like cancel)
   const updateTransferStatus = async (transferId: string, newStatus: TransferStatus) => {
     if (isUpdatingTransferStatus) return;
     setIsUpdatingTransferStatus(true);
@@ -632,9 +637,63 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
-  // Log transfer delivery with quantities
-  const logTransferDelivery = async (transferId: string) => {
-    if (isUpdatingTransferStatus || !selectedTransfer) return;
+  // Confirm Mark In Transit - updates Shopify inventory then transfer status
+  const confirmMarkInTransit = async () => {
+    if (!transferToMarkInTransit || isMarkingInTransit) return;
+    
+    setIsMarkingInTransit(true);
+    try {
+      // Step 1: Update Shopify inventory (subtract from origin)
+      const inventoryResponse = await fetch('/api/transfers/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mark_in_transit',
+          transferId: transferToMarkInTransit.id,
+          origin: transferToMarkInTransit.origin,
+          destination: transferToMarkInTransit.destination,
+          items: transferToMarkInTransit.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
+        }),
+      });
+
+      const inventoryData = await inventoryResponse.json();
+
+      if (!inventoryResponse.ok) {
+        showProdNotification('error', 'Shopify Update Failed', inventoryData.details || inventoryData.error || 'Failed to update Shopify inventory');
+        return;
+      }
+
+      // Step 2: Update transfer status
+      const statusResponse = await fetch('/api/transfers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transferId: transferToMarkInTransit.id,
+          status: 'in_transit',
+        }),
+      });
+
+      const statusData = await statusResponse.json();
+
+      if (statusResponse.ok) {
+        setTransfers(prev => prev.map(t => t.id === transferToMarkInTransit.id ? statusData.transfer : t));
+        setShowMarkInTransitConfirm(false);
+        setTransferToMarkInTransit(null);
+        showProdNotification('success', 'In Transit', `Transfer ${transferToMarkInTransit.id} marked in transit. Shopify inventory updated.`);
+      } else {
+        showProdNotification('error', 'Status Update Failed', statusData.error || 'Shopify updated but failed to update transfer status');
+      }
+    } catch (err) {
+      console.error('Failed to mark in transit:', err);
+      showProdNotification('error', 'Update Failed', 'Failed to mark transfer in transit');
+    } finally {
+      setIsMarkingInTransit(false);
+    }
+  };
+
+  // Show delivery confirmation modal (validates first)
+  const showDeliveryConfirmation = () => {
+    if (!selectedTransfer) return;
     
     const validDeliveries = transferDeliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
@@ -645,9 +704,44 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    setIsUpdatingTransferStatus(true);
+    setShowLogDeliveryConfirm(true);
+  };
+
+  // Confirm Log Delivery - updates Shopify inventory then transfer
+  const confirmLogDelivery = async () => {
+    if (isLoggingDelivery || !selectedTransfer) return;
+    
+    const validDeliveries = transferDeliveryItems
+      .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+
+    if (validDeliveries.length === 0) {
+      showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
+      return;
+    }
+
+    setIsLoggingDelivery(true);
     try {
-      // Update items with received quantities
+      // Step 1: Update Shopify inventory (add to destination on_hand)
+      const inventoryResponse = await fetch('/api/transfers/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'log_delivery',
+          transferId: selectedTransfer.id,
+          destination: selectedTransfer.destination,
+          items: validDeliveries,
+        }),
+      });
+
+      const inventoryData = await inventoryResponse.json();
+
+      if (!inventoryResponse.ok) {
+        showProdNotification('error', 'Shopify Update Failed', inventoryData.details || inventoryData.error || 'Failed to update Shopify inventory');
+        return;
+      }
+
+      // Step 2: Update transfer items with received quantities
       const updatedItems = selectedTransfer.items.map(item => {
         const delivery = validDeliveries.find(d => d.sku === item.sku);
         const currentReceived = item.receivedQuantity || 0;
@@ -666,7 +760,7 @@ export default function Dashboard({ session }: DashboardProps) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transferId,
+          transferId: selectedTransfer.id,
           items: updatedItems,
           status: newStatus,
         }),
@@ -675,20 +769,21 @@ export default function Dashboard({ session }: DashboardProps) {
       const data = await response.json();
 
       if (response.ok) {
-        setTransfers(prev => prev.map(t => t.id === transferId ? data.transfer : t));
+        setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowTransferDeliveryForm(false);
+        setShowLogDeliveryConfirm(false);
         setTransferDeliveryItems([]);
         setSelectedTransfer(data.transfer);
         const statusLabel = allDelivered ? 'Delivered' : 'Partial Delivery';
-        showProdNotification('success', statusLabel, `Transfer ${transferId} delivery logged successfully`);
+        showProdNotification('success', statusLabel, `Transfer ${selectedTransfer.id} delivery logged. Shopify inventory updated.`);
       } else {
-        showProdNotification('error', 'Log Failed', data.error || 'Failed to log delivery');
+        showProdNotification('error', 'Log Failed', data.error || 'Shopify updated but failed to update transfer');
       }
     } catch (err) {
       console.error('Failed to log transfer delivery:', err);
       showProdNotification('error', 'Log Failed', 'Failed to log delivery');
     } finally {
-      setIsUpdatingTransferStatus(false);
+      setIsLoggingDelivery(false);
     }
   };
 
@@ -6336,15 +6431,19 @@ export default function Dashboard({ session }: DashboardProps) {
                                               {transfer.status === 'draft' && (
                                                 <button
                                                   type="button"
-                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
-                                                  disabled={isUpdatingTransferStatus}
+                                                  onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    setTransferToMarkInTransit(transfer);
+                                                    setShowMarkInTransitConfirm(true);
+                                                  }}
+                                                  disabled={isMarkingInTransit}
                                                   className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                                                    isUpdatingTransferStatus
+                                                    isMarkingInTransit
                                                       ? 'bg-green-400 text-white cursor-not-allowed'
                                                       : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                                                   }`}
                                                 >
-                                                  {isUpdatingTransferStatus ? 'Updating...' : 'Mark In Transit'}
+                                                  Mark In Transit
                                                 </button>
                                               )}
                                               {/* In Transit or Partial status: show Log Delivery green button */}
@@ -6882,6 +6981,153 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 )}
 
+                {/* Mark In Transit Confirmation Modal */}
+                {showMarkInTransitConfirm && transferToMarkInTransit && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Confirm Mark In Transit</h3>
+                      </div>
+                      <div className="px-6 py-4 space-y-4">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            Stock will be subtracted from the origin location's "On Hand" quantity.
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Transfer ID:</span>
+                            <span className="font-medium text-gray-900">{transferToMarkInTransit.id}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Origin:</span>
+                            <span className="font-medium text-gray-900">{transferToMarkInTransit.origin}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Destination:</span>
+                            <span className="font-medium text-gray-900">{transferToMarkInTransit.destination}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Shipment Type:</span>
+                            <span className="font-medium text-gray-900">{transferToMarkInTransit.transferType || '—'}</span>
+                          </div>
+                        </div>
+
+                        <div className="border-t pt-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Items to be shipped:</p>
+                          <div className="bg-gray-50 rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
+                            {transferToMarkInTransit.items.map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-sm">
+                                <span className="font-mono text-gray-600">{item.sku}</span>
+                                <span className="text-gray-900">{item.quantity.toLocaleString()} units</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Total: {transferToMarkInTransit.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()} units
+                          </p>
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowMarkInTransitConfirm(false);
+                            setTransferToMarkInTransit(null);
+                          }}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmMarkInTransit}
+                          disabled={isMarkingInTransit}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isMarkingInTransit
+                              ? 'bg-green-400 text-white cursor-not-allowed'
+                              : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                          }`}
+                        >
+                          {isMarkingInTransit ? 'Updating Shopify...' : 'Confirm & Update Shopify'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Log Delivery Confirmation Modal */}
+                {showLogDeliveryConfirm && selectedTransfer && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Confirm Delivery</h3>
+                      </div>
+                      <div className="px-6 py-4 space-y-4">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                          <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            Stock will be added to {selectedTransfer.destination}'s "On Hand" quantity.
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Transfer ID:</span>
+                            <span className="font-medium text-gray-900">{selectedTransfer.id}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Destination:</span>
+                            <span className="font-medium text-gray-900">{selectedTransfer.destination}</span>
+                          </div>
+                        </div>
+
+                        <div className="border-t pt-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Items being received:</p>
+                          <div className="bg-gray-50 rounded-lg p-3 space-y-1 max-h-40 overflow-y-auto">
+                            {transferDeliveryItems
+                              .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+                              .map((item, idx) => (
+                                <div key={idx} className="flex justify-between text-sm">
+                                  <span className="font-mono text-gray-600">{item.sku}</span>
+                                  <span className="text-gray-900">{parseInt(item.quantity).toLocaleString()} units</span>
+                                </div>
+                              ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Total: {transferDeliveryItems
+                              .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
+                              .reduce((sum, i) => sum + parseInt(i.quantity), 0).toLocaleString()} units
+                          </p>
+                        </div>
+                      </div>
+                      <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowLogDeliveryConfirm(false)}
+                          className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          onClick={confirmLogDelivery}
+                          disabled={isLoggingDelivery}
+                          className={`px-4 py-2 rounded-md text-sm font-medium ${
+                            isLoggingDelivery
+                              ? 'bg-green-400 text-white cursor-not-allowed'
+                              : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                          }`}
+                        >
+                          {isLoggingDelivery ? 'Updating Shopify...' : 'Confirm & Update Shopify'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Transfer Delivery Modal */}
                 {showTransferDeliveryForm && selectedTransfer && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -6935,15 +7181,10 @@ export default function Dashboard({ session }: DashboardProps) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => logTransferDelivery(selectedTransfer.id)}
-                          disabled={isUpdatingTransferStatus}
-                          className={`px-4 py-2 rounded-md text-sm font-medium ${
-                            isUpdatingTransferStatus
-                              ? 'bg-green-400 text-white cursor-not-allowed'
-                              : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
-                          }`}
+                          onClick={() => showDeliveryConfirmation()}
+                          className="px-4 py-2 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 active:bg-green-800"
                         >
-                          {isUpdatingTransferStatus ? 'Saving...' : 'Confirm Delivery'}
+                          Continue
                         </button>
                       </div>
                     </div>
