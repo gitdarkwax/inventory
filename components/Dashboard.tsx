@@ -5837,13 +5837,6 @@ export default function Dashboard({ session }: DashboardProps) {
                     <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.id}</h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
-                    {/* PO Number - Display Only */}
-                    {selectedOrder.poNumber && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">PO#</label>
-                        <p className="text-sm text-gray-900 font-medium">{selectedOrder.poNumber}</p>
-                      </div>
-                    )}
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
