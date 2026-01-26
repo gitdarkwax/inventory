@@ -318,7 +318,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [transferToMarkInTransit, setTransferToMarkInTransit] = useState<Transfer | null>(null);
   const [isMarkingInTransit, setIsMarkingInTransit] = useState(false);
   const [showLogDeliveryConfirm, setShowLogDeliveryConfirm] = useState(false);
-  const [isLoggingDelivery, setIsLoggingDelivery] = useState(false);
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
@@ -954,8 +953,8 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
   };
 
-  // Show delivery confirmation (first step - validates and shows confirmation modal)
-  const showDeliveryConfirmation = () => {
+  // Show order delivery confirmation (first step - validates and shows confirmation modal)
+  const showOrderDeliveryConfirmation = () => {
     const validDeliveries = getValidDeliveries();
 
     if (validDeliveries.length === 0) {
@@ -5868,7 +5867,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={showDeliveryConfirmation}
+                      onClick={showOrderDeliveryConfirmation}
                       className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
                     >
                       Confirm Delivery
