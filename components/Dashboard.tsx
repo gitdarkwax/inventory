@@ -2046,7 +2046,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     activeTab === 'production' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                   }`}
                 >
-                  🚚 Prod & Transfer
+                  🚚 POs & Transfers
                 </button>
                 <button
                   onClick={() => setActiveTab('warehouse')}
