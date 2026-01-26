@@ -255,7 +255,6 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isUpdatingShopify, setIsUpdatingShopify] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editOrderItems, setEditOrderItems] = useState<{ sku: string; quantity: string }[]>([]);
-  const [editOrderPoNumber, setEditOrderPoNumber] = useState('');
   const [editOrderVendor, setEditOrderVendor] = useState('');
   const [editOrderEta, setEditOrderEta] = useState('');
   const [editOrderNotes, setEditOrderNotes] = useState('');
@@ -984,11 +983,6 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Check if PO number already exists (excluding current order)
-    if (checkDuplicatePO(editOrderPoNumber, orderId)) {
-      return;
-    }
-
     setIsSavingOrder(true);
     try {
       const response = await fetch('/api/production-orders', {
@@ -997,7 +991,6 @@ export default function Dashboard({ session }: DashboardProps) {
         body: JSON.stringify({
           orderId,
           items: validItems,
-          poNumber: editOrderPoNumber || undefined,
           vendor: editOrderVendor || undefined,
           eta: editOrderEta || undefined,
           notes: editOrderNotes,
@@ -5436,7 +5429,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
-                                              setEditOrderPoNumber(order.poNumber || '');
                                               setEditOrderVendor(order.vendor || '');
                                               setEditOrderEta(order.eta || '');
                                               setEditOrderNotes(order.notes || '');
@@ -5860,18 +5852,13 @@ export default function Dashboard({ session }: DashboardProps) {
                     <h3 className="text-lg font-semibold text-gray-900">Edit {selectedOrder.id}</h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
-                    {/* PO Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">PO# <span className="text-xs text-gray-400 font-normal">(from Shopify)</span></label>
-                      <input
-                        type="text"
-                        value={editOrderPoNumber}
-                        onChange={(e) => setEditOrderPoNumber(e.target.value.toUpperCase())}
-                        onBlur={() => checkDuplicatePO(editOrderPoNumber, selectedOrder?.id)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        placeholder="PO12345"
-                      />
-                    </div>
+                    {/* PO Number - Display Only */}
+                    {selectedOrder.poNumber && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">PO#</label>
+                        <p className="text-sm text-gray-900 font-medium">{selectedOrder.poNumber}</p>
+                      </div>
+                    )}
                     {/* Items */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
