@@ -5854,17 +5854,33 @@ export default function Dashboard({ session }: DashboardProps) {
                     );
                   }
 
+                  // Helper function to get tracking URL based on carrier
+                  const getTrackingUrl = (carrier: string | undefined, trackingNumber: string | undefined): string | null => {
+                    if (!trackingNumber) return null;
+                    switch (carrier) {
+                      case 'FedEx':
+                        return `https://www.fedex.com/fedextrack/?trknbr=${trackingNumber}`;
+                      case 'DHL':
+                        return `https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=${trackingNumber}`;
+                      case 'UPS':
+                        return `https://www.ups.com/track?tracknum=${trackingNumber}`;
+                      default:
+                        return null;
+                    }
+                  };
+
                   return (
                     <div className="bg-white shadow rounded-lg overflow-hidden">
                       <table className="min-w-full" style={{ tableLayout: 'fixed' }}>
                         <colgroup>
-                          <col style={{ width: '80px' }} />
-                          <col style={{ width: '120px' }} />
-                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '70px' }} />
                           <col style={{ width: '100px' }} />
                           <col style={{ width: '100px' }} />
-                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '90px' }} />
+                          <col style={{ width: '140px' }} />
                           <col style={{ width: '100px' }} />
+                          <col style={{ width: '100px' }} />
+                          <col style={{ width: '90px' }} />
                         </colgroup>
                         <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
@@ -5872,7 +5888,8 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Origin</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Destination</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrier</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrier / Tracking</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Est. Arrival</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                           </tr>
@@ -5883,6 +5900,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             const totalItems = transfer.items.reduce((sum, i) => sum + i.quantity, 0);
                             const skuPreview = transfer.items.map(i => i.sku).join(', ');
                             const displaySkus = skuPreview.length > 20 ? skuPreview.substring(0, 20) + '...' : skuPreview;
+                            const trackingUrl = getTrackingUrl(transfer.carrier, transfer.trackingNumber);
                             
                             return (
                               <Fragment key={transfer.id}>
@@ -5903,7 +5921,34 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <td className="px-4 py-3 text-sm text-gray-500" title={skuPreview}>
                                     {transfer.items.length} SKU{transfer.items.length !== 1 ? 's' : ''} ({totalItems.toLocaleString()})
                                   </td>
-                                  <td className="px-4 py-3 text-sm text-gray-500">{transfer.carrier || '—'}</td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">
+                                    {transfer.carrier ? (
+                                      <span>
+                                        {transfer.carrier}
+                                        {transfer.trackingNumber && (
+                                          <>
+                                            {' / '}
+                                            {trackingUrl ? (
+                                              <a
+                                                href={trackingUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="text-blue-600 hover:text-blue-800 hover:underline"
+                                              >
+                                                {transfer.trackingNumber}
+                                              </a>
+                                            ) : (
+                                              <span>{transfer.trackingNumber}</span>
+                                            )}
+                                          </>
+                                        )}
+                                      </span>
+                                    ) : '—'}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-500">
+                                    {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                                  </td>
                                   <td className="px-4 py-3 text-sm text-gray-500">
                                     {new Date(transfer.createdAt).toLocaleDateString()}
                                   </td>
@@ -5922,67 +5967,131 @@ export default function Dashboard({ session }: DashboardProps) {
                                 {/* Expanded Details Row */}
                                 {isExpanded && (
                                   <tr>
-                                    <td colSpan={7} className="bg-gray-50 px-4 py-4">
-                                      <div className="grid grid-cols-2 gap-6">
-                                        {/* Left Column - Items */}
+                                    <td colSpan={8} className="bg-gray-50 px-4 py-4">
+                                      <div className="space-y-4">
+                                        {/* Meta info */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                          <div>
+                                            <span className="text-gray-500">Created by:</span>
+                                            <span className="ml-2 text-gray-900">{transfer.createdBy}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Carrier:</span>
+                                            <span className="ml-2 text-gray-900">{transfer.carrier || '—'}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Created:</span>
+                                            <span className="ml-2 text-gray-900">
+                                              {new Date(transfer.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Est. Arrival:</span>
+                                            <span className="ml-2 text-gray-900">
+                                              {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        {/* Tracking Number Row */}
+                                        {transfer.trackingNumber && (
+                                          <div className="text-sm">
+                                            <span className="text-gray-500">Tracking:</span>
+                                            <span className="ml-2">
+                                              {trackingUrl ? (
+                                                <a
+                                                  href={trackingUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                                                >
+                                                  {transfer.trackingNumber}
+                                                </a>
+                                              ) : (
+                                                <span className="text-gray-900">{transfer.trackingNumber}</span>
+                                              )}
+                                            </span>
+                                          </div>
+                                        )}
+                                        {/* Items Table */}
                                         <div>
-                                          <h4 className="text-sm font-medium text-gray-700 mb-3">Items</h4>
+                                          <h4 className="text-sm font-medium text-gray-700 mb-2">Items ({transfer.items.length})</h4>
                                           <div className="bg-white rounded-md border border-gray-200 overflow-hidden">
-                                            <table className="min-w-full">
-                                              <thead className="bg-gray-50">
+                                            <table className="min-w-full divide-y divide-gray-200">
+                                              <thead className="bg-gray-100">
                                                 <tr>
-                                                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">SKU</th>
-                                                  <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Qty</th>
+                                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Quantity</th>
                                                 </tr>
                                               </thead>
                                               <tbody className="divide-y divide-gray-200">
                                                 {transfer.items.map((item, idx) => (
                                                   <tr key={idx}>
-                                                    <td className="px-3 py-2 text-sm font-mono text-gray-900">{item.sku}</td>
-                                                    <td className="px-3 py-2 text-sm text-right text-gray-600">{item.quantity.toLocaleString()}</td>
+                                                    <td className="px-4 py-2 text-sm text-gray-900 font-mono">{item.sku}</td>
+                                                    <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
                                                   </tr>
                                                 ))}
+                                                <tr className="bg-gray-100">
+                                                  <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
+                                                  <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
+                                                    {transfer.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
+                                                  </td>
+                                                </tr>
                                               </tbody>
                                             </table>
                                           </div>
                                         </div>
-                                        
-                                        {/* Right Column - Details & Actions */}
-                                        <div className="space-y-4">
+                                        {/* Notes */}
+                                        {transfer.notes && (
                                           <div>
-                                            <h4 className="text-sm font-medium text-gray-700 mb-2">Details</h4>
-                                            <div className="text-sm text-gray-600 space-y-1">
-                                              <p><span className="text-gray-500">Origin:</span> {transfer.origin}</p>
-                                              <p><span className="text-gray-500">Destination:</span> {transfer.destination}</p>
-                                              {transfer.carrier && <p><span className="text-gray-500">Carrier:</span> {transfer.carrier}</p>}
-                                              {transfer.trackingNumber && <p><span className="text-gray-500">Tracking:</span> {transfer.trackingNumber}</p>}
-                                              {transfer.eta && <p><span className="text-gray-500">Est. Delivery:</span> {new Date(transfer.eta).toLocaleDateString()}</p>}
-                                              {transfer.notes && <p><span className="text-gray-500">Notes:</span> {transfer.notes}</p>}
-                                              <p><span className="text-gray-500">Created:</span> {new Date(transfer.createdAt).toLocaleString()} by {transfer.createdBy}</p>
-                                              {transfer.deliveredAt && <p><span className="text-gray-500">Delivered:</span> {new Date(transfer.deliveredAt).toLocaleString()}</p>}
-                                            </div>
+                                            <h4 className="text-sm font-medium text-gray-700 mb-2">Notes</h4>
+                                            <p className="text-sm text-gray-600 bg-white p-3 rounded-md border border-gray-200">{transfer.notes}</p>
                                           </div>
-                                          
-                                          {/* Actions */}
-                                          {!['delivered', 'cancelled'].includes(transfer.status) && (
-                                            <div className="flex gap-2 pt-2">
-                                              {transfer.status === 'pending' && (
-                                                <button
-                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
-                                                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
-                                                >
-                                                  Mark In Transit
-                                                </button>
-                                              )}
+                                        )}
+                                        {/* Activity Log */}
+                                        {transfer.activityLog && transfer.activityLog.length > 0 && (
+                                          <div>
+                                            <details className="group">
+                                              <summary className="text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700 flex items-center gap-1">
+                                                <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                </svg>
+                                                Activity Log ({transfer.activityLog.length})
+                                              </summary>
+                                              <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                                                {[...transfer.activityLog].reverse().map((entry, idx) => (
+                                                  <div key={idx} className="text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
+                                                    <div className="flex justify-between items-start gap-2">
+                                                      <span className="font-medium text-gray-700">{entry.action}</span>
+                                                      <span className="text-gray-400 whitespace-nowrap">
+                                                        {new Date(entry.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {new Date(entry.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                                                      </span>
+                                                    </div>
+                                                    {entry.details && (
+                                                      <div className="text-gray-500 mt-0.5">{entry.details}</div>
+                                                    )}
+                                                    <div className="text-gray-400 mt-0.5">by {entry.changedBy}</div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </details>
+                                          </div>
+                                        )}
+                                        {/* Actions */}
+                                        <div className="flex gap-2 pt-2">
+                                          {!['delivered', 'cancelled'].includes(transfer.status) ? (
+                                            <>
                                               {['pending', 'in_transit'].includes(transfer.status) && (
                                                 <button
+                                                  type="button"
                                                   onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'delivered'); }}
-                                                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                                                  className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
                                                 >
-                                                  Mark Delivered
+                                                  Log Delivery
                                                 </button>
                                               )}
                                               <button
+                                                type="button"
                                                 onClick={(e) => { 
                                                   e.stopPropagation(); 
                                                   setEditTransferOrigin(transfer.origin);
@@ -5994,33 +6103,46 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   setEditTransferNotes(transfer.notes || '');
                                                   setShowEditTransferForm(true);
                                                 }}
-                                                className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200"
+                                                className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                                               >
                                                 Edit
                                               </button>
+                                              {transfer.status === 'pending' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => { e.stopPropagation(); updateTransferStatus(transfer.id, 'in_transit'); }}
+                                                  className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
+                                                >
+                                                  Mark In Transit
+                                                </button>
+                                              )}
                                               <button
+                                                type="button"
                                                 onClick={(e) => { e.stopPropagation(); setShowCancelTransferConfirm(true); }}
-                                                className="px-3 py-1.5 text-red-600 text-sm rounded-md hover:bg-red-50"
+                                                className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
                                               >
-                                                Cancel
+                                                Cancel Transfer
                                               </button>
-                                            </div>
-                                          )}
-                                          
-                                          {/* Activity Log */}
-                                          {transfer.activityLog && transfer.activityLog.length > 0 && (
-                                            <div className="pt-2">
-                                              <h4 className="text-sm font-medium text-gray-700 mb-2">Activity Log</h4>
-                                              <div className="text-xs text-gray-500 space-y-1 max-h-32 overflow-y-auto">
-                                                {transfer.activityLog.map((log, idx) => (
-                                                  <p key={idx}>
-                                                    <span className="text-gray-400">{new Date(log.timestamp).toLocaleString()}</span>
-                                                    {' • '}{log.action} by {log.changedBy}
-                                                    {log.details && <span className="text-gray-400"> — {log.details}</span>}
-                                                  </p>
-                                                ))}
-                                              </div>
-                                            </div>
+                                            </>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setNewTransferOrigin(transfer.origin);
+                                                setNewTransferDestination(transfer.destination);
+                                                setNewTransferItems(transfer.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                                setNewTransferCarrier(transfer.carrier || '');
+                                                setNewTransferTracking('');
+                                                setNewTransferEta('');
+                                                setNewTransferNotes(transfer.notes || '');
+                                                setSelectedTransfer(null);
+                                                setShowNewTransferForm(true);
+                                              }}
+                                              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
+                                            >
+                                              Duplicate Transfer
+                                            </button>
                                           )}
                                         </div>
                                       </div>
