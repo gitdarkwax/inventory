@@ -5,7 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { TransfersService, CarrierType } from '@/lib/transfers';
+import { TransfersService, CarrierType, TransferType } from '@/lib/transfers';
+import { AnalyticsCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,9 +43,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { origin, destination, items, carrier, trackingNumber, eta, notes } = body as { 
+    const { origin, destination, transferType, items, carrier, trackingNumber, eta, notes } = body as { 
       origin: string;
       destination: string;
+      transferType: TransferType;
       items: { sku: string; quantity: number }[]; 
       carrier?: CarrierType;
       trackingNumber?: string;
@@ -63,6 +65,21 @@ export async function POST(request: NextRequest) {
     if (!destination) {
       return NextResponse.json(
         { error: 'Destination is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!transferType) {
+      return NextResponse.json(
+        { error: 'Transfer Type is required' },
+        { status: 400 }
+      );
+    }
+
+    const validTransferTypes: TransferType[] = ['Air Express', 'Air Slow', 'Sea', 'Immediate'];
+    if (!validTransferTypes.includes(transferType)) {
+      return NextResponse.json(
+        { error: 'Invalid transfer type. Must be: Air Express, Air Slow, Sea, or Immediate' },
         { status: 400 }
       );
     }
@@ -91,9 +108,49 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check stock availability at origin location
+    try {
+      const inventoryCache = await AnalyticsCacheService.loadFromCache();
+      if (inventoryCache?.inventory) {
+        const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+        
+        for (const item of items) {
+          const inventoryItem = inventoryCache.inventory.find(inv => inv.sku === item.sku);
+          const availableAtOrigin = inventoryItem?.locations?.[origin] || 0;
+          
+          if (availableAtOrigin < item.quantity) {
+            insufficientStock.push({
+              sku: item.sku,
+              requested: item.quantity,
+              available: availableAtOrigin,
+            });
+          }
+        }
+        
+        if (insufficientStock.length > 0) {
+          const errorDetails = insufficientStock
+            .map(s => `${s.sku}: requested ${s.requested}, only ${s.available} available`)
+            .join('; ');
+          
+          return NextResponse.json(
+            { 
+              error: 'Insufficient stock at origin location',
+              details: errorDetails,
+              insufficientStock,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    } catch (stockCheckError) {
+      console.warn('Could not verify stock levels:', stockCheckError);
+      // Continue with transfer creation even if stock check fails
+    }
+
     const newTransfer = await TransfersService.createTransfer(
       origin,
       destination,
+      transferType,
       items,
       session.user.name || 'Unknown',
       session.user.email || 'unknown@example.com',
@@ -123,10 +180,11 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transferId, origin, destination, items, carrier, trackingNumber, eta, notes, status } = body as {
+    const { transferId, origin, destination, transferType, items, carrier, trackingNumber, eta, notes, status } = body as {
       transferId: string;
       origin?: string;
       destination?: string;
+      transferType?: TransferType;
       items?: { sku: string; quantity: number; receivedQuantity?: number }[];
       carrier?: CarrierType;
       trackingNumber?: string;
@@ -158,6 +216,7 @@ export async function PATCH(request: NextRequest) {
       {
         origin,
         destination,
+        transferType,
         items,
         carrier,
         trackingNumber,

@@ -20,11 +20,13 @@ export interface ActivityLogEntry {
 
 export type TransferStatus = 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
 export type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
+export type TransferType = 'Air Express' | 'Air Slow' | 'Sea' | 'Immediate';
 
 export interface Transfer {
   id: string; // T001, T002, etc.
   origin: string;
   destination: string;
+  transferType: TransferType;
   items: TransferItem[];
   carrier?: CarrierType;
   trackingNumber?: string;
@@ -259,6 +261,7 @@ export class TransfersService {
   static async createTransfer(
     origin: string,
     destination: string,
+    transferType: TransferType,
     items: TransferItem[],
     createdBy: string,
     createdByEmail: string,
@@ -281,6 +284,7 @@ export class TransfersService {
       id: transferId,
       origin,
       destination,
+      transferType,
       items,
       carrier: carrier || '',
       trackingNumber: trackingNumber || '',
@@ -296,7 +300,7 @@ export class TransfersService {
         action: 'Transfer Created',
         changedBy: createdBy,
         changedByEmail: createdByEmail,
-        details: `${origin} → ${destination}: ${itemsSummary}`,
+        details: `[${transferType}] ${origin} → ${destination}: ${itemsSummary}`,
       }],
     };
 
@@ -313,7 +317,7 @@ export class TransfersService {
    */
   static async updateTransfer(
     transferId: string,
-    updates: Partial<Pick<Transfer, 'origin' | 'destination' | 'items' | 'carrier' | 'trackingNumber' | 'eta' | 'notes' | 'status'>>,
+    updates: Partial<Pick<Transfer, 'origin' | 'destination' | 'transferType' | 'items' | 'carrier' | 'trackingNumber' | 'eta' | 'notes' | 'status'>>,
     changedBy?: string,
     changedByEmail?: string
   ): Promise<Transfer | null> {
@@ -339,6 +343,10 @@ export class TransfersService {
     if (updates.destination !== undefined && updates.destination !== transfer.destination) {
       changes.push(`Destination: ${updates.destination}`);
       transfer.destination = updates.destination;
+    }
+    if (updates.transferType !== undefined && updates.transferType !== transfer.transferType) {
+      changes.push(`Transfer Type: ${updates.transferType}`);
+      transfer.transferType = updates.transferType;
     }
     if (updates.items !== undefined) {
       const oldItems = transfer.items.map(i => `${i.sku} x${i.quantity}`).join(', ');

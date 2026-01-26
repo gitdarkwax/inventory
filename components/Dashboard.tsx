@@ -133,11 +133,13 @@ interface TransferItem {
 
 type TransferStatus = 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
 type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
+type TransferType = 'Air Express' | 'Air Slow' | 'Sea' | 'Immediate';
 
 interface Transfer {
   id: string;
   origin: string;
   destination: string;
+  transferType: TransferType;
   items: TransferItem[];
   carrier?: CarrierType;
   trackingNumber?: string;
@@ -283,6 +285,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferOrigin, setNewTransferOrigin] = useState<string>('');
   const [newTransferDestination, setNewTransferDestination] = useState<string>('');
   const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
+  const [newTransferType, setNewTransferType] = useState<TransferType | ''>('');
   const [newTransferCarrier, setNewTransferCarrier] = useState<CarrierType>('');
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
@@ -298,6 +301,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showEditTransferForm, setShowEditTransferForm] = useState(false);
   const [editTransferOrigin, setEditTransferOrigin] = useState('');
   const [editTransferDestination, setEditTransferDestination] = useState('');
+  const [editTransferType, setEditTransferType] = useState<TransferType | ''>('');
   const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string }[]>([]);
   const [editTransferCarrier, setEditTransferCarrier] = useState<CarrierType>('');
   const [editTransferTracking, setEditTransferTracking] = useState('');
@@ -526,6 +530,11 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
     
+    if (!newTransferType) {
+      showProdNotification('error', 'Missing Transfer Type', 'Please select a transfer type');
+      return;
+    }
+    
     if (newTransferOrigin === newTransferDestination) {
       showProdNotification('error', 'Invalid Locations', 'Origin and destination cannot be the same');
       return;
@@ -549,6 +558,7 @@ export default function Dashboard({ session }: DashboardProps) {
         body: JSON.stringify({
           origin: newTransferOrigin,
           destination: newTransferDestination,
+          transferType: newTransferType,
           items: validItems,
           carrier: newTransferCarrier || undefined,
           trackingNumber: newTransferTracking.trim() || undefined,
@@ -564,6 +574,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setShowNewTransferForm(false);
         setNewTransferOrigin('');
         setNewTransferDestination('');
+        setNewTransferType('');
         setNewTransferItems([{ sku: '', quantity: '' }]);
         setNewTransferCarrier('');
         setNewTransferTracking('');
@@ -571,7 +582,16 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferNotes('');
         showProdNotification('success', 'Transfer Created', `Transfer ${data.transfer.id} created successfully`);
       } else {
-        showProdNotification('error', 'Create Failed', data.error || 'Failed to create transfer');
+        // Handle insufficient stock error with details
+        if (data.insufficientStock) {
+          const stockDetails = data.insufficientStock
+            .map((s: { sku: string; requested: number; available: number }) => 
+              `${s.sku}: need ${s.requested}, only ${s.available} at ${newTransferOrigin}`)
+            .join('\n');
+          showProdNotification('error', 'Insufficient Stock', stockDetails);
+        } else {
+          showProdNotification('error', 'Create Failed', data.error || 'Failed to create transfer');
+        }
       }
     } catch (err) {
       console.error('Failed to create transfer:', err);
@@ -685,6 +705,11 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    if (!editTransferType) {
+      showProdNotification('error', 'Missing Transfer Type', 'Please select a transfer type');
+      return;
+    }
+
     if (editTransferOrigin === editTransferDestination) {
       showProdNotification('error', 'Invalid Locations', 'Origin and destination cannot be the same');
       return;
@@ -700,6 +725,7 @@ export default function Dashboard({ session }: DashboardProps) {
           transferId: selectedTransfer.id,
           origin: editTransferOrigin,
           destination: editTransferDestination,
+          transferType: editTransferType,
           items: validItems,
           carrier: editTransferCarrier || undefined,
           trackingNumber: editTransferTracking.trim() || undefined,
@@ -6344,6 +6370,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   e.stopPropagation(); 
                                                   setEditTransferOrigin(transfer.origin);
                                                   setEditTransferDestination(transfer.destination);
+                                                  setEditTransferType(transfer.transferType || '');
                                                   setEditTransferItems(transfer.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
                                                   setEditTransferCarrier(transfer.carrier || '');
                                                   setEditTransferTracking(transfer.trackingNumber || '');
@@ -6433,6 +6460,22 @@ export default function Dashboard({ session }: DashboardProps) {
                               ))}
                             </select>
                           </div>
+                        </div>
+
+                        {/* Transfer Type */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Transfer Type <span className="text-red-500">*</span></label>
+                          <select
+                            value={newTransferType}
+                            onChange={(e) => setNewTransferType(e.target.value as TransferType)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          >
+                            <option value="">Select transfer type...</option>
+                            <option value="Air Express">Air Express</option>
+                            <option value="Air Slow">Air Slow</option>
+                            <option value="Sea">Sea</option>
+                            <option value="Immediate">Immediate</option>
+                          </select>
                         </div>
                         
                         {/* Items */}
@@ -6631,6 +6674,22 @@ export default function Dashboard({ session }: DashboardProps) {
                               ))}
                             </select>
                           </div>
+                        </div>
+
+                        {/* Transfer Type */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Transfer Type <span className="text-red-500">*</span></label>
+                          <select
+                            value={editTransferType}
+                            onChange={(e) => setEditTransferType(e.target.value as TransferType)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          >
+                            <option value="">Select transfer type...</option>
+                            <option value="Air Express">Air Express</option>
+                            <option value="Air Slow">Air Slow</option>
+                            <option value="Sea">Sea</option>
+                            <option value="Immediate">Immediate</option>
+                          </select>
                         </div>
                         
                         {/* Items */}
