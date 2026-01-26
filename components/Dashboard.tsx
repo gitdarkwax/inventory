@@ -335,12 +335,12 @@ export default function Dashboard({ session }: DashboardProps) {
   // Returns a map of destination -> SKU -> { inboundAir, inboundSea, airTransfers, seaTransfers }
   // Cache is updated when transfers are marked in transit or deliveries are logged
   const getIncomingFromTransfers = () => {
-    // Transform cache format to match expected format (transferId -> id rename for compatibility)
+    // Transform cache format to match TransferDetail interface
     const result: Record<string, Record<string, {
       inboundAir: number;
       inboundSea: number;
-      airTransfers: Array<{ id: string; quantity: number; note: string | null; createdAt: string }>;
-      seaTransfers: Array<{ id: string; quantity: number; note: string | null; createdAt: string }>;
+      airTransfers: TransferDetail[];
+      seaTransfers: TransferDetail[];
     }>> = {};
 
     for (const [destination, skuData] of Object.entries(incomingInventoryCache)) {
@@ -351,15 +351,21 @@ export default function Dashboard({ session }: DashboardProps) {
           inboundSea: data.inboundSea,
           airTransfers: data.airTransfers.map(t => ({
             id: t.transferId,
+            name: t.transferId,
             quantity: t.quantity,
+            tags: ['Air'],
             note: t.note,
             createdAt: t.createdAt,
+            expectedArrivalAt: null,
           })),
           seaTransfers: data.seaTransfers.map(t => ({
             id: t.transferId,
+            name: t.transferId,
             quantity: t.quantity,
+            tags: ['Sea'],
             note: t.note,
             createdAt: t.createdAt,
+            expectedArrivalAt: null,
           })),
         };
       }
@@ -1716,22 +1722,8 @@ export default function Dashboard({ session }: DashboardProps) {
               incoming: totalLocalIncoming, // Total incoming from local transfers
               inboundAir: localIncoming.inboundAir,
               inboundSea: localIncoming.inboundSea,
-              airTransfers: localIncoming.airTransfers.map(t => ({
-                id: t.id,
-                name: t.id,
-                quantity: t.quantity,
-                tags: ['Air'],
-                note: t.note,
-                createdAt: t.createdAt,
-              })),
-              seaTransfers: localIncoming.seaTransfers.map(t => ({
-                id: t.id,
-                name: t.id,
-                quantity: t.quantity,
-                tags: ['Sea'],
-                note: t.note,
-                createdAt: t.createdAt,
-              })),
+              airTransfers: localIncoming.airTransfers,
+              seaTransfers: localIncoming.seaTransfers,
             };
           }
           // No local transfers for this SKU - use zeros (not Shopify data)
@@ -3399,28 +3391,14 @@ export default function Dashboard({ session }: DashboardProps) {
                   const getLAAirTransfers = (sku: string): TransferDetail[] => {
                     const data = incomingFromTransfers['LA Office']?.[sku];
                     if (!data) return [];
-                    return data.airTransfers.map(t => ({
-                      id: t.id,
-                      name: t.id,
-                      quantity: t.quantity,
-                      tags: ['Air'],
-                      note: t.note,
-                      createdAt: t.createdAt,
-                    }));
+                    return data.airTransfers;
                   };
                   
                   // Get sea transfers for LA Office (from our local transfers)
                   const getLASeaTransfers = (sku: string): TransferDetail[] => {
                     const data = incomingFromTransfers['LA Office']?.[sku];
                     if (!data) return [];
-                    return data.seaTransfers.map(t => ({
-                      id: t.id,
-                      name: t.id,
-                      quantity: t.quantity,
-                      tags: ['Sea'],
-                      note: t.note,
-                      createdAt: t.createdAt,
-                    }));
+                    return data.seaTransfers;
                   };
                   
                   // Get committed from LA (LA Office + DTLA WH)
