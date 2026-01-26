@@ -324,6 +324,7 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Calculate incoming quantities from local transfers (not Shopify)
   // This returns a map of destination -> SKU -> { inboundAir, inboundSea, airTransfers, seaTransfers }
+  // Includes both 'in_transit' and 'partial' transfers (partial has some items still incoming)
   const getIncomingFromTransfers = () => {
     const result: Record<string, Record<string, {
       inboundAir: number;
@@ -332,10 +333,11 @@ export default function Dashboard({ session }: DashboardProps) {
       seaTransfers: Array<{ id: string; quantity: number; note: string | null; createdAt: string }>;
     }>> = {};
 
-    // Only include transfers that are in_transit (not pending, delivered, partial, or cancelled)
-    const inTransitTransfers = transfers.filter(t => t.status === 'in_transit');
+    // Include transfers that are in_transit OR partial (partial has some items still incoming)
+    // Exclude: pending, delivered, cancelled
+    const activeTransfers = transfers.filter(t => t.status === 'in_transit' || t.status === 'partial');
 
-    for (const transfer of inTransitTransfers) {
+    for (const transfer of activeTransfers) {
       const dest = transfer.destination;
       if (!result[dest]) {
         result[dest] = {};
@@ -348,6 +350,13 @@ export default function Dashboard({ session }: DashboardProps) {
       if (!isAir && !isSea) continue;
 
       for (const item of transfer.items) {
+        // Calculate remaining incoming: shipped quantity minus what's already been received
+        const receivedQty = item.receivedQuantity || 0;
+        const remainingIncoming = item.quantity - receivedQty;
+        
+        // Skip if all units have been received
+        if (remainingIncoming <= 0) continue;
+
         if (!result[dest][item.sku]) {
           result[dest][item.sku] = {
             inboundAir: 0,
@@ -359,16 +368,16 @@ export default function Dashboard({ session }: DashboardProps) {
 
         const transferDetail = {
           id: transfer.id,
-          quantity: item.quantity,
+          quantity: remainingIncoming, // Show remaining, not total
           note: transfer.activityLog?.[0]?.action || null,
           createdAt: transfer.createdAt,
         };
 
         if (isAir) {
-          result[dest][item.sku].inboundAir += item.quantity;
+          result[dest][item.sku].inboundAir += remainingIncoming;
           result[dest][item.sku].airTransfers.push(transferDetail);
         } else if (isSea) {
-          result[dest][item.sku].inboundSea += item.quantity;
+          result[dest][item.sku].inboundSea += remainingIncoming;
           result[dest][item.sku].seaTransfers.push(transferDetail);
         }
       }
@@ -7221,10 +7230,12 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                       <div className="px-6 py-4 space-y-4">
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
+                          <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update inventory</p>
                           <p className="text-xs text-yellow-700 mt-1">
-                            • Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand" quantity<br/>
-                            • Transfer will be removed from incoming tracking in this app
+                            <strong>Shopify:</strong> Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand"<br/>
+                            <strong>This App:</strong> Received quantities will be <strong>subtracted</strong> from "{
+                              selectedTransfer.transferType === 'Sea' ? 'In Sea' : 'In Air'
+                            }" incoming
                           </p>
                         </div>
                         
@@ -7236,6 +7247,10 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="flex justify-between text-sm">
                             <span className="text-gray-500">Destination:</span>
                             <span className="font-medium text-gray-900">{selectedTransfer.destination}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Shipment Type:</span>
+                            <span className="font-medium text-gray-900">{selectedTransfer.transferType}</span>
                           </div>
                         </div>
 
