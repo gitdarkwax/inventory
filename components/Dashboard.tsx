@@ -6992,7 +6992,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                           <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
                           <p className="text-xs text-yellow-700 mt-1">
-                            Stock will be subtracted from the origin location's "On Hand" quantity.
+                            • Stock will be <strong>subtracted</strong> from {transferToMarkInTransit.origin}'s "On Hand" quantity<br/>
+                            • Stock will be <strong>added</strong> to {transferToMarkInTransit.destination}'s "Incoming" quantity
                           </p>
                         </div>
                         
@@ -7069,7 +7070,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                           <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update Shopify inventory</p>
                           <p className="text-xs text-yellow-700 mt-1">
-                            Stock will be added to {selectedTransfer.destination}'s "On Hand" quantity.
+                            • Stock will be <strong>subtracted</strong> from {selectedTransfer.destination}'s "Incoming" quantity<br/>
+                            • Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand" quantity
                           </p>
                         </div>
                         

@@ -56,6 +56,7 @@ const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
 async function adjustInventory(
   graphqlUrl: string,
   accessToken: string,
+  inventoryName: 'available' | 'incoming', // 'available' affects on_hand, 'incoming' is in-transit stock
   adjustments: Array<{
     inventoryItemId: string;
     locationId: string;
@@ -64,9 +65,8 @@ async function adjustInventory(
   }>,
   reason: string
 ) {
-  // Group adjustments by ledgerDocumentUri (each adjustment needs its own call due to API limitations)
   const input = {
-    name: 'available', // Adjusts 'available' which affects on_hand
+    name: inventoryName,
     reason: reason,
     changes: adjustments.map(adj => ({
       inventoryItemId: adj.inventoryItemId,
@@ -152,7 +152,13 @@ export async function POST(request: NextRequest) {
 
       // Get inventoryItemIds for each SKU from origin location details
       const originDetails = locationDetails[origin] || [];
-      const adjustments: Array<{
+      const originAdjustments: Array<{
+        inventoryItemId: string;
+        locationId: string;
+        delta: number;
+        ledgerDocumentUri: string;
+      }> = [];
+      const destIncomingAdjustments: Array<{
         inventoryItemId: string;
         locationId: string;
         delta: number;
@@ -168,27 +174,38 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Subtract from origin (on_hand)
-        adjustments.push({
+        // Subtract from origin's available (on_hand)
+        originAdjustments.push({
           inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
           locationId: `gid://shopify/Location/${originLocationId}`,
           delta: -item.quantity,
           ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/origin`,
         });
 
-        // Add to destination (incoming) - Note: Shopify handles incoming via transfers
-        // For now, we'll just subtract from origin. The incoming is tracked in Shopify transfers.
-        // If you want to track incoming separately, we'd need to use Shopify's native transfer system
+        // Add to destination's incoming
+        destIncomingAdjustments.push({
+          inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+          locationId: `gid://shopify/Location/${destLocationId}`,
+          delta: item.quantity,
+          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/incoming`,
+        });
       }
 
-      if (errors.length > 0 && adjustments.length === 0) {
+      if (errors.length > 0 && originAdjustments.length === 0) {
         return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
       }
 
-      // Execute the adjustment
+      // Execute the adjustments (two separate calls - one for available, one for incoming)
       try {
-        await adjustInventory(graphqlUrl, accessToken, adjustments, 'movement_updated');
-        console.log(`✅ Transfer ${transferId} inventory adjusted: ${items.length} SKUs`);
+        // Step 1: Subtract from origin's available (on_hand)
+        await adjustInventory(graphqlUrl, accessToken, 'available', originAdjustments, 'movement_updated');
+        console.log(`✅ Subtracted from origin ${origin}: ${originAdjustments.length} SKUs`);
+
+        // Step 2: Add to destination's incoming
+        await adjustInventory(graphqlUrl, accessToken, 'incoming', destIncomingAdjustments, 'movement_created');
+        console.log(`✅ Added to destination ${destination} incoming: ${destIncomingAdjustments.length} SKUs`);
+
+        console.log(`✅ Transfer ${transferId} fully adjusted`);
       } catch (error) {
         console.error('❌ Shopify adjustment failed:', error);
         return NextResponse.json({ 
@@ -219,7 +236,13 @@ export async function POST(request: NextRequest) {
 
       // Get inventoryItemIds for each SKU from destination location details
       const destDetails = locationDetails[destination] || [];
-      const adjustments: Array<{
+      const incomingAdjustments: Array<{
+        inventoryItemId: string;
+        locationId: string;
+        delta: number;
+        ledgerDocumentUri: string;
+      }> = [];
+      const availableAdjustments: Array<{
         inventoryItemId: string;
         locationId: string;
         delta: number;
@@ -229,44 +252,51 @@ export async function POST(request: NextRequest) {
       const errors: string[] = [];
 
       for (const item of items) {
-        const detail = destDetails.find(d => d.sku === item.sku);
+        let detail = destDetails.find(d => d.sku === item.sku);
         if (!detail) {
           // Try to find in any location
-          let foundDetail = null;
           for (const loc of Object.keys(locationDetails)) {
-            foundDetail = locationDetails[loc]?.find(d => d.sku === item.sku);
-            if (foundDetail) break;
+            detail = locationDetails[loc]?.find(d => d.sku === item.sku);
+            if (detail) break;
           }
-          if (!foundDetail) {
+          if (!detail) {
             errors.push(`SKU ${item.sku} not found in inventory`);
             continue;
           }
-          // Use the found detail's inventoryItemId
-          adjustments.push({
-            inventoryItemId: `gid://shopify/InventoryItem/${foundDetail.inventoryItemId}`,
-            locationId: `gid://shopify/Location/${destLocationId}`,
-            delta: item.quantity,
-            ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery`,
-          });
-        } else {
-          // Add to destination on_hand
-          adjustments.push({
-            inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-            locationId: `gid://shopify/Location/${destLocationId}`,
-            delta: item.quantity,
-            ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery`,
-          });
         }
+
+        // Subtract from destination's incoming
+        incomingAdjustments.push({
+          inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+          locationId: `gid://shopify/Location/${destLocationId}`,
+          delta: -item.quantity,
+          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery-incoming`,
+        });
+
+        // Add to destination's available (on_hand)
+        availableAdjustments.push({
+          inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+          locationId: `gid://shopify/Location/${destLocationId}`,
+          delta: item.quantity,
+          ledgerDocumentUri: `app://inventory-dashboard/transfer/${transferId}/delivery-onhand`,
+        });
       }
 
-      if (errors.length > 0 && adjustments.length === 0) {
+      if (errors.length > 0 && availableAdjustments.length === 0) {
         return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
       }
 
-      // Execute the adjustment
+      // Execute the adjustments (two separate calls)
       try {
-        await adjustInventory(graphqlUrl, accessToken, adjustments, 'received');
-        console.log(`✅ Delivery logged for transfer ${transferId}: ${items.length} SKUs`);
+        // Step 1: Subtract from incoming
+        await adjustInventory(graphqlUrl, accessToken, 'incoming', incomingAdjustments, 'movement_updated');
+        console.log(`✅ Subtracted from ${destination} incoming: ${incomingAdjustments.length} SKUs`);
+
+        // Step 2: Add to available (on_hand)
+        await adjustInventory(graphqlUrl, accessToken, 'available', availableAdjustments, 'received');
+        console.log(`✅ Added to ${destination} on_hand: ${availableAdjustments.length} SKUs`);
+
+        console.log(`✅ Delivery logged for transfer ${transferId}`);
       } catch (error) {
         console.error('❌ Shopify adjustment failed:', error);
         return NextResponse.json({ 
