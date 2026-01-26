@@ -183,6 +183,15 @@ export default function Dashboard({ session }: DashboardProps) {
   const [inventoryData, setInventoryData] = useState<InventorySummary | null>(null);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
+  
+  // Incoming inventory cache (from app transfers, not Shopify)
+  // Structure: { [destination]: { [sku]: { inboundAir, inboundSea, airTransfers, seaTransfers } } }
+  const [incomingInventoryCache, setIncomingInventoryCache] = useState<Record<string, Record<string, {
+    inboundAir: number;
+    inboundSea: number;
+    airTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string }>;
+    seaTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string }>;
+  }>>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<string>('sku');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -322,10 +331,11 @@ export default function Dashboard({ session }: DashboardProps) {
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
 
-  // Calculate incoming quantities from local transfers (not Shopify)
-  // This returns a map of destination -> SKU -> { inboundAir, inboundSea, airTransfers, seaTransfers }
-  // Includes both 'in_transit' and 'partial' transfers (partial has some items still incoming)
+  // Get incoming quantities from cache (tracked from app transfers, not Shopify)
+  // Returns a map of destination -> SKU -> { inboundAir, inboundSea, airTransfers, seaTransfers }
+  // Cache is updated when transfers are marked in transit or deliveries are logged
   const getIncomingFromTransfers = () => {
+    // Transform cache format to match expected format (transferId -> id rename for compatibility)
     const result: Record<string, Record<string, {
       inboundAir: number;
       inboundSea: number;
@@ -333,53 +343,25 @@ export default function Dashboard({ session }: DashboardProps) {
       seaTransfers: Array<{ id: string; quantity: number; note: string | null; createdAt: string }>;
     }>> = {};
 
-    // Include transfers that are in_transit OR partial (partial has some items still incoming)
-    // Exclude: pending, delivered, cancelled
-    const activeTransfers = transfers.filter(t => t.status === 'in_transit' || t.status === 'partial');
-
-    for (const transfer of activeTransfers) {
-      const dest = transfer.destination;
-      if (!result[dest]) {
-        result[dest] = {};
-      }
-
-      const isAir = transfer.transferType === 'Air Express' || transfer.transferType === 'Air Slow';
-      const isSea = transfer.transferType === 'Sea';
-      // Immediate transfers don't count as incoming (they complete instantly)
-
-      if (!isAir && !isSea) continue;
-
-      for (const item of transfer.items) {
-        // Calculate remaining incoming: shipped quantity minus what's already been received
-        const receivedQty = item.receivedQuantity || 0;
-        const remainingIncoming = item.quantity - receivedQty;
-        
-        // Skip if all units have been received
-        if (remainingIncoming <= 0) continue;
-
-        if (!result[dest][item.sku]) {
-          result[dest][item.sku] = {
-            inboundAir: 0,
-            inboundSea: 0,
-            airTransfers: [],
-            seaTransfers: [],
-          };
-        }
-
-        const transferDetail = {
-          id: transfer.id,
-          quantity: remainingIncoming, // Show remaining, not total
-          note: transfer.activityLog?.[0]?.action || null,
-          createdAt: transfer.createdAt,
+    for (const [destination, skuData] of Object.entries(incomingInventoryCache)) {
+      result[destination] = {};
+      for (const [sku, data] of Object.entries(skuData)) {
+        result[destination][sku] = {
+          inboundAir: data.inboundAir,
+          inboundSea: data.inboundSea,
+          airTransfers: data.airTransfers.map(t => ({
+            id: t.transferId,
+            quantity: t.quantity,
+            note: t.note,
+            createdAt: t.createdAt,
+          })),
+          seaTransfers: data.seaTransfers.map(t => ({
+            id: t.transferId,
+            quantity: t.quantity,
+            note: t.note,
+            createdAt: t.createdAt,
+          })),
         };
-
-        if (isAir) {
-          result[dest][item.sku].inboundAir += remainingIncoming;
-          result[dest][item.sku].airTransfers.push(transferDetail);
-        } else if (isSea) {
-          result[dest][item.sku].inboundSea += remainingIncoming;
-          result[dest][item.sku].seaTransfers.push(transferDetail);
-        }
       }
     }
 
@@ -497,16 +479,34 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
+  // Load incoming inventory from cache (tracked from app transfers)
+  const loadIncomingFromCache = async () => {
+    try {
+      const response = await fetch('/api/incoming');
+      if (response.ok) {
+        const data = await response.json();
+        setIncomingInventoryCache(data.incomingInventory || {});
+      }
+    } catch (err) {
+      console.error('Error loading incoming inventory cache:', err);
+    }
+  };
+
   // Load cached inventory data
   const loadInventoryFromCache = async () => {
     setInventoryLoading(true);
     setInventoryError(null);
     try {
-      const response = await fetch('/api/inventory');
-      const data = await response.json();
-      if (!response.ok) {
+      // Load both inventory and incoming data in parallel
+      const [inventoryResponse] = await Promise.all([
+        fetch('/api/inventory'),
+        loadIncomingFromCache(),
+      ]);
+      
+      const data = await inventoryResponse.json();
+      if (!inventoryResponse.ok) {
         // No cache available - this is expected on first load
-        if (response.status === 503) {
+        if (inventoryResponse.status === 503) {
           setInventoryError('No cached data. Click Refresh to load data from Shopify.');
         } else {
           throw new Error(data.error || 'Failed to fetch inventory');
@@ -759,6 +759,8 @@ export default function Dashboard({ session }: DashboardProps) {
         if (isImmediate) {
           showProdNotification('success', 'Transfer Complete', `Transfer ${transferToMarkInTransit.id} completed. Stock moved from ${transferToMarkInTransit.origin} to ${transferToMarkInTransit.destination}.`);
         } else {
+          // Reload incoming cache since we added new incoming items
+          await loadIncomingFromCache();
           showProdNotification('success', 'In Transit', `Transfer ${transferToMarkInTransit.id} marked in transit. Shopify inventory updated.`);
         }
       } else {
@@ -803,7 +805,7 @@ export default function Dashboard({ session }: DashboardProps) {
 
     setIsLoggingDelivery(true);
     try {
-      // Step 1: Update Shopify inventory (add to destination on_hand)
+      // Step 1: Update Shopify inventory (add to destination on_hand) and update incoming cache
       const inventoryResponse = await fetch('/api/transfers/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -811,6 +813,7 @@ export default function Dashboard({ session }: DashboardProps) {
           action: 'log_delivery',
           transferId: selectedTransfer.id,
           destination: selectedTransfer.destination,
+          shipmentType: selectedTransfer.transferType,
           items: validDeliveries,
         }),
       });
@@ -855,6 +858,8 @@ export default function Dashboard({ session }: DashboardProps) {
         setShowLogDeliveryConfirm(false);
         setTransferDeliveryItems([]);
         setSelectedTransfer(data.transfer);
+        // Reload incoming cache since we subtracted delivered items
+        await loadIncomingFromCache();
         const statusLabel = allDelivered ? 'Delivered' : 'Partial Delivery';
         showProdNotification('success', statusLabel, `Transfer ${selectedTransfer.id} delivery logged. Shopify inventory updated.`);
       } else {

@@ -37,6 +37,7 @@ interface LogDeliveryRequest {
   action: 'log_delivery';
   transferId: string;
   destination: string;
+  shipmentType: ShipmentType; // Needed to know which incoming column to subtract from
   items: { sku: string; quantity: number }[]; // quantity being delivered
 }
 
@@ -209,14 +210,26 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Step 1: Subtract from origin's On Hand
+        // Step 1: Subtract from origin's On Hand in Shopify
         await adjustInventory(graphqlUrl, accessToken, originAdjustments, 'movement_updated');
         console.log(`✅ Subtracted from origin ${origin}: ${originAdjustments.length} SKUs`);
 
-        // Step 2 (Immediate only): Add to destination's On Hand
+        // Step 2 (Immediate only): Add to destination's On Hand in Shopify
         if (isImmediate && destAdjustments.length > 0) {
           await adjustInventory(graphqlUrl, accessToken, destAdjustments, 'received');
           console.log(`✅ Added to destination ${destination}: ${destAdjustments.length} SKUs`);
+        }
+
+        // Step 3 (Air/Sea only): Add to incoming cache in our app
+        if (!isImmediate && (shipmentType === 'Air Express' || shipmentType === 'Air Slow' || shipmentType === 'Sea')) {
+          await cacheService.addToIncoming(
+            destination,
+            shipmentType,
+            items,
+            transferId,
+            new Date().toISOString()
+          );
+          console.log(`✅ Added to incoming cache: ${items.length} SKUs for ${destination}`);
         }
 
         console.log(`✅ Transfer ${transferId} Shopify adjustment complete`);
@@ -240,9 +253,9 @@ export async function POST(request: NextRequest) {
       });
 
     } else if (body.action === 'log_delivery') {
-      const { transferId, destination, items } = body;
+      const { transferId, destination, shipmentType, items } = body;
       
-      console.log(`📦 Logging delivery for transfer ${transferId} at ${destination}`);
+      console.log(`📦 Logging delivery for transfer ${transferId} at ${destination} [${shipmentType}]`);
       
       const destLocationId = locationIds[destination];
       
@@ -276,8 +289,6 @@ export async function POST(request: NextRequest) {
         }
 
         // Add to destination's On Hand
-        // Note: Incoming is tracked locally in our app (not in Shopify)
-        // so we only need to add to On Hand when delivery is logged
         availableAdjustments.push({
           inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
           locationId: `gid://shopify/Location/${destLocationId}`,
@@ -291,9 +302,20 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Add to destination's On Hand
+        // Step 1: Add to destination's On Hand in Shopify
         await adjustInventory(graphqlUrl, accessToken, availableAdjustments, 'received');
         console.log(`✅ Added to ${destination} On Hand: ${availableAdjustments.length} SKUs`);
+
+        // Step 2: Subtract from incoming cache in our app (Air/Sea only)
+        if (shipmentType === 'Air Express' || shipmentType === 'Air Slow' || shipmentType === 'Sea') {
+          await cacheService.subtractFromIncoming(
+            destination,
+            shipmentType,
+            items,
+            transferId
+          );
+          console.log(`✅ Subtracted from incoming cache: ${items.length} SKUs for ${destination}`);
+        }
 
         console.log(`✅ Delivery logged for transfer ${transferId}`);
       } catch (error) {

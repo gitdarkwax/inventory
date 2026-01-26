@@ -59,6 +59,24 @@ export interface PurchaseOrderItem {
   pendingQuantity: number;
 }
 
+// Incoming inventory tracked from app transfers (not Shopify)
+export interface IncomingTransferDetail {
+  transferId: string;
+  quantity: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface IncomingInventoryBySku {
+  inboundAir: number;
+  inboundSea: number;
+  airTransfers: IncomingTransferDetail[];
+  seaTransfers: IncomingTransferDetail[];
+}
+
+// destination -> sku -> incoming data
+export type IncomingInventoryCache = Record<string, Record<string, IncomingInventoryBySku>>;
+
 export interface CachedInventoryData {
   inventory: {
     totalSKUs: number;
@@ -76,6 +94,8 @@ export interface CachedInventoryData {
   purchaseOrders?: {
     purchaseOrders: PurchaseOrderItem[];
   };
+  // Incoming inventory from app transfers (Air/Sea shipments in transit)
+  incomingInventory?: IncomingInventoryCache;
   lastUpdated: string;
   refreshedBy?: string; // User name or "hourly auto refresh"
 }
@@ -171,5 +191,202 @@ export class InventoryCacheService {
     
     const lastUpdated = new Date(cache.lastUpdated).getTime();
     return Math.floor((Date.now() - lastUpdated) / 1000 / 60);
+  }
+
+  /**
+   * Add incoming inventory when a transfer is marked "In Transit" (Air/Sea only)
+   * @param destination - The destination location (e.g., "LA Office")
+   * @param shipmentType - "Air Express", "Air Slow", or "Sea"
+   * @param items - Array of { sku, quantity } being transferred
+   * @param transferId - The transfer ID for tracking
+   * @param createdAt - When the transfer was created
+   * @param note - Optional note for the transfer
+   */
+  async addToIncoming(
+    destination: string,
+    shipmentType: 'Air Express' | 'Air Slow' | 'Sea',
+    items: Array<{ sku: string; quantity: number }>,
+    transferId: string,
+    createdAt: string,
+    note?: string | null
+  ): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache) {
+      console.error('❌ Cannot add to incoming: cache not loaded');
+      return;
+    }
+
+    // Initialize incoming inventory if not exists
+    if (!cache.incomingInventory) {
+      cache.incomingInventory = {};
+    }
+    if (!cache.incomingInventory[destination]) {
+      cache.incomingInventory[destination] = {};
+    }
+
+    const isAir = shipmentType === 'Air Express' || shipmentType === 'Air Slow';
+    const isSea = shipmentType === 'Sea';
+
+    for (const item of items) {
+      if (!cache.incomingInventory[destination][item.sku]) {
+        cache.incomingInventory[destination][item.sku] = {
+          inboundAir: 0,
+          inboundSea: 0,
+          airTransfers: [],
+          seaTransfers: [],
+        };
+      }
+
+      const skuData = cache.incomingInventory[destination][item.sku];
+      const transferDetail: IncomingTransferDetail = {
+        transferId,
+        quantity: item.quantity,
+        note: note || null,
+        createdAt,
+      };
+
+      if (isAir) {
+        skuData.inboundAir += item.quantity;
+        skuData.airTransfers.push(transferDetail);
+      } else if (isSea) {
+        skuData.inboundSea += item.quantity;
+        skuData.seaTransfers.push(transferDetail);
+      }
+    }
+
+    // Save updated cache
+    await this.saveFullCache(cache);
+    console.log(`✅ Added incoming to cache: ${items.length} SKUs for ${destination} (${shipmentType})`);
+  }
+
+  /**
+   * Subtract from incoming inventory when delivery is logged
+   * @param destination - The destination location
+   * @param shipmentType - "Air Express", "Air Slow", or "Sea"
+   * @param items - Array of { sku, quantity } being received
+   * @param transferId - The transfer ID to update
+   */
+  async subtractFromIncoming(
+    destination: string,
+    shipmentType: 'Air Express' | 'Air Slow' | 'Sea',
+    items: Array<{ sku: string; quantity: number }>,
+    transferId: string
+  ): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache?.incomingInventory?.[destination]) {
+      console.warn('⚠️ No incoming inventory to subtract from');
+      return;
+    }
+
+    const isAir = shipmentType === 'Air Express' || shipmentType === 'Air Slow';
+    const isSea = shipmentType === 'Sea';
+
+    for (const item of items) {
+      const skuData = cache.incomingInventory[destination][item.sku];
+      if (!skuData) continue;
+
+      if (isAir) {
+        skuData.inboundAir = Math.max(0, skuData.inboundAir - item.quantity);
+        // Update the transfer detail quantity or remove if fully delivered
+        const transferIdx = skuData.airTransfers.findIndex(t => t.transferId === transferId);
+        if (transferIdx >= 0) {
+          skuData.airTransfers[transferIdx].quantity -= item.quantity;
+          if (skuData.airTransfers[transferIdx].quantity <= 0) {
+            skuData.airTransfers.splice(transferIdx, 1);
+          }
+        }
+      } else if (isSea) {
+        skuData.inboundSea = Math.max(0, skuData.inboundSea - item.quantity);
+        // Update the transfer detail quantity or remove if fully delivered
+        const transferIdx = skuData.seaTransfers.findIndex(t => t.transferId === transferId);
+        if (transferIdx >= 0) {
+          skuData.seaTransfers[transferIdx].quantity -= item.quantity;
+          if (skuData.seaTransfers[transferIdx].quantity <= 0) {
+            skuData.seaTransfers.splice(transferIdx, 1);
+          }
+        }
+      }
+
+      // Clean up empty SKU entries
+      if (skuData.inboundAir === 0 && skuData.inboundSea === 0) {
+        delete cache.incomingInventory[destination][item.sku];
+      }
+    }
+
+    // Clean up empty destination entries
+    if (Object.keys(cache.incomingInventory[destination]).length === 0) {
+      delete cache.incomingInventory[destination];
+    }
+
+    // Save updated cache
+    await this.saveFullCache(cache);
+    console.log(`✅ Subtracted incoming from cache: ${items.length} SKUs for ${destination}`);
+  }
+
+  /**
+   * Remove a transfer from incoming (when cancelled or deleted)
+   * @param destination - The destination location
+   * @param transferId - The transfer ID to remove
+   */
+  async removeTransferFromIncoming(
+    destination: string,
+    transferId: string
+  ): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache?.incomingInventory?.[destination]) {
+      return;
+    }
+
+    for (const sku of Object.keys(cache.incomingInventory[destination])) {
+      const skuData = cache.incomingInventory[destination][sku];
+      
+      // Remove from air transfers
+      const airIdx = skuData.airTransfers.findIndex(t => t.transferId === transferId);
+      if (airIdx >= 0) {
+        skuData.inboundAir -= skuData.airTransfers[airIdx].quantity;
+        skuData.airTransfers.splice(airIdx, 1);
+      }
+
+      // Remove from sea transfers
+      const seaIdx = skuData.seaTransfers.findIndex(t => t.transferId === transferId);
+      if (seaIdx >= 0) {
+        skuData.inboundSea -= skuData.seaTransfers[seaIdx].quantity;
+        skuData.seaTransfers.splice(seaIdx, 1);
+      }
+
+      // Clean up empty SKU entries
+      if (skuData.inboundAir <= 0 && skuData.inboundSea <= 0) {
+        delete cache.incomingInventory[destination][sku];
+      }
+    }
+
+    // Clean up empty destination entries
+    if (Object.keys(cache.incomingInventory[destination]).length === 0) {
+      delete cache.incomingInventory[destination];
+    }
+
+    await this.saveFullCache(cache);
+    console.log(`✅ Removed transfer ${transferId} from incoming cache`);
+  }
+
+  /**
+   * Get incoming inventory from cache
+   */
+  async getIncomingInventory(): Promise<IncomingInventoryCache> {
+    const cache = await this.loadCache();
+    return cache?.incomingInventory || {};
+  }
+
+  /**
+   * Save full cache (internal helper)
+   */
+  private async saveFullCache(cache: CachedInventoryData): Promise<void> {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (isProduction) {
+      await GoogleDriveCacheService.saveCache(cache);
+    } else {
+      fs.writeFileSync(this.cacheFile, JSON.stringify(cache, null, 2), 'utf-8');
+    }
   }
 }
