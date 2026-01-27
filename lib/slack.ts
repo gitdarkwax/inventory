@@ -380,12 +380,12 @@ export class SlackService {
    * Send notification for low stock alert
    */
   async notifyLowStock(data: {
-    items: Array<{ sku: string; productName: string; quantity: number }>;
+    items: Array<{ sku: string; variantName: string; quantity: number }>;
     location: string;
     threshold: number;
   }): Promise<void> {
     const itemsList = data.items
-      .map(item => `• *${item.sku}*: ${item.quantity} units${item.productName ? ` (${item.productName})` : ''}`)
+      .map(item => `• *${item.sku}*: ${item.quantity} units${item.variantName ? ` (${item.variantName})` : ''}`)
       .join('\n');
 
     const blocks = [

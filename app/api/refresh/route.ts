@@ -365,9 +365,9 @@ export async function checkLowStockAlerts(
     const existingAlerts = await cache.getLowStockAlerts();
     
     // Find SKUs that are low stock
-    const lowStockSkus: Array<{ sku: string; productName: string; quantity: number }> = [];
+    const lowStockSkus: Array<{ sku: string; variantName: string; quantity: number }> = [];
     const newAlerts: LowStockAlertCache = {};
-    const skusToAlert: Array<{ sku: string; productName: string; quantity: number }> = [];
+    const skusToAlert: Array<{ sku: string; variantName: string; quantity: number }> = [];
 
     for (const item of laOfficeDetails) {
       const quantity = item.available;
@@ -380,7 +380,7 @@ export async function checkLowStockAlerts(
           // Never alerted before - send alert
           skusToAlert.push({
             sku: item.sku,
-            productName: item.productTitle,
+            variantName: item.variantTitle,
             quantity,
           });
           newAlerts[item.sku] = quantity;
@@ -391,7 +391,7 @@ export async function checkLowStockAlerts(
         
         lowStockSkus.push({
           sku: item.sku,
-          productName: item.productTitle,
+          variantName: item.variantTitle,
           quantity,
         });
       } else if (existingAlerts[item.sku] !== undefined) {
