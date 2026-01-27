@@ -74,14 +74,10 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${data.eta || 'Not set'}`,
+          text: [
+            `*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}`,
+            `*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${data.eta || 'Not set'}`,
+          ].join('\n'),
         },
       },
       {
@@ -128,21 +124,11 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*PO#:* ${data.poNumber}    *Status:* ${statusText}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Vendor:* ${data.vendor || 'N/A'}    *Received By:* ${data.receivedBy}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Location:* ${data.location}`,
+          text: [
+            `*PO#:* ${data.poNumber}    *Status:* ${statusText}`,
+            `*Vendor:* ${data.vendor || 'N/A'}    *Received By:* ${data.receivedBy}`,
+            `*Location:* ${data.location}`,
+          ].join('\n'),
         },
       },
       {
@@ -204,28 +190,12 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Transfer#:* ${data.transferId}    *Created By:* ${data.createdBy}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Tracking:* ${trackingText}`,
+          text: [
+            `*Transfer#:* ${data.transferId}    *Created By:* ${data.createdBy}`,
+            `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
+            `*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}`,
+            `*Tracking:* ${trackingText}`,
+          ].join('\n'),
         },
       },
       {
@@ -279,28 +249,12 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Transfer#:* ${data.transferId}    *Status:* ${statusText}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Received By:* ${data.receivedBy}    *Shipment Type:* ${data.shipmentType}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Tracking:* ${trackingText}`,
+          text: [
+            `*Transfer#:* ${data.transferId}    *Status:* ${statusText}`,
+            `*Received By:* ${data.receivedBy}    *Shipment Type:* ${data.shipmentType}`,
+            `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
+            `*Tracking:* ${trackingText}`,
+          ].join('\n'),
         },
       },
       {
@@ -352,14 +306,10 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*PO#:* ${data.poNumber}    *Cancelled By:* ${data.cancelledBy}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Vendor:* ${data.vendor || 'N/A'}`,
+          text: [
+            `*PO#:* ${data.poNumber}    *Cancelled By:* ${data.cancelledBy}`,
+            `*Vendor:* ${data.vendor || 'N/A'}`,
+          ].join('\n'),
         },
       },
       {
@@ -402,21 +352,11 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Shipment Type:* ${data.shipmentType}`,
+          text: [
+            `*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}`,
+            `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
+            `*Shipment Type:* ${data.shipmentType}`,
+          ].join('\n'),
         },
       },
       {
