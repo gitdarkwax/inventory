@@ -338,6 +338,7 @@ export default function Dashboard({ session }: DashboardProps) {
     notes?: string;
   } | null>(null);
   const [isExecutingImmediateTransfer, setIsExecutingImmediateTransfer] = useState(false);
+  const [isValidatingTransfer, setIsValidatingTransfer] = useState(false);
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
@@ -643,40 +644,68 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate inventory levels at origin for Immediate transfers
+    // For Immediate transfers, refresh data and validate before showing confirmation
     if (newTransferType === 'Immediate') {
-      const originDetails = inventoryData?.locationDetails?.[newTransferOrigin];
-      if (!originDetails) {
-        showProdNotification('error', 'Validation Error', `Could not find inventory data for ${newTransferOrigin}`);
-        return;
-      }
-
-      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+      setIsValidatingTransfer(true);
+      showProdNotification('info', 'Refreshing Data', 'Getting latest inventory from Shopify...');
       
-      for (const item of validItems) {
-        const detail = originDetails.find(d => d.sku.toUpperCase() === item.sku.toUpperCase());
-        const availableAtOrigin = detail?.onHand || 0;
-        
-        if (availableAtOrigin < item.quantity) {
-          insufficientStock.push({
-            sku: item.sku,
-            requested: item.quantity,
-            available: availableAtOrigin,
-          });
+      try {
+        // Step 1: Refresh inventory data from Shopify
+        const refreshResponse = await fetch('/api/refresh');
+        if (!refreshResponse.ok) {
+          const data = await refreshResponse.json();
+          throw new Error(data.error || 'Failed to refresh inventory');
         }
-      }
+        
+        // Step 2: Reload cache with fresh data
+        const cacheResponse = await fetch('/api/inventory');
+        if (!cacheResponse.ok) {
+          throw new Error('Failed to load refreshed inventory');
+        }
+        const freshData = await cacheResponse.json();
+        setInventoryData(freshData);
+        
+        // Step 3: Check inventory levels at origin with fresh data
+        const originDetails = freshData?.locationDetails?.[newTransferOrigin];
+        if (!originDetails) {
+          showProdNotification('error', 'Validation Error', `Could not find inventory data for ${newTransferOrigin}`);
+          setIsValidatingTransfer(false);
+          return;
+        }
 
-      if (insufficientStock.length > 0) {
-        const stockDetails = insufficientStock
-          .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${newTransferOrigin}`)
-          .join('\n');
-        showProdNotification('error', 'Insufficient Stock', stockDetails);
+        const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+        
+        for (const item of validItems) {
+          const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
+          const availableAtOrigin = detail?.onHand || 0;
+          
+          if (availableAtOrigin < item.quantity) {
+            insufficientStock.push({
+              sku: item.sku,
+              requested: item.quantity,
+              available: availableAtOrigin,
+            });
+          }
+        }
+
+        if (insufficientStock.length > 0) {
+          const stockDetails = insufficientStock
+            .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${newTransferOrigin}`)
+            .join('\n');
+          showProdNotification('error', 'Insufficient Stock', stockDetails);
+          setIsValidatingTransfer(false);
+          return;
+        }
+        
+        setIsValidatingTransfer(false);
+      } catch (err) {
+        console.error('Failed to validate transfer:', err);
+        showProdNotification('error', 'Validation Failed', err instanceof Error ? err.message : 'Failed to refresh inventory');
+        setIsValidatingTransfer(false);
         return;
       }
-    }
 
-    // For Immediate transfers, show confirmation modal first
-    if (newTransferType === 'Immediate') {
+      // Validation passed - show confirmation modal
       setPendingImmediateTransfer({
         origin: newTransferOrigin,
         destination: newTransferDestination,
@@ -885,40 +914,66 @@ export default function Dashboard({ session }: DashboardProps) {
   };
 
   // Validate inventory at origin before allowing Mark In Transit
-  const validateAndShowMarkInTransit = (transfer: Transfer) => {
-    // Check inventory levels at origin
-    const originDetails = inventoryData?.locationDetails?.[transfer.origin];
-    if (!originDetails) {
-      showProdNotification('error', 'Validation Error', `Could not find inventory data for ${transfer.origin}`);
-      return;
-    }
-
-    const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+  // First refreshes data from Shopify to ensure accurate stock levels
+  const validateAndShowMarkInTransit = async (transfer: Transfer) => {
+    setIsValidatingTransfer(true);
+    showProdNotification('info', 'Refreshing Data', 'Getting latest inventory from Shopify...');
     
-    for (const item of transfer.items) {
-      const detail = originDetails.find(d => d.sku === item.sku);
-      const availableAtOrigin = detail?.onHand || 0;
-      
-      if (availableAtOrigin < item.quantity) {
-        insufficientStock.push({
-          sku: item.sku,
-          requested: item.quantity,
-          available: availableAtOrigin,
-        });
+    try {
+      // Step 1: Refresh inventory data from Shopify
+      const refreshResponse = await fetch('/api/refresh');
+      if (!refreshResponse.ok) {
+        const data = await refreshResponse.json();
+        throw new Error(data.error || 'Failed to refresh inventory');
       }
-    }
+      
+      // Step 2: Reload cache with fresh data
+      const cacheResponse = await fetch('/api/inventory');
+      if (!cacheResponse.ok) {
+        throw new Error('Failed to load refreshed inventory');
+      }
+      const freshData = await cacheResponse.json();
+      setInventoryData(freshData);
+      
+      // Step 3: Check inventory levels at origin with fresh data
+      const originDetails = freshData?.locationDetails?.[transfer.origin];
+      if (!originDetails) {
+        showProdNotification('error', 'Validation Error', `Could not find inventory data for ${transfer.origin}`);
+        return;
+      }
 
-    if (insufficientStock.length > 0) {
-      const stockDetails = insufficientStock
-        .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${transfer.origin}`)
-        .join('\n');
-      showProdNotification('error', 'Insufficient Stock', stockDetails);
-      return;
-    }
+      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+      
+      for (const item of transfer.items) {
+        const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku === item.sku);
+        const availableAtOrigin = detail?.onHand || 0;
+        
+        if (availableAtOrigin < item.quantity) {
+          insufficientStock.push({
+            sku: item.sku,
+            requested: item.quantity,
+            available: availableAtOrigin,
+          });
+        }
+      }
 
-    // Validation passed - show confirmation modal
-    setTransferToMarkInTransit(transfer);
-    setShowMarkInTransitConfirm(true);
+      if (insufficientStock.length > 0) {
+        const stockDetails = insufficientStock
+          .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${transfer.origin}`)
+          .join('\n');
+        showProdNotification('error', 'Insufficient Stock', stockDetails);
+        return;
+      }
+
+      // Validation passed - show confirmation modal
+      setTransferToMarkInTransit(transfer);
+      setShowMarkInTransitConfirm(true);
+    } catch (err) {
+      console.error('Failed to validate transfer:', err);
+      showProdNotification('error', 'Validation Failed', err instanceof Error ? err.message : 'Failed to refresh inventory');
+    } finally {
+      setIsValidatingTransfer(false);
+    }
   };
 
   // Confirm Mark In Transit - updates Shopify inventory then transfer status
@@ -1091,7 +1146,17 @@ export default function Dashboard({ session }: DashboardProps) {
         // Reload incoming cache since we subtracted delivered items
         await loadIncomingFromCache();
         const statusLabel = allDelivered ? 'Delivered' : 'Partial Delivery';
-        showProdNotification('success', statusLabel, `Transfer ${selectedTransfer.id} delivery logged. Shopify inventory updated.`);
+        showProdNotification('success', statusLabel, `Transfer ${selectedTransfer.id} delivery logged. Refreshing data...`);
+        
+        // Refresh all data from Shopify to ensure accurate dashboard
+        try {
+          await fetch('/api/refresh');
+          await Promise.all([loadInventoryFromCache(), loadForecastingFromCache()]);
+          showProdNotification('success', 'Data Refreshed', 'Dashboard updated with latest Shopify data');
+        } catch (refreshErr) {
+          console.error('Failed to refresh after delivery:', refreshErr);
+          // Don't show error - delivery was successful, refresh is just a bonus
+        }
       } else {
         showProdNotification('error', 'Log Failed', data.error || 'Shopify updated but failed to update transfer');
       }
@@ -6850,14 +6915,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                                     e.stopPropagation(); 
                                                     validateAndShowMarkInTransit(transfer);
                                                   }}
-                                                  disabled={isMarkingInTransit}
+                                                  disabled={isMarkingInTransit || isValidatingTransfer}
                                                   className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                                                    isMarkingInTransit
+                                                    isMarkingInTransit || isValidatingTransfer
                                                       ? 'bg-green-400 text-white cursor-not-allowed'
                                                       : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                                                   }`}
                                                 >
-                                                  Mark In Transit
+                                                  {isValidatingTransfer ? 'Refreshing...' : 'Mark In Transit'}
                                                 </button>
                                               )}
                                               {/* In Transit or Partial status: show Log Delivery green button */}
@@ -7140,14 +7205,14 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           type="button"
                           onClick={createTransfer}
-                          disabled={isCreatingTransfer}
+                          disabled={isCreatingTransfer || isValidatingTransfer}
                           className={`px-4 py-2 rounded-md text-sm font-medium ${
-                            isCreatingTransfer 
+                            isCreatingTransfer || isValidatingTransfer
                               ? 'bg-blue-400 text-white cursor-not-allowed' 
                               : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
                           }`}
                         >
-                          {isCreatingTransfer ? 'Creating...' : (newTransferType === 'Immediate' ? 'Transfer Now' : 'Create Transfer')}
+                          {isValidatingTransfer ? 'Refreshing...' : isCreatingTransfer ? 'Creating...' : (newTransferType === 'Immediate' ? 'Transfer Now' : 'Create Transfer')}
                         </button>
                       </div>
                     </div>
