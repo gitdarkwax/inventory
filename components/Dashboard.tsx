@@ -2315,9 +2315,6 @@ export default function Dashboard({ session }: DashboardProps) {
       if (t.expectedArrivalAt) {
         lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}`);
       }
-      if (t.note) {
-        lines.push(t.note);
-      }
       const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
       lines.push(`Qty: ${t.quantity}${tagsStr ? ` - ${tagsStr}` : ''}`);
       return lines.join('\n');
