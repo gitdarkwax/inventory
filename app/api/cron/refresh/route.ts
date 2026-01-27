@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       forecasting: { forecasting: forecastingData },
     }, 'hourly auto refresh');
 
-    // Check for low stock at LA Office and send alerts
+    // Check for low stock in LA area (LA Office + DTLA WH) and send alerts
     await checkLowStockAlerts(cache, inventoryData, skuToProductName);
 
     const duration = Date.now() - startTime;

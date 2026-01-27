@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       forecasting: { forecasting: forecastingData },
     }, refreshedBy);
 
-    // Check for low stock at LA Office and send alerts
+    // Check for low stock in LA area (LA Office + DTLA WH) and send alerts
     await checkLowStockAlerts(cache, inventoryData, skuToProductName);
 
     const duration = Date.now() - startTime;
@@ -342,7 +342,7 @@ export async function fetchForecastingData() {
 }
 
 /**
- * Check for low stock at LA Office and send Slack alerts
+ * Check for low stock in LA area (LA Office + DTLA WH combined) and send Slack alerts
  * Only sends alerts for SKUs that haven't been alerted yet or were restocked
  */
 export async function checkLowStockAlerts(
@@ -351,14 +351,41 @@ export async function checkLowStockAlerts(
   skuToProductName: Map<string, string>
 ): Promise<void> {
   const LOW_STOCK_THRESHOLD = 100;
-  const LOCATION = 'LA Office';
+  const LOCATIONS = ['LA Office', 'DTLA WH'];
+  const LOCATION_LABEL = 'LA Area';
 
   try {
-    // Get LA Office inventory details
-    const laOfficeDetails = inventoryData.locationDetails[LOCATION];
-    if (!laOfficeDetails) {
-      console.log(`ℹ️ No inventory data for ${LOCATION}`);
+    // Get inventory details for both LA locations
+    const laOfficeDetails = inventoryData.locationDetails['LA Office'] || [];
+    const dtlaDetails = inventoryData.locationDetails['DTLA WH'] || [];
+    
+    if (laOfficeDetails.length === 0 && dtlaDetails.length === 0) {
+      console.log(`ℹ️ No inventory data for LA Area`);
       return;
+    }
+
+    // Build a map of SKU -> combined quantity and variant info
+    const skuInventory = new Map<string, { quantity: number; variantTitle: string }>();
+    
+    // Add LA Office quantities
+    for (const item of laOfficeDetails) {
+      skuInventory.set(item.sku, {
+        quantity: item.available,
+        variantTitle: item.variantTitle,
+      });
+    }
+    
+    // Add DTLA WH quantities (combine with existing)
+    for (const item of dtlaDetails) {
+      const existing = skuInventory.get(item.sku);
+      if (existing) {
+        existing.quantity += item.available;
+      } else {
+        skuInventory.set(item.sku, {
+          quantity: item.available,
+          variantTitle: item.variantTitle,
+        });
+      }
     }
 
     // Get existing alerts
@@ -369,35 +396,35 @@ export async function checkLowStockAlerts(
     const newAlerts: LowStockAlertCache = {};
     const skusToAlert: Array<{ sku: string; variantName: string; quantity: number }> = [];
 
-    for (const item of laOfficeDetails) {
-      const quantity = item.available;
+    for (const [sku, data] of skuInventory) {
+      const quantity = data.quantity;
       
       if (quantity < LOW_STOCK_THRESHOLD) {
         // SKU is below threshold
-        const previousAlertQty = existingAlerts[item.sku];
+        const previousAlertQty = existingAlerts[sku];
         
         if (previousAlertQty === undefined) {
           // Never alerted before - send alert
           skusToAlert.push({
-            sku: item.sku,
-            variantName: item.variantTitle,
+            sku,
+            variantName: data.variantTitle,
             quantity,
           });
-          newAlerts[item.sku] = quantity;
+          newAlerts[sku] = quantity;
         } else {
           // Already alerted - keep the existing alert record
-          newAlerts[item.sku] = previousAlertQty;
+          newAlerts[sku] = previousAlertQty;
         }
         
         lowStockSkus.push({
-          sku: item.sku,
-          variantName: item.variantTitle,
+          sku,
+          variantName: data.variantTitle,
           quantity,
         });
-      } else if (existingAlerts[item.sku] !== undefined) {
+      } else if (existingAlerts[sku] !== undefined) {
         // SKU was previously low but is now above threshold - clear the alert
         // (Don't add to newAlerts, effectively removing it)
-        console.log(`📈 ${item.sku} restocked to ${quantity} units (was alerted at ${existingAlerts[item.sku]})`);
+        console.log(`📈 ${sku} restocked to ${quantity} units (was alerted at ${existingAlerts[sku]})`);
       }
     }
 
@@ -406,7 +433,7 @@ export async function checkLowStockAlerts(
 
     // Send Slack notification for newly low stock items
     if (skusToAlert.length > 0) {
-      console.log(`⚠️ Sending low stock alert for ${skusToAlert.length} SKUs at ${LOCATION}`);
+      console.log(`⚠️ Sending low stock alert for ${skusToAlert.length} SKUs at ${LOCATION_LABEL}`);
       
       sendSlackNotification(async () => {
         const alertsChannelId = process.env.SLACK_CHANNEL_ALERTS;
@@ -417,7 +444,7 @@ export async function checkLowStockAlerts(
         const slack = new SlackService(alertsChannelId);
         await slack.notifyLowStock({
           items: skusToAlert,
-          location: LOCATION,
+          location: LOCATION_LABEL,
           threshold: LOW_STOCK_THRESHOLD,
         });
       }, 'SLACK_CHANNEL_ALERTS');
