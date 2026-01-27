@@ -352,7 +352,7 @@ export async function checkLowStockAlerts(
 ): Promise<void> {
   const LOW_STOCK_THRESHOLD = 100;
   const LOCATIONS = ['LA Office', 'DTLA WH'];
-  const LOCATION_LABEL = 'LA Area';
+  const LOCATION_LABEL = 'LA';
 
   try {
     // Get inventory details for both LA locations

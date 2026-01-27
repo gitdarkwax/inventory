@@ -389,18 +389,10 @@ export class SlackService {
 
     const blocks = [
       {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `⚠️ Low Stock Alert - ${data.location}`,
-          emoji: true,
-        },
-      },
-      {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `The following SKUs have fallen below *${data.threshold} units*:`,
+          text: `*⚠️ Low Stock Alert - ${data.location}*\nThe following SKUs have fallen below *${data.threshold} units*:`,
         },
       },
       {
