@@ -136,11 +136,11 @@ export class SlackService {
   }
 
   /**
-   * Send notification when a Transfer is created
+   * Send notification when a Transfer is marked in transit
    */
-  async notifyTransferCreated(data: {
+  async notifyTransferInTransit(data: {
     transferId: string;
-    createdBy: string;
+    markedBy: string;
     origin: string;
     destination: string;
     shipmentType: string;
@@ -159,7 +159,7 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*🚚 New Transfer Created*\n*Transfer#:* ${data.transferId}    *Created By:* ${data.createdBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}\n*Tracking:* ${trackingText}`,
+          text: `*🚚 Transfer In Transit*\n*Transfer#:* ${data.transferId}    *Marked By:* ${data.markedBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}\n*Tracking:* ${trackingText}`,
         },
       },
       {
@@ -173,7 +173,7 @@ export class SlackService {
 
     await this.client.chat.postMessage({
       channel: this.channelId,
-      text: `New Transfer: ${data.transferId} - ${data.origin} → ${data.destination}`,
+      text: `Transfer In Transit: ${data.transferId} - ${data.origin} → ${data.destination}`,
       blocks,
     });
   }

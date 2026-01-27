@@ -162,22 +162,6 @@ export async function POST(request: NextRequest) {
       notes
     );
 
-    // Send Slack notification (non-blocking)
-    sendSlackNotification(async () => {
-      const slack = new SlackService();
-      await slack.notifyTransferCreated({
-        transferId: newTransfer.id,
-        createdBy: session.user?.name || 'Unknown',
-        origin,
-        destination,
-        shipmentType: transferType,
-        carrier,
-        trackingNumber,
-        eta: eta || null,
-        items,
-      });
-    });
-
     return NextResponse.json({ transfer: newTransfer }, { status: 201 });
 
   } catch (error) {
@@ -257,6 +241,29 @@ export async function PATCH(request: NextRequest) {
         { error: 'Transfer not found' },
         { status: 404 }
       );
+    }
+
+    // Send Slack notification when transfer is marked in transit
+    const isMarkedInTransit = status === 'in_transit' && previousStatus !== 'in_transit';
+    
+    if (isMarkedInTransit) {
+      sendSlackNotification(async () => {
+        const slack = new SlackService();
+        await slack.notifyTransferInTransit({
+          transferId: updatedTransfer.id,
+          markedBy: userName,
+          origin: updatedTransfer.origin,
+          destination: updatedTransfer.destination,
+          shipmentType: updatedTransfer.transferType || 'Unknown',
+          carrier: updatedTransfer.carrier,
+          trackingNumber: updatedTransfer.trackingNumber,
+          eta: updatedTransfer.eta || null,
+          items: updatedTransfer.items.map(item => ({
+            sku: item.sku,
+            quantity: item.quantity,
+          })),
+        });
+      });
     }
 
     // Send Slack notification if delivery was logged (status changed to partial or delivered)
