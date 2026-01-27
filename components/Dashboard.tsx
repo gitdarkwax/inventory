@@ -1995,6 +1995,102 @@ export default function Dashboard({ session }: DashboardProps) {
     };
   }) || [];
 
+  // Extract product model from SKU - must be defined before filteredInventory uses it
+  const extractProductModel = (productTitle: string, sku: string): string => {
+    // Guard against null/undefined values
+    if (!sku) return productTitle || 'Unknown Product';
+    if (!productTitle) productTitle = '';
+    
+    const skuUpper = sku.toUpperCase();
+    
+    // Screen Protectors (SP, SC prefix)
+    if (/^(SP|SC)/i.test(skuUpper)) {
+      return 'Screen Protectors';
+    }
+    
+    // Lens Protectors (LP prefix)
+    if (/^LP/i.test(skuUpper)) {
+      return 'Lens Protectors';
+    }
+
+    // iPhone case SKUs: EC17M, EC17P, EC17, MBC17M, MBC17P, MBC17, MBCX17M, etc.
+    // Pattern: (EC|MBC|MBCX) + model number + optional variant (M=Max, P=Pro, PL=Plus, MN=Mini)
+    const iphoneCaseMatch = skuUpper.match(/^(EC|MBC|MBCX)(\d+)(M|P|PL|MN)?/);
+    if (iphoneCaseMatch) {
+      const model = iphoneCaseMatch[2];
+      const variant = iphoneCaseMatch[3];
+      if (variant === 'M') return `iPhone ${model} Pro Max`;
+      if (variant === 'P') return `iPhone ${model} Pro`;
+      if (variant === 'PL') return `iPhone ${model} Plus`;
+      if (variant === 'MN') return `iPhone ${model} mini`;
+      return `iPhone ${model}`;
+    }
+
+    // Samsung Galaxy S26 (ES26 prefix)
+    if (/^ES26/i.test(skuUpper)) {
+      return 'Samsung Galaxy S26';
+    }
+
+    // Samsung Galaxy S25 (ES25, MBS25 prefix)
+    if (/^(ES25|MBS25)/i.test(skuUpper)) {
+      return 'Samsung Galaxy S25';
+    }
+
+    // Samsung Galaxy S24 (ES24, MBS24 prefix)
+    if (/^(ES24|MBS24)/i.test(skuUpper)) {
+      return 'Samsung Galaxy S24';
+    }
+
+    // Pixel Cases (EP, MBP prefix)
+    if (/^(EP|MBP)\d/i.test(skuUpper)) {
+      return 'Pixel Cases';
+    }
+
+    // Wrist Straps (WRT prefix)
+    if (/^WRT/i.test(skuUpper)) {
+      return 'Wrist Straps';
+    }
+
+    // Wallets (FMWLT, MBWLT prefix)
+    if (/^(FMWLT|MBWLT)/i.test(skuUpper)) {
+      return 'Wallets';
+    }
+
+    // Color Accessories (ACC, ACU, ACP, LF, ACS, BTN prefix)
+    if (/^(ACC|ACU|ACP|LF|ACS|BTN)/i.test(skuUpper)) {
+      return 'Color Accessories';
+    }
+
+    // KeyTag (MBKH prefix)
+    if (/^MBKH/i.test(skuUpper)) {
+      return 'KeyTag';
+    }
+
+    // Tesla Charger (MBT prefix)
+    if (/^MBT/i.test(skuUpper)) {
+      return 'Tesla Charger';
+    }
+
+    // Chargers (MBQI, TVL, MBPD prefix)
+    if (/^(MBQI|TVL|MBPD)/i.test(skuUpper)) {
+      return 'Chargers';
+    }
+
+    // MagSticks (MBST prefix)
+    if (/^MBST/i.test(skuUpper)) {
+      return 'MagSticks';
+    }
+
+    // RimCase (RPTM prefix)
+    if (/^RPTM/i.test(skuUpper)) {
+      return 'RimCase';
+    }
+
+    // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
+    const simplified = productTitle.split(/[-|]/)[0].trim();
+    return simplified.length > 40 ? simplified.substring(0, 40) + '...' : simplified;
+  };
+
   // Get incoming data from our local transfers (not Shopify) - declare before filteredInventory uses it
   const incomingFromTransfersData = getIncomingFromTransfers();
 
@@ -2214,101 +2310,6 @@ export default function Dashboard({ session }: DashboardProps) {
   };
 
   // Extract product model from SKU for grouping (SKU is the source of truth)
-  const extractProductModel = (productTitle: string, sku: string): string => {
-    // Guard against null/undefined values
-    if (!sku) return productTitle || 'Unknown Product';
-    if (!productTitle) productTitle = '';
-    
-    const skuUpper = sku.toUpperCase();
-    
-    // Screen Protectors (SP, SC prefix)
-    if (/^(SP|SC)/i.test(skuUpper)) {
-      return 'Screen Protectors';
-    }
-    
-    // Lens Protectors (LP prefix)
-    if (/^LP/i.test(skuUpper)) {
-      return 'Lens Protectors';
-    }
-
-    // iPhone case SKUs: EC17M, EC17P, EC17, MBC17M, MBC17P, MBC17, MBCX17M, etc.
-    // Pattern: (EC|MBC|MBCX) + model number + optional variant (M=Max, P=Pro, PL=Plus, MN=Mini)
-    const iphoneCaseMatch = skuUpper.match(/^(EC|MBC|MBCX)(\d+)(M|P|PL|MN)?/);
-    if (iphoneCaseMatch) {
-      const model = iphoneCaseMatch[2];
-      const variant = iphoneCaseMatch[3];
-      if (variant === 'M') return `iPhone ${model} Pro Max`;
-      if (variant === 'P') return `iPhone ${model} Pro`;
-      if (variant === 'PL') return `iPhone ${model} Plus`;
-      if (variant === 'MN') return `iPhone ${model} mini`;
-      return `iPhone ${model}`;
-    }
-
-    // Samsung Galaxy S26 (ES26 prefix)
-    if (/^ES26/i.test(skuUpper)) {
-      return 'Samsung Galaxy S26';
-    }
-
-    // Samsung Galaxy S25 (ES25, MBS25 prefix)
-    if (/^(ES25|MBS25)/i.test(skuUpper)) {
-      return 'Samsung Galaxy S25';
-    }
-
-    // Samsung Galaxy S24 (ES24, MBS24 prefix)
-    if (/^(ES24|MBS24)/i.test(skuUpper)) {
-      return 'Samsung Galaxy S24';
-    }
-
-    // Pixel Cases (EP, MBP prefix)
-    if (/^(EP|MBP)\d/i.test(skuUpper)) {
-      return 'Pixel Cases';
-    }
-
-    // Wrist Straps (WRT prefix)
-    if (/^WRT/i.test(skuUpper)) {
-      return 'Wrist Straps';
-    }
-
-    // Wallets (FMWLT, MBWLT prefix)
-    if (/^(FMWLT|MBWLT)/i.test(skuUpper)) {
-      return 'Wallets';
-    }
-
-    // Color Accessories (ACC, ACU, ACP, LF, ACS, BTN prefix)
-    if (/^(ACC|ACU|ACP|LF|ACS|BTN)/i.test(skuUpper)) {
-      return 'Color Accessories';
-    }
-
-    // KeyTag (MBKH prefix)
-    if (/^MBKH/i.test(skuUpper)) {
-      return 'KeyTag';
-    }
-
-    // Tesla Charger (MBT prefix)
-    if (/^MBT/i.test(skuUpper)) {
-      return 'Tesla Charger';
-    }
-
-    // Chargers (MBQI, TVL, MBPD prefix)
-    if (/^(MBQI|TVL|MBPD)/i.test(skuUpper)) {
-      return 'Chargers';
-    }
-
-    // MagSticks (MBST prefix)
-    if (/^MBST/i.test(skuUpper)) {
-      return 'MagSticks';
-    }
-
-    // RimCase (RPTM prefix)
-    if (/^RPTM/i.test(skuUpper)) {
-      return 'RimCase';
-    }
-
-    // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
-    const simplified = productTitle.split(/[-|]/)[0].trim();
-    return simplified.length > 40 ? simplified.substring(0, 40) + '...' : simplified;
-  };
-
   // Group inventory items by product model
   const groupedInventory = filteredInventory.reduce((groups, item) => {
     const model = extractProductModel(item.productTitle, item.sku);
