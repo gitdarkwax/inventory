@@ -5286,6 +5286,58 @@ export default function Dashboard({ session }: DashboardProps) {
                                         `Successfully updated ${result.summary.success} SKUs in Shopify.`);
                                     }
                                     
+                                    // Update local inventory data to reflect submitted counts (temporary until next refresh)
+                                    if (!trackerTestMode && inventoryData) {
+                                      setInventoryData(prev => {
+                                        if (!prev) return prev;
+                                        
+                                        // Create a map of SKU -> new quantity from updates
+                                        const updateMap = new Map(updates.map(u => [u.sku, u.quantity]));
+                                        
+                                        // Update locationDetails for the tracker location
+                                        const updatedLocationDetails = { ...prev.locationDetails };
+                                        if (updatedLocationDetails[trackerLocation]) {
+                                          updatedLocationDetails[trackerLocation] = updatedLocationDetails[trackerLocation].map(item => {
+                                            const newQty = updateMap.get(item.sku);
+                                            if (newQty !== undefined) {
+                                              // Calculate the difference to adjust available (onHand change affects available)
+                                              const diff = newQty - item.onHand;
+                                              return {
+                                                ...item,
+                                                onHand: newQty,
+                                                available: Math.max(0, item.available + diff),
+                                              };
+                                            }
+                                            return item;
+                                          });
+                                        }
+                                        
+                                        // Update main inventory array totals
+                                        const updatedInventory = prev.inventory.map(item => {
+                                          const newQty = updateMap.get(item.sku);
+                                          if (newQty !== undefined) {
+                                            const oldQty = item.locations[trackerLocation] || 0;
+                                            const diff = newQty - oldQty;
+                                            return {
+                                              ...item,
+                                              locations: {
+                                                ...item.locations,
+                                                [trackerLocation]: newQty,
+                                              },
+                                              totalAvailable: item.totalAvailable + diff,
+                                            };
+                                          }
+                                          return item;
+                                        });
+                                        
+                                        return {
+                                          ...prev,
+                                          locationDetails: updatedLocationDetails,
+                                          inventory: updatedInventory,
+                                        };
+                                      });
+                                    }
+                                    
                                   } catch (error) {
                                     console.error('Submission failed:', error);
                                     showTrackerNotification('error', 'Submission Failed', 
