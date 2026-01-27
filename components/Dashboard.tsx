@@ -2460,7 +2460,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Sea', description: 'Units in transit via sea freight (from Shopify transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
-    { name: 'Need', description: 'Units needed in LA to cover the period selected under the "Units needed in LA" drop down menu.\nCurrent stock available in LA plus In Air inventory is factored into the calculation.\n(Target Days × Burn Rate) - (LA Inventory + In Air - committed)' },
+    { name: 'Need', description: 'Units needed to bridge the gap until sea shipment arrives.\n\nIf sea transfer has ETA after Runway Air date (stockout):\nNeed = Gap Days × 21-day Burn Rate\n\nIf sea arrives before stockout: Need = 0\n\nIf no sea transfer: Uses target days formula:\n(Target Days × Burn Rate) - (LA + In Air - committed)' },
     { name: 'Ship Type', description: 'Recommended shipping method based on days of stock:\n\nSea inventory is only included if its ETA is before the Runway Air date (when LA + Air runs out). This prevents triggering unnecessary air shipments when sea is arriving soon.\n\nDays of Stock = (LA + Air + Effective Sea) / Burn Rate\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list & China = 0 → Phase Out' },
     { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / Burn Rate:\n• >90 days & active PO → More in Prod\n• >90 days & no PO → No Action\n• 60-90 days & active PO → Get Prod Status\n• 60-90 days & no PO → No Action\n• ≤60 days & active PO → Push Vendor\n• ≤60 days & no PO → Order More' },
     { name: 'Runway Air', description: 'Days of stock based on LA + air shipments only:\n(LA Office + LA WH + In Air) / Burn Rate\nColor: Red if < 60 days' },
@@ -3861,6 +3861,12 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
+                  // Get 21-day burn rate specifically (used for gap-based Need calculation)
+                  const get21DayBurnRate = (sku: string): number => {
+                    const forecast = forecastingData.forecasting.find(f => f.sku === sku);
+                    return forecast?.avgDaily21d || 0;
+                  };
+                  
                   // Get pending PO quantity for a SKU (from manual production orders)
                   const getPOQuantity = (sku: string): number => {
                     const po = purchaseOrderData?.purchaseOrders?.find(p => p.sku === sku);
@@ -3994,8 +4000,38 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Calculate Runway (days of LA + Inbound Air + Inbound Sea)
                       const runway = unitsPerDay > 0 ? Math.round((laInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
                       
-                      // Calculate LA Need: units needed to cover target days minus (LA qty + In Air - committed)
-                      const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory + inboundAir - laCommitted)));
+                      // Calculate LA Need with sea gap logic
+                      // If sea transfer exists with ETA after runway air date, calculate need based on gap
+                      const burnRate21d = get21DayBurnRate(inv.sku);
+                      let laNeeded = 0;
+                      
+                      if (seaTransfers.length > 0 && inboundSea > 0) {
+                        // Find the earliest sea ETA
+                        const seaETAs = seaTransfers
+                          .filter(t => t.expectedArrivalAt)
+                          .map(t => new Date(t.expectedArrivalAt!))
+                          .sort((a, b) => a.getTime() - b.getTime());
+                        
+                        if (seaETAs.length > 0) {
+                          const earliestSeaETA = seaETAs[0];
+                          const runwayAirDate = new Date();
+                          runwayAirDate.setDate(runwayAirDate.getDate() + runwayAir);
+                          
+                          if (earliestSeaETA > runwayAirDate) {
+                            // Gap exists: sea arrives after stockout
+                            const gapMs = earliestSeaETA.getTime() - runwayAirDate.getTime();
+                            const gapDays = Math.ceil(gapMs / (1000 * 60 * 60 * 24));
+                            laNeeded = Math.ceil(gapDays * burnRate21d);
+                          }
+                          // If sea arrives before stockout, laNeeded stays 0
+                        } else {
+                          // Sea transfers exist but no ETA - use original logic
+                          laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory + inboundAir - laCommitted)));
+                        }
+                      } else {
+                        // No sea transfers - use original logic
+                        laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory + inboundAir - laCommitted)));
+                      }
                       
                       // Determine prod status based on runway and PO (or Phase Out if applicable)
                       let prodStatus: string;
