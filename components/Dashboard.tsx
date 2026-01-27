@@ -1995,16 +1995,22 @@ export default function Dashboard({ session }: DashboardProps) {
     };
   }) || [];
 
+  // Get incoming data from our local transfers (not Shopify) - declare before filteredInventory uses it
+  const incomingFromTransfersData = getIncomingFromTransfers();
+
   // Filter and sort inventory
   const filteredInventory = inventoryData?.inventory
     .filter(item => {
+      // Guard against items with missing SKU
+      if (!item.sku) return false;
+      
       // Phase out filter: hide phased out SKUs with zero total inventory
       const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
       if (isPhaseOut && item.totalAvailable <= 0) return false;
       
       const matchesSearch = !searchTerm || 
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.productTitle.toLowerCase().includes(searchTerm.toLowerCase());
+        (item.productTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
       if (filterOutOfStock && item.totalAvailable > 0) return false;
       if (filterLowStock && (item.totalAvailable <= 0 || item.totalAvailable > 10)) return false;
       // Filter by product group (multi-select)
@@ -2049,9 +2055,6 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Filter and sort location detail (uses either inventoryLocationFilter for inline view or selectedLocation for modal)
   const activeLocationFilter = inventoryLocationFilter || selectedLocation;
-  
-  // Get incoming data from our local transfers (not Shopify)
-  const incomingFromTransfersData = getIncomingFromTransfers();
   
   const filteredLocationDetail = activeLocationFilter && inventoryData?.locationDetails?.[activeLocationFilter]
     ? inventoryData.locationDetails[activeLocationFilter]
@@ -2212,6 +2215,10 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Extract product model from SKU for grouping (SKU is the source of truth)
   const extractProductModel = (productTitle: string, sku: string): string => {
+    // Guard against null/undefined values
+    if (!sku) return productTitle || 'Unknown Product';
+    if (!productTitle) productTitle = '';
+    
     const skuUpper = sku.toUpperCase();
     
     // Screen Protectors (SP, SC prefix)
