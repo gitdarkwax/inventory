@@ -1,6 +1,6 @@
 /**
  * Slack Notification Service for Inventory App
- * Sends notifications to #pos-transfers channel for PO and Transfer events
+ * Sends notifications to configured channels for PO and Transfer events
  */
 
 import { WebClient } from '@slack/web-api';
@@ -72,12 +72,17 @@ export class SlackService {
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*PO#:*\n${data.poNumber}` },
-          { type: 'mrkdwn', text: `*Created By:*\n${data.createdBy}` },
-          { type: 'mrkdwn', text: `*Vendor:*\n${data.vendor || 'N/A'}` },
-          { type: 'mrkdwn', text: `*ETA:*\n${data.eta || 'Not set'}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${data.eta || 'Not set'}`,
+        },
       },
       {
         type: 'section',
@@ -121,18 +126,23 @@ export class SlackService {
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*PO#:*\n${data.poNumber}` },
-          { type: 'mrkdwn', text: `*Status:*\n${statusText}` },
-          { type: 'mrkdwn', text: `*Vendor:*\n${data.vendor || 'N/A'}` },
-          { type: 'mrkdwn', text: `*Received By:*\n${data.receivedBy}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*PO#:* ${data.poNumber}    *Status:* ${statusText}`,
+        },
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Location:*\n${data.location}`,
+          text: `*Vendor:* ${data.vendor || 'N/A'}    *Received By:* ${data.receivedBy}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Location:* ${data.location}`,
         },
       },
       {
@@ -192,20 +202,31 @@ export class SlackService {
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Transfer#:*\n${data.transferId}` },
-          { type: 'mrkdwn', text: `*Created By:*\n${data.createdBy}` },
-          { type: 'mrkdwn', text: `*Origin:*\n${data.origin}` },
-          { type: 'mrkdwn', text: `*Destination:*\n${data.destination}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*Transfer#:* ${data.transferId}    *Created By:* ${data.createdBy}`,
+        },
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Shipment Type:*\n${data.shipmentType}` },
-          { type: 'mrkdwn', text: `*Tracking:*\n${trackingText}` },
-          { type: 'mrkdwn', text: `*ETA:*\n${data.eta || 'Not set'}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Tracking:* ${trackingText}`,
+        },
       },
       {
         type: 'section',
@@ -256,20 +277,31 @@ export class SlackService {
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Transfer#:*\n${data.transferId}` },
-          { type: 'mrkdwn', text: `*Status:*\n${statusText}` },
-          { type: 'mrkdwn', text: `*Received By:*\n${data.receivedBy}` },
-          { type: 'mrkdwn', text: `*Shipment Type:*\n${data.shipmentType}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*Transfer#:* ${data.transferId}    *Status:* ${statusText}`,
+        },
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Origin:*\n${data.origin}` },
-          { type: 'mrkdwn', text: `*Destination:*\n${data.destination}` },
-          { type: 'mrkdwn', text: `*Tracking:*\n${trackingText}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*Received By:* ${data.receivedBy}    *Shipment Type:* ${data.shipmentType}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Tracking:* ${trackingText}`,
+        },
       },
       {
         type: 'section',
@@ -318,11 +350,17 @@ export class SlackService {
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*PO#:*\n${data.poNumber}` },
-          { type: 'mrkdwn', text: `*Cancelled By:*\n${data.cancelledBy}` },
-          { type: 'mrkdwn', text: `*Vendor:*\n${data.vendor || 'N/A'}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*PO#:* ${data.poNumber}    *Cancelled By:* ${data.cancelledBy}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Vendor:* ${data.vendor || 'N/A'}`,
+        },
       },
       {
         type: 'section',
@@ -362,18 +400,24 @@ export class SlackService {
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Transfer#:*\n${data.transferId}` },
-          { type: 'mrkdwn', text: `*Cancelled By:*\n${data.cancelledBy}` },
-          { type: 'mrkdwn', text: `*Origin:*\n${data.origin}` },
-          { type: 'mrkdwn', text: `*Destination:*\n${data.destination}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}`,
+        },
       },
       {
         type: 'section',
-        fields: [
-          { type: 'mrkdwn', text: `*Shipment Type:*\n${data.shipmentType}` },
-        ],
+        text: {
+          type: 'mrkdwn',
+          text: `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Shipment Type:* ${data.shipmentType}`,
+        },
       },
       {
         type: 'section',
