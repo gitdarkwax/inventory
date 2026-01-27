@@ -247,10 +247,18 @@ export class InventoryCacheService {
     createdAt: string,
     note?: string | null
   ): Promise<void> {
-    const cache = await this.loadCache();
+    // Retry loading cache up to 3 times
+    let cache: CachedInventoryData | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      cache = await this.loadCache();
+      if (cache) break;
+      console.warn(`⚠️ addToIncoming: cache load attempt ${attempt}/3 failed`);
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
+    }
+    
     if (!cache) {
-      console.error('❌ Cannot add to incoming: cache not loaded');
-      return;
+      console.error('❌ Cannot add to incoming: cache not loaded after 3 attempts');
+      throw new Error('Failed to load cache for addToIncoming');
     }
 
     // Initialize incoming inventory if not exists
@@ -412,6 +420,33 @@ export class InventoryCacheService {
   async getIncomingInventory(): Promise<IncomingInventoryCache> {
     const cache = await this.loadCache();
     return cache?.incomingInventory || {};
+  }
+
+  /**
+   * Set the entire incoming inventory (used for rebuild)
+   * This is more reliable than calling addToIncoming multiple times
+   */
+  async setIncomingInventory(incomingInventory: IncomingInventoryCache): Promise<void> {
+    // Retry loading cache up to 3 times
+    let cache: CachedInventoryData | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      cache = await this.loadCache();
+      if (cache) break;
+      console.warn(`⚠️ setIncomingInventory: cache load attempt ${attempt}/3 failed`);
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000));
+    }
+    
+    if (!cache) {
+      console.error('❌ Cannot set incoming inventory: cache not loaded after 3 attempts');
+      throw new Error('Failed to load cache for setIncomingInventory');
+    }
+
+    cache.incomingInventory = incomingInventory;
+    await this.saveFullCache(cache);
+    
+    const destinations = Object.keys(incomingInventory);
+    const totalSkus = destinations.reduce((sum, dest) => sum + Object.keys(incomingInventory[dest] || {}).length, 0);
+    console.log(`✅ Set incoming inventory: ${totalSkus} SKUs across ${destinations.length} destinations`);
   }
 
   /**
