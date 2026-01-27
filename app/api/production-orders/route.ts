@@ -176,6 +176,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ order: updatedOrder });
     }
 
+    // Get the order before update to detect status changes
+    const ordersBefore = await ProductionOrdersService.loadOrders();
+    const orderBefore = ordersBefore.orders.find(o => o.id === orderId);
+    const previousStatus = orderBefore?.status;
+
     // Otherwise, update order fields
     const updatedOrder = await ProductionOrdersService.updateOrder(
       orderId, 
@@ -196,6 +201,22 @@ export async function PATCH(request: NextRequest) {
         { error: 'Order not found' },
         { status: 404 }
       );
+    }
+
+    // Send Slack notification if order was cancelled
+    if (status === 'cancelled' && previousStatus !== 'cancelled') {
+      sendSlackNotification(async () => {
+        const slack = new SlackService();
+        await slack.notifyPOCancelled({
+          poNumber: updatedOrder.id,
+          cancelledBy: userName,
+          vendor: updatedOrder.vendor || '',
+          items: updatedOrder.items.map(item => ({
+            sku: item.sku,
+            quantity: item.quantity,
+          })),
+        });
+      });
     }
 
     return NextResponse.json({ order: updatedOrder });

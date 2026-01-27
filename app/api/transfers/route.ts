@@ -297,6 +297,24 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
+    // Send Slack notification if transfer was cancelled
+    if (status === 'cancelled' && previousStatus !== 'cancelled') {
+      sendSlackNotification(async () => {
+        const slack = new SlackService();
+        await slack.notifyTransferCancelled({
+          transferId: updatedTransfer.id,
+          cancelledBy: userName,
+          origin: updatedTransfer.origin,
+          destination: updatedTransfer.destination,
+          shipmentType: updatedTransfer.transferType || 'Unknown',
+          items: updatedTransfer.items.map(item => ({
+            sku: item.sku,
+            quantity: item.quantity,
+          })),
+        });
+      });
+    }
+
     return NextResponse.json({ transfer: updatedTransfer });
 
   } catch (error) {

@@ -296,6 +296,100 @@ export class SlackService {
 }
 
 /**
+   * Send notification when a PO is cancelled
+   */
+  async notifyPOCancelled(data: {
+    poNumber: string;
+    cancelledBy: string;
+    vendor: string;
+    items: Array<{ sku: string; quantity: number }>;
+  }): Promise<void> {
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `❌ Production Order Cancelled`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*PO#:*\n${data.poNumber}` },
+          { type: 'mrkdwn', text: `*Cancelled By:*\n${data.cancelledBy}` },
+          { type: 'mrkdwn', text: `*Vendor:*\n${data.vendor || 'N/A'}` },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Items:*\n${this.formatSkuList(data.items)}`,
+        },
+      },
+    ];
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `PO Cancelled: ${data.poNumber}`,
+      blocks,
+    });
+  }
+
+  /**
+   * Send notification when a Transfer is cancelled
+   */
+  async notifyTransferCancelled(data: {
+    transferId: string;
+    cancelledBy: string;
+    origin: string;
+    destination: string;
+    shipmentType: string;
+    items: Array<{ sku: string; quantity: number }>;
+  }): Promise<void> {
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `❌ Transfer Cancelled`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Transfer#:*\n${data.transferId}` },
+          { type: 'mrkdwn', text: `*Cancelled By:*\n${data.cancelledBy}` },
+          { type: 'mrkdwn', text: `*Origin:*\n${data.origin}` },
+          { type: 'mrkdwn', text: `*Destination:*\n${data.destination}` },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Shipment Type:*\n${data.shipmentType}` },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Items:*\n${this.formatSkuList(data.items)}`,
+        },
+      },
+    ];
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `Transfer Cancelled: ${data.transferId}`,
+      blocks,
+    });
+  }
+}
+
+/**
  * Helper to safely send Slack notification (doesn't throw on failure)
  */
 export async function sendSlackNotification(
