@@ -77,6 +77,10 @@ export interface IncomingInventoryBySku {
 // destination -> sku -> incoming data
 export type IncomingInventoryCache = Record<string, Record<string, IncomingInventoryBySku>>;
 
+// Track low stock alerts to avoid duplicates
+// sku -> last alerted quantity (only send new alert if quantity changed after going above threshold)
+export type LowStockAlertCache = Record<string, number>;
+
 export interface CachedInventoryData {
   inventory: {
     totalSKUs: number;
@@ -96,6 +100,8 @@ export interface CachedInventoryData {
   };
   // Incoming inventory from app transfers (Air/Sea shipments in transit)
   incomingInventory?: IncomingInventoryCache;
+  // Track which SKUs have been alerted for low stock (to avoid duplicate alerts)
+  lowStockAlerts?: LowStockAlertCache;
   lastUpdated: string;
   refreshedBy?: string; // User name or "hourly auto refresh"
 }
@@ -165,6 +171,8 @@ export class InventoryCacheService {
       ...data,
       // Preserve existing incomingInventory if not being explicitly updated
       incomingInventory: data.incomingInventory || existingCache?.incomingInventory || {},
+      // Preserve existing lowStockAlerts if not being explicitly updated
+      lowStockAlerts: data.lowStockAlerts || existingCache?.lowStockAlerts || {},
       lastUpdated: new Date().toISOString(),
       refreshedBy: refreshedBy || 'unknown',
     };
@@ -460,5 +468,48 @@ export class InventoryCacheService {
     } else {
       fs.writeFileSync(this.cacheFile, JSON.stringify(cache, null, 2), 'utf-8');
     }
+  }
+
+  /**
+   * Get low stock alerts tracking data
+   */
+  async getLowStockAlerts(): Promise<LowStockAlertCache> {
+    const cache = await this.loadCache();
+    return cache?.lowStockAlerts || {};
+  }
+
+  /**
+   * Update low stock alerts tracking
+   * @param alerts - Record of SKU -> quantity that was alerted
+   */
+  async updateLowStockAlerts(alerts: LowStockAlertCache): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache) {
+      console.warn('⚠️ Cannot update low stock alerts: cache not loaded');
+      return;
+    }
+
+    cache.lowStockAlerts = {
+      ...cache.lowStockAlerts,
+      ...alerts,
+    };
+
+    await this.saveFullCache(cache);
+    console.log(`✅ Updated low stock alerts for ${Object.keys(alerts).length} SKUs`);
+  }
+
+  /**
+   * Clear a low stock alert when SKU is restocked above threshold
+   * @param sku - The SKU to clear
+   */
+  async clearLowStockAlert(sku: string): Promise<void> {
+    const cache = await this.loadCache();
+    if (!cache?.lowStockAlerts?.[sku]) {
+      return;
+    }
+
+    delete cache.lowStockAlerts[sku];
+    await this.saveFullCache(cache);
+    console.log(`✅ Cleared low stock alert for ${sku}`);
   }
 }

@@ -9,7 +9,8 @@ import { ShopifyClient } from '@/lib/shopify';
 import { ShopifyQLService } from '@/lib/shopifyql';
 // Note: Shopify transfer data is no longer fetched here
 // Incoming quantities are now tracked locally from transfers created in our app
-import { InventoryCacheService } from '@/lib/inventory-cache';
+import { InventoryCacheService, LowStockAlertCache } from '@/lib/inventory-cache';
+import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for all queries
@@ -72,6 +73,9 @@ export async function GET(request: NextRequest) {
       inventory: inventoryData,
       forecasting: { forecasting: forecastingData },
     }, refreshedBy);
+
+    // Check for low stock at LA Office and send alerts
+    await checkLowStockAlerts(cache, inventoryData, skuToProductName);
 
     const duration = Date.now() - startTime;
     console.log(`✅ Refresh complete in ${duration}ms`);
@@ -335,4 +339,101 @@ export async function fetchInventoryData() {
 export async function fetchForecastingData() {
   const shopifyQL = new ShopifyQLService();
   return await shopifyQL.getForecastingData();
+}
+
+/**
+ * Check for low stock at LA Office and send Slack alerts
+ * Only sends alerts for SKUs that haven't been alerted yet or were restocked
+ */
+export async function checkLowStockAlerts(
+  cache: InventoryCacheService,
+  inventoryData: Awaited<ReturnType<typeof fetchInventoryData>>,
+  skuToProductName: Map<string, string>
+): Promise<void> {
+  const LOW_STOCK_THRESHOLD = 100;
+  const LOCATION = 'LA Office';
+
+  try {
+    // Get LA Office inventory details
+    const laOfficeDetails = inventoryData.locationDetails[LOCATION];
+    if (!laOfficeDetails) {
+      console.log(`ℹ️ No inventory data for ${LOCATION}`);
+      return;
+    }
+
+    // Get existing alerts
+    const existingAlerts = await cache.getLowStockAlerts();
+    
+    // Find SKUs that are low stock
+    const lowStockSkus: Array<{ sku: string; productName: string; quantity: number }> = [];
+    const newAlerts: LowStockAlertCache = {};
+    const skusToAlert: Array<{ sku: string; productName: string; quantity: number }> = [];
+
+    for (const item of laOfficeDetails) {
+      const quantity = item.available;
+      
+      if (quantity < LOW_STOCK_THRESHOLD) {
+        // SKU is below threshold
+        const previousAlertQty = existingAlerts[item.sku];
+        
+        if (previousAlertQty === undefined) {
+          // Never alerted before - send alert
+          skusToAlert.push({
+            sku: item.sku,
+            productName: item.productTitle,
+            quantity,
+          });
+          newAlerts[item.sku] = quantity;
+        } else {
+          // Already alerted - keep the existing alert record
+          newAlerts[item.sku] = previousAlertQty;
+        }
+        
+        lowStockSkus.push({
+          sku: item.sku,
+          productName: item.productTitle,
+          quantity,
+        });
+      } else if (existingAlerts[item.sku] !== undefined) {
+        // SKU was previously low but is now above threshold - clear the alert
+        // (Don't add to newAlerts, effectively removing it)
+        console.log(`📈 ${item.sku} restocked to ${quantity} units (was alerted at ${existingAlerts[item.sku]})`);
+      }
+    }
+
+    // Update the alerts cache with current low stock SKUs
+    // This replaces the entire alerts cache to remove restocked items
+    if (Object.keys(newAlerts).length > 0 || Object.keys(existingAlerts).length > 0) {
+      const fullCache = await cache.loadCache();
+      if (fullCache) {
+        fullCache.lowStockAlerts = newAlerts;
+        await cache.updateLowStockAlerts(newAlerts);
+      }
+    }
+
+    // Send Slack notification for newly low stock items
+    if (skusToAlert.length > 0) {
+      console.log(`⚠️ Sending low stock alert for ${skusToAlert.length} SKUs at ${LOCATION}`);
+      
+      sendSlackNotification(async () => {
+        const alertsChannelId = process.env.SLACK_CHANNEL_ALERTS;
+        if (!alertsChannelId) {
+          throw new Error('SLACK_CHANNEL_ALERTS not configured');
+        }
+        
+        const slack = new SlackService(alertsChannelId);
+        await slack.notifyLowStock({
+          items: skusToAlert,
+          location: LOCATION,
+          threshold: LOW_STOCK_THRESHOLD,
+        });
+      }, 'SLACK_CHANNEL_ALERTS');
+    } else {
+      console.log(`✅ No new low stock alerts needed (${lowStockSkus.length} SKUs below threshold, all previously alerted)`);
+    }
+
+  } catch (error) {
+    console.error('⚠️ Error checking low stock alerts:', error);
+    // Don't throw - low stock check failure shouldn't fail the refresh
+  }
 }

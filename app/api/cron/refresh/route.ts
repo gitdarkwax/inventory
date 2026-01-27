@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { InventoryCacheService } from '@/lib/inventory-cache';
-import { fetchInventoryData, fetchForecastingData } from '@/app/api/refresh/route';
+import { fetchInventoryData, fetchForecastingData, checkLowStockAlerts } from '@/app/api/refresh/route';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds
@@ -58,6 +58,9 @@ export async function GET(request: NextRequest) {
       inventory: inventoryData,
       forecasting: { forecasting: forecastingData },
     }, 'hourly auto refresh');
+
+    // Check for low stock at LA Office and send alerts
+    await checkLowStockAlerts(cache, inventoryData, skuToProductName);
 
     const duration = Date.now() - startTime;
     console.log(`✅ Hourly cron refresh complete in ${duration}ms`);

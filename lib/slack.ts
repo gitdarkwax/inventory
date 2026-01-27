@@ -377,18 +377,64 @@ export class SlackService {
 }
 
 /**
+   * Send notification for low stock alert
+   */
+  async notifyLowStock(data: {
+    items: Array<{ sku: string; productName: string; quantity: number }>;
+    location: string;
+    threshold: number;
+  }): Promise<void> {
+    const itemsList = data.items
+      .map(item => `• *${item.sku}*: ${item.quantity} units${item.productName ? ` (${item.productName})` : ''}`)
+      .join('\n');
+
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `⚠️ Low Stock Alert - ${data.location}`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `The following SKUs have fallen below *${data.threshold} units*:`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: itemsList,
+        },
+      },
+    ];
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `Low Stock Alert: ${data.items.length} SKU(s) below ${data.threshold} units at ${data.location}`,
+      blocks,
+    });
+  }
+}
+
+/**
  * Helper to safely send Slack notification (doesn't throw on failure)
  */
 export async function sendSlackNotification(
-  notifyFn: () => Promise<void>
+  notifyFn: () => Promise<void>,
+  channelEnvVar: string = 'SLACK_CHANNEL_TRANSFERS'
 ): Promise<void> {
   // Check if required env vars exist before attempting
   if (!process.env.SLACK_BOT_TOKEN) {
     console.error('⚠️ SLACK_BOT_TOKEN not set - skipping Slack notification');
     return;
   }
-  if (!process.env.SLACK_CHANNEL_TRANSFERS) {
-    console.error('⚠️ SLACK_CHANNEL_TRANSFERS not set - skipping Slack notification');
+  if (!process.env[channelEnvVar]) {
+    console.error(`⚠️ ${channelEnvVar} not set - skipping Slack notification`);
     return;
   }
   
