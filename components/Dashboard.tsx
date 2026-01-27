@@ -657,13 +657,16 @@ export default function Dashboard({ session }: DashboardProps) {
           throw new Error(data.error || 'Failed to refresh inventory');
         }
         
-        // Step 2: Reload cache with fresh data
+        // Step 2: Reload cache with fresh data (both inventory and incoming)
         const cacheResponse = await fetch('/api/inventory');
         if (!cacheResponse.ok) {
           throw new Error('Failed to load refreshed inventory');
         }
         const freshData = await cacheResponse.json();
         setInventoryData(freshData);
+        
+        // Also reload incoming cache to preserve in-transit data
+        await loadIncomingFromCache();
         
         // Step 3: Check inventory levels at origin with fresh data
         const originDetails = freshData?.locationDetails?.[newTransferOrigin];
@@ -927,13 +930,16 @@ export default function Dashboard({ session }: DashboardProps) {
         throw new Error(data.error || 'Failed to refresh inventory');
       }
       
-      // Step 2: Reload cache with fresh data
+      // Step 2: Reload cache with fresh data (both inventory and incoming)
       const cacheResponse = await fetch('/api/inventory');
       if (!cacheResponse.ok) {
         throw new Error('Failed to load refreshed inventory');
       }
       const freshData = await cacheResponse.json();
       setInventoryData(freshData);
+      
+      // Also reload incoming cache to preserve in-transit data
+      await loadIncomingFromCache();
       
       // Step 3: Check inventory levels at origin with fresh data
       const originDetails = freshData?.locationDetails?.[transfer.origin];
