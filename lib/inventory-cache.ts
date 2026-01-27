@@ -479,23 +479,21 @@ export class InventoryCacheService {
   }
 
   /**
-   * Update low stock alerts tracking
+   * Set low stock alerts tracking (replaces existing alerts entirely)
    * @param alerts - Record of SKU -> quantity that was alerted
    */
-  async updateLowStockAlerts(alerts: LowStockAlertCache): Promise<void> {
+  async setLowStockAlerts(alerts: LowStockAlertCache): Promise<void> {
     const cache = await this.loadCache();
     if (!cache) {
-      console.warn('⚠️ Cannot update low stock alerts: cache not loaded');
+      console.warn('⚠️ Cannot set low stock alerts: cache not loaded');
       return;
     }
 
-    cache.lowStockAlerts = {
-      ...cache.lowStockAlerts,
-      ...alerts,
-    };
+    // Replace entirely - this removes SKUs that are no longer low stock
+    cache.lowStockAlerts = alerts;
 
     await this.saveFullCache(cache);
-    console.log(`✅ Updated low stock alerts for ${Object.keys(alerts).length} SKUs`);
+    console.log(`✅ Set low stock alerts: ${Object.keys(alerts).length} SKUs tracked`);
   }
 
   /**

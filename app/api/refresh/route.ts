@@ -401,15 +401,8 @@ export async function checkLowStockAlerts(
       }
     }
 
-    // Update the alerts cache with current low stock SKUs
-    // This replaces the entire alerts cache to remove restocked items
-    if (Object.keys(newAlerts).length > 0 || Object.keys(existingAlerts).length > 0) {
-      const fullCache = await cache.loadCache();
-      if (fullCache) {
-        fullCache.lowStockAlerts = newAlerts;
-        await cache.updateLowStockAlerts(newAlerts);
-      }
-    }
+    // Replace the entire alerts cache - this removes restocked SKUs
+    await cache.setLowStockAlerts(newAlerts);
 
     // Send Slack notification for newly low stock items
     if (skusToAlert.length > 0) {
