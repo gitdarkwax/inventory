@@ -19,12 +19,16 @@ export class SlackService {
   private client: WebClient;
   private channelId: string;
 
-  constructor() {
+  constructor(channelOverride?: string) {
     const token = process.env.SLACK_BOT_TOKEN;
-    const channelId = process.env.SLACK_CHANNEL_POS_TRANSFERS || 'C0AB5HYDJ8M';
+    const channelId = channelOverride || process.env.SLACK_CHANNEL_TRANSFERS;
 
     if (!token) {
       throw new Error('Missing SLACK_BOT_TOKEN');
+    }
+
+    if (!channelId) {
+      throw new Error('Missing SLACK_CHANNEL_TRANSFERS');
     }
 
     this.client = new WebClient(token);
@@ -394,9 +398,13 @@ export class SlackService {
 export async function sendSlackNotification(
   notifyFn: () => Promise<void>
 ): Promise<void> {
-  // Check if token exists before attempting
+  // Check if required env vars exist before attempting
   if (!process.env.SLACK_BOT_TOKEN) {
     console.error('⚠️ SLACK_BOT_TOKEN not set - skipping Slack notification');
+    return;
+  }
+  if (!process.env.SLACK_CHANNEL_TRANSFERS) {
+    console.error('⚠️ SLACK_CHANNEL_TRANSFERS not set - skipping Slack notification');
     return;
   }
   
