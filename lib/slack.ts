@@ -301,11 +301,21 @@ export class SlackService {
 export async function sendSlackNotification(
   notifyFn: () => Promise<void>
 ): Promise<void> {
+  // Check if token exists before attempting
+  if (!process.env.SLACK_BOT_TOKEN) {
+    console.error('⚠️ SLACK_BOT_TOKEN not set - skipping Slack notification');
+    return;
+  }
+  
   try {
     await notifyFn();
-    console.log('✅ Slack notification sent');
-  } catch (error) {
-    // Log but don't throw - Slack failures shouldn't break the main flow
-    console.error('⚠️ Failed to send Slack notification:', error);
+    console.log('✅ Slack notification sent successfully');
+  } catch (error: any) {
+    // Log detailed error info for debugging
+    console.error('⚠️ Failed to send Slack notification:', {
+      message: error?.message,
+      code: error?.code,
+      data: error?.data,
+    });
   }
 }
