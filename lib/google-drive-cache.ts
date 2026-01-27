@@ -210,7 +210,13 @@ export class GoogleDriveCacheService {
         // Already parsed JSON - check for expected properties
         const data = response.data as Record<string, unknown>;
         if (data.inventory || data.lastUpdated) {
-          console.log('✅ Loaded inventory cache from Google Drive (already parsed)');
+          // Log what we're loading
+          const incomingInventory = data.incomingInventory as Record<string, unknown> | undefined;
+          if (incomingInventory && Object.keys(incomingInventory).length > 0) {
+            console.log(`✅ Loaded inventory cache from Google Drive (already parsed) with incomingInventory`);
+          } else {
+            console.log('✅ Loaded inventory cache from Google Drive (already parsed) - no incomingInventory');
+          }
           return response.data as T;
         }
         
@@ -235,7 +241,12 @@ export class GoogleDriveCacheService {
       }
       
       const cached = JSON.parse(dataString);
-      console.log('✅ Loaded inventory cache from Google Drive');
+      // Log what we loaded
+      if (cached.incomingInventory && Object.keys(cached.incomingInventory).length > 0) {
+        console.log(`✅ Loaded inventory cache from Google Drive with incomingInventory`);
+      } else {
+        console.log('✅ Loaded inventory cache from Google Drive - no incomingInventory');
+      }
       return cached as T;
 
     } catch (error) {

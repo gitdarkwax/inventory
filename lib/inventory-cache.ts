@@ -128,7 +128,38 @@ export class InventoryCacheService {
    */
   async saveCache(data: Omit<CachedInventoryData, 'lastUpdated' | 'refreshedBy'>, refreshedBy?: string): Promise<void> {
     // Load existing cache to preserve incomingInventory
-    const existingCache = await this.loadCache();
+    // Retry up to 3 times if loading fails to avoid losing incoming data
+    let existingCache: CachedInventoryData | null = null;
+    let loadAttempts = 0;
+    const maxAttempts = 3;
+    
+    while (loadAttempts < maxAttempts) {
+      loadAttempts++;
+      existingCache = await this.loadCache();
+      if (existingCache) {
+        console.log(`✅ Loaded existing cache on attempt ${loadAttempts}`);
+        break;
+      } else {
+        console.warn(`⚠️ Cache load returned null (attempt ${loadAttempts}/${maxAttempts})`);
+        if (loadAttempts < maxAttempts) {
+          // Wait 1 second before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+    
+    // Log what we're preserving
+    const existingIncoming = existingCache?.incomingInventory;
+    const hasExistingIncoming = existingIncoming && Object.keys(existingIncoming).length > 0;
+    if (hasExistingIncoming) {
+      const destinations = Object.keys(existingIncoming);
+      const totalSkus = destinations.reduce((sum, dest) => sum + Object.keys(existingIncoming[dest] || {}).length, 0);
+      console.log(`📦 Preserving existing incomingInventory: ${totalSkus} SKUs across ${destinations.length} destinations`);
+    } else if (!existingCache) {
+      console.warn(`⚠️ Could not load existing cache after ${maxAttempts} attempts - incomingInventory may be lost!`);
+    } else {
+      console.log(`📭 No existing incomingInventory to preserve`);
+    }
     
     const cacheData: CachedInventoryData = {
       ...data,
