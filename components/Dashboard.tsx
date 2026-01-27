@@ -2456,15 +2456,15 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'SKU', description: 'Product SKU identifier' },
     { name: 'In Stock', description: 'Total available inventory across LA Office and DTLA WH locations' },
     { name: 'BR', description: 'Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)' },
-    { name: 'In Air', description: 'Units in transit via air freight (from Shopify transfers tagged "air")' },
-    { name: 'In Sea', description: 'Units in transit via sea freight (from Shopify transfers tagged "sea")' },
+    { name: 'In Air', description: 'Units in transit via air freight (from transfers tagged "air")' },
+    { name: 'In Sea', description: 'Units in transit via sea freight (from transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
-    { name: 'Need', description: 'Units needed to bridge the gap until sea shipment arrives.\n\nIf sea transfer has ETA after Runway Air date (stockout):\nNeed = Gap Days × 21-day Burn Rate\n\nIf sea arrives before stockout: Need = 0\n\nIf no sea transfer: Uses target days formula:\n(Target Days × Burn Rate) - (LA + In Air - committed)' },
-    { name: 'Ship Type', description: 'Recommended shipping method based on days of stock:\n\nSea inventory is only included if its ETA is before the Runway Air date (when LA + Air runs out). This prevents triggering unnecessary air shipments when sea is arriving soon.\n\nDays of Stock = (LA + Air + Effective Sea) / Burn Rate\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list & China = 0 → Phase Out' },
-    { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / Burn Rate:\n• >90 days & active PO → More in Prod\n• >90 days & no PO → No Action\n• 60-90 days & active PO → Get Prod Status\n• 60-90 days & no PO → No Action\n• ≤60 days & active PO → Push Vendor\n• ≤60 days & no PO → Order More' },
-    { name: 'Runway Air', description: 'Days of stock based on LA + air shipments only:\n(LA Office + LA WH + In Air) / Burn Rate\nColor: Red if < 60 days' },
-    { name: 'Runway', description: 'Days of stock based on LA + all air and sea shipments:\n(LA Office + LA WH + In Air + In Sea) / Burn Rate\nColor: Red if < 90 days' },
+    { name: 'Need', description: 'Units needed to air-ship to bridge the gap until sea arrives.\n\nLogic:\n1. Calculate Runway Air date (when LA + Air runs out)\n2. Check earliest Sea ETA\n\nIf Sea ETA > Runway Air date (gap exists):\n  Need = Gap Days × 21-day Burn Rate\n\nIf Sea ETA ≤ Runway Air date:\n  Need = 0 (sea arrives before stockout)\n\nIf no sea transfer or no ETA:\n  Need = (Target Days × BR) - (LA + Air - committed)' },
+    { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
+    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on Runway = (LA + Air + Sea) / BR:\n\n• >90 days + active PO → More in Prod\n• >90 days + no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days + no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days + no PO → Order More' },
+    { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
+    { name: 'Runway', description: 'Days until stockout based on all inventory.\n\nFormula: (LA Office + DTLA WH + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
   ];
 
   // Location Detail View
