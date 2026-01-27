@@ -349,11 +349,36 @@ export class TransfersService {
       transfer.transferType = updates.transferType;
     }
     if (updates.items !== undefined) {
-      const oldItems = transfer.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
-      const newItems = updates.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
-      if (oldItems !== newItems) {
-        changes.push(`Items: ${newItems}`);
+      // Check if this is a delivery update (items have receivedQuantity changes)
+      const isDeliveryUpdate = updates.items.some((newItem, idx) => {
+        const oldItem = transfer.items.find(i => i.sku === newItem.sku);
+        return oldItem && (newItem.receivedQuantity || 0) > (oldItem.receivedQuantity || 0);
+      });
+      
+      if (isDeliveryUpdate) {
+        // Format delivery details: "SKU: delivered of total"
+        const deliveryDetails = updates.items
+          .filter(newItem => {
+            const oldItem = transfer.items.find(i => i.sku === newItem.sku);
+            return oldItem && (newItem.receivedQuantity || 0) > (oldItem.receivedQuantity || 0);
+          })
+          .map(newItem => {
+            const oldItem = transfer.items.find(i => i.sku === newItem.sku);
+            const thisDelivery = (newItem.receivedQuantity || 0) - (oldItem?.receivedQuantity || 0);
+            const totalDelivered = newItem.receivedQuantity || 0;
+            const totalQty = newItem.quantity;
+            return `${newItem.sku}: ${thisDelivery.toLocaleString()} delivered (${totalDelivered.toLocaleString()} of ${totalQty.toLocaleString()})`;
+          })
+          .join(', ');
+        changes.push(`Delivery: ${deliveryDetails}`);
         transfer.items = updates.items;
+      } else {
+        const oldItems = transfer.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+        const newItems = updates.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+        if (oldItems !== newItems) {
+          changes.push(`Items: ${newItems}`);
+          transfer.items = updates.items;
+        }
       }
     }
     if (updates.carrier !== undefined && updates.carrier !== transfer.carrier) {
@@ -392,9 +417,23 @@ export class TransfersService {
     
     // Add activity log entry if there were changes
     if (changes.length > 0 && changedBy && changedByEmail) {
+      // Determine action type based on changes
+      const isDeliveryLog = changes.some(c => c.startsWith('Delivery:'));
+      const isStatusDelivered = updates.status === 'delivered';
+      const isStatusPartial = updates.status === 'partial';
+      
+      let action = 'Transfer Updated';
+      if (isDeliveryLog) {
+        action = isStatusDelivered ? 'Delivery Logged (Completed)' : 'Delivery Logged';
+      } else if (updates.status === 'cancelled') {
+        action = 'Transfer Cancelled';
+      } else if (updates.status === 'in_transit') {
+        action = 'Marked In Transit';
+      }
+      
       transfer.activityLog.push({
         timestamp: now,
-        action: 'Transfer Updated',
+        action,
         changedBy,
         changedByEmail,
         details: changes.join('; '),

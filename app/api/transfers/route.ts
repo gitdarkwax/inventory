@@ -267,20 +267,13 @@ export async function PATCH(request: NextRequest) {
       sendSlackNotification(async () => {
         const slack = new SlackService();
         
-        // Calculate delivered and pending items
-        const deliveredItems = updatedTransfer.items
-          .filter(item => (item.receivedQuantity || 0) > 0)
-          .map(item => ({
-            sku: item.sku,
-            quantity: item.receivedQuantity || 0,
-          }));
-
-        const pendingItems = updatedTransfer.items
-          .filter(item => (item.receivedQuantity || 0) < item.quantity)
-          .map(item => ({
-            sku: item.sku,
-            quantity: item.quantity - (item.receivedQuantity || 0),
-          }));
+        // Build items with delivery progress for Slack notification
+        const itemsWithProgress = updatedTransfer.items.map(item => ({
+          sku: item.sku,
+          totalQty: item.quantity,
+          delivered: item.receivedQuantity || 0,
+          pending: item.quantity - (item.receivedQuantity || 0),
+        }));
 
         await slack.notifyTransferDelivery({
           transferId: updatedTransfer.id,
@@ -291,8 +284,7 @@ export async function PATCH(request: NextRequest) {
           shipmentType: updatedTransfer.transferType || 'Unknown',
           carrier: updatedTransfer.carrier,
           trackingNumber: updatedTransfer.trackingNumber,
-          deliveredItems,
-          pendingItems: pendingItems.length > 0 ? pendingItems : undefined,
+          items: itemsWithProgress,
         });
       });
     }

@@ -226,8 +226,7 @@ export class SlackService {
     shipmentType: string;
     carrier?: string;
     trackingNumber?: string;
-    deliveredItems: Array<{ sku: string; quantity: number }>;
-    pendingItems?: Array<{ sku: string; quantity: number }>;
+    items: Array<{ sku: string; totalQty: number; delivered: number; pending: number }>;
   }): Promise<void> {
     const statusEmoji = data.status === 'delivered' ? '✅' : '📬';
     const statusText = data.status === 'delivered' ? 'Fully Delivered' : 'Partial Delivery';
@@ -235,6 +234,16 @@ export class SlackService {
     const trackingText = data.trackingNumber
       ? (trackingUrl ? `<${trackingUrl}|${data.trackingNumber}>` : data.trackingNumber)
       : 'N/A';
+
+    // Format items with delivery progress
+    // e.g., "• ACU-BL: 1,000 of 1,000" or "• ACU-RD: 500 of 1,000 [Pending 500]"
+    const itemsList = data.items
+      .map(item => {
+        const deliveredText = `${item.delivered.toLocaleString()} of ${item.totalQty.toLocaleString()}`;
+        const pendingText = item.pending > 0 ? ` [Pending ${item.pending.toLocaleString()}]` : '';
+        return `• *${item.sku}*: ${deliveredText}${pendingText}`;
+      })
+      .join('\n');
 
     const blocks: any[] = [
       {
@@ -261,21 +270,10 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Delivered Items:*\n${this.formatSkuList(data.deliveredItems)}`,
+          text: `*Delivered Items:*\n${itemsList}`,
         },
       },
     ];
-
-    // Add pending items if partial delivery
-    if (data.status === 'partial' && data.pendingItems && data.pendingItems.length > 0) {
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*⏳ Pending Items:*\n${this.formatSkuList(data.pendingItems)}`,
-        },
-      });
-    }
 
     await this.client.chat.postMessage({
       channel: this.channelId,
