@@ -2463,7 +2463,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Sea', description: 'Units in transit via sea freight (from Shopify transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
-    { name: 'Need', description: 'Units needed in LA to cover the period selected under the "Units needed in LA" drop down menu.\nCurrent stock available in LA is factored into the calculation.\n(Target Days selected × Burn Rate) - (LA Inventory - committed)' },
+    { name: 'Need', description: 'Units needed in LA to cover the period selected under the "Units needed in LA" drop down menu.\nCurrent stock available in LA plus In Air inventory is factored into the calculation.\n(Target Days × Burn Rate) - (LA Inventory + In Air - committed)' },
     { name: 'Ship Type', description: 'Recommended shipping method based on days of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list & China = 0 → Phase Out' },
     { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / Burn Rate:\n• >90 days & active PO → More in Prod\n• >90 days & no PO → No Action\n• 60-90 days & active PO → Get Prod Status\n• 60-90 days & no PO → No Action\n• ≤60 days & active PO → Push Vendor\n• ≤60 days & no PO → Order More' },
     { name: 'Runway Air', description: 'Days of stock based on LA + air shipments only:\n(LA Office + LA WH + In Air) / Burn Rate\nColor: Red if < 60 days' },
@@ -3969,8 +3969,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Calculate Runway (days of LA + Inbound Air + Inbound Sea)
                       const runway = unitsPerDay > 0 ? Math.round((laInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
                       
-                      // Calculate LA Need: units needed to cover target days minus (LA qty - committed)
-                      const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory - laCommitted)));
+                      // Calculate LA Need: units needed to cover target days minus (LA qty + In Air - committed)
+                      const laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory + inboundAir - laCommitted)));
                       
                       // Determine prod status based on runway and PO (or Phase Out if applicable)
                       let prodStatus: string;
