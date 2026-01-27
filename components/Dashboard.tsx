@@ -647,7 +647,7 @@ export default function Dashboard({ session }: DashboardProps) {
     // For Immediate transfers, refresh data and validate before showing confirmation
     if (newTransferType === 'Immediate') {
       setIsValidatingTransfer(true);
-      showProdNotification('info', 'Refreshing Data', 'Getting latest inventory from Shopify...');
+      showProdNotification('warning', 'Refreshing Data', 'Getting latest inventory from Shopify...');
       
       try {
         // Step 1: Refresh inventory data from Shopify
@@ -917,7 +917,7 @@ export default function Dashboard({ session }: DashboardProps) {
   // First refreshes data from Shopify to ensure accurate stock levels
   const validateAndShowMarkInTransit = async (transfer: Transfer) => {
     setIsValidatingTransfer(true);
-    showProdNotification('info', 'Refreshing Data', 'Getting latest inventory from Shopify...');
+    showProdNotification('warning', 'Refreshing Data', 'Getting latest inventory from Shopify...');
     
     try {
       // Step 1: Refresh inventory data from Shopify
