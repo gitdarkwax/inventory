@@ -1252,12 +1252,50 @@ export default function Dashboard({ session }: DashboardProps) {
     setIsCancellingTransfer(true);
 
     try {
+      // Check if this is a partial delivery - need to restock undelivered items
+      const isPartialDelivery = selectedTransfer.status === 'partial';
+      let restockedItems: Array<{ sku: string; quantity: number }> = [];
+      
+      if (isPartialDelivery) {
+        // Calculate undelivered quantities to restock to origin
+        const undeliveredItems = selectedTransfer.items
+          .map(item => ({
+            sku: item.sku,
+            quantity: item.quantity - (item.receivedQuantity || 0),
+          }))
+          .filter(item => item.quantity > 0);
+        
+        if (undeliveredItems.length > 0) {
+          // Restock undelivered items to origin location in Shopify
+          const inventoryResponse = await fetch('/api/transfers/inventory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'restock_cancelled',
+              transferId: selectedTransfer.id,
+              origin: selectedTransfer.origin,
+              items: undeliveredItems,
+            }),
+          });
+          
+          if (!inventoryResponse.ok) {
+            const inventoryData = await inventoryResponse.json();
+            showProdNotification('error', 'Restock Failed', inventoryData.error || 'Failed to restock items to origin');
+            setIsCancellingTransfer(false);
+            return;
+          }
+          
+          restockedItems = undeliveredItems;
+        }
+      }
+
       const response = await fetch('/api/transfers', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transferId: selectedTransfer.id,
           status: 'cancelled',
+          restockedItems: restockedItems.length > 0 ? restockedItems : undefined,
         }),
       });
 
@@ -1267,7 +1305,11 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowCancelTransferConfirm(false);
         setSelectedTransfer(null);
-        showProdNotification('success', 'Transfer Cancelled', `Transfer ${selectedTransfer.id} has been cancelled`);
+        
+        const restockMessage = restockedItems.length > 0 
+          ? ` Undelivered items restocked to ${selectedTransfer.origin}.`
+          : '';
+        showProdNotification('success', 'Transfer Cancelled', `Transfer ${selectedTransfer.id} has been cancelled.${restockMessage}`);
       } else {
         showProdNotification('error', 'Cancel Failed', data.error || 'Failed to cancel transfer');
       }

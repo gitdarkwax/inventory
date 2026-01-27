@@ -198,12 +198,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transferId, origin, destination, transferType, items, carrier, trackingNumber, eta, notes, status } = body as {
+    const { transferId, origin, destination, transferType, items, carrier, trackingNumber, eta, notes, status, restockedItems } = body as {
       transferId: string;
       origin?: string;
       destination?: string;
       transferType?: TransferType;
       items?: { sku: string; quantity: number; receivedQuantity?: number }[];
+      restockedItems?: { sku: string; quantity: number }[];
       carrier?: CarrierType;
       trackingNumber?: string;
       eta?: string;
@@ -303,6 +304,7 @@ export async function PATCH(request: NextRequest) {
             sku: item.sku,
             quantity: item.quantity,
           })),
+          restockedItems: restockedItems,
         });
       });
     }

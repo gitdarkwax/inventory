@@ -41,7 +41,14 @@ interface LogDeliveryRequest {
   items: { sku: string; quantity: number }[]; // quantity being delivered
 }
 
-type RequestBody = MarkInTransitRequest | LogDeliveryRequest;
+interface RestockCancelledRequest {
+  action: 'restock_cancelled';
+  transferId: string;
+  origin: string;
+  items: { sku: string; quantity: number }[]; // undelivered items to restock
+}
+
+type RequestBody = MarkInTransitRequest | LogDeliveryRequest | RestockCancelledRequest;
 
 // GraphQL mutation for adjusting inventory quantities (using delta values)
 const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
@@ -348,6 +355,76 @@ export async function POST(request: NextRequest) {
         transferId,
         itemsAdjusted: items.length,
         skippedShopify: isShipBob,
+        warnings: errors.length > 0 ? errors : undefined,
+      });
+
+    } else if (body.action === 'restock_cancelled') {
+      // Restock undelivered items to origin when cancelling a partial delivery
+      const { transferId, origin, items } = body;
+      
+      console.log(`📦 Restocking ${items.length} SKUs to ${origin} for cancelled transfer ${transferId}`);
+      
+      const errors: string[] = [];
+
+      try {
+        const originLocationId = locationIds[origin];
+        
+        if (!originLocationId) {
+          return NextResponse.json({ error: `Origin location "${origin}" not found in Shopify` }, { status: 400 });
+        }
+
+        // Get inventoryItemIds for each SKU
+        const originDetails = locationDetails[origin] || [];
+        const availableAdjustments: Array<{
+          inventoryItemId: string;
+          locationId: string;
+          delta: number;
+        }> = [];
+
+        for (const item of items) {
+          let detail = originDetails.find(d => d.sku === item.sku);
+          if (!detail) {
+            // Try to find in any location
+            for (const loc of Object.keys(locationDetails)) {
+              detail = locationDetails[loc]?.find(d => d.sku === item.sku);
+              if (detail) break;
+            }
+            if (!detail) {
+              errors.push(`SKU ${item.sku} not found in inventory`);
+              continue;
+            }
+          }
+
+          // Add back to origin's On Hand
+          availableAdjustments.push({
+            inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+            locationId: `gid://shopify/Location/${originLocationId}`,
+            delta: item.quantity,
+          });
+        }
+
+        if (errors.length > 0 && availableAdjustments.length === 0) {
+          return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
+        }
+
+        await adjustInventory(graphqlUrl, accessToken, availableAdjustments, 'restock');
+        console.log(`✅ Restocked to ${origin} On Hand: ${availableAdjustments.length} SKUs`);
+
+        console.log(`✅ Restock completed for cancelled transfer ${transferId}`);
+      } catch (error) {
+        console.error('❌ Shopify restock failed:', error);
+        return NextResponse.json({ 
+          error: 'Failed to restock inventory to origin', 
+          details: error instanceof Error ? error.message : 'Unknown error',
+          partialErrors: errors.length > 0 ? errors : undefined,
+        }, { status: 500 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: 'restock_cancelled',
+        transferId,
+        itemsRestocked: items.length,
         warnings: errors.length > 0 ? errors : undefined,
       });
     }

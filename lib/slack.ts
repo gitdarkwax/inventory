@@ -63,21 +63,10 @@ export class SlackService {
   }): Promise<void> {
     const blocks = [
       {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `📦 New Production Order Created`,
-          emoji: true,
-        },
-      },
-      {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: [
-            `*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}`,
-            `*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${data.eta || 'Not set'}`,
-          ].join('\n'),
+          text: `*📦 New Production Order Created*\n*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}\n*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${data.eta || 'Not set'}`,
         },
       },
       {
@@ -113,22 +102,10 @@ export class SlackService {
 
     const blocks: any[] = [
       {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `${statusEmoji} PO Delivery Logged`,
-          emoji: true,
-        },
-      },
-      {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: [
-            `*PO#:* ${data.poNumber}    *Status:* ${statusText}`,
-            `*Vendor:* ${data.vendor || 'N/A'}    *Received By:* ${data.receivedBy}`,
-            `*Location:* ${data.location}`,
-          ].join('\n'),
+          text: `*${statusEmoji} PO Delivery Logged*\n*PO#:* ${data.poNumber}    *Status:* ${statusText}\n*Vendor:* ${data.vendor || 'N/A'}    *Received By:* ${data.receivedBy}\n*Location:* ${data.location}`,
         },
       },
       {
@@ -179,23 +156,10 @@ export class SlackService {
 
     const blocks = [
       {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `🚚 New Transfer Created`,
-          emoji: true,
-        },
-      },
-      {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: [
-            `*Transfer#:* ${data.transferId}    *Created By:* ${data.createdBy}`,
-            `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
-            `*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}`,
-            `*Tracking:* ${trackingText}`,
-          ].join('\n'),
+          text: `*🚚 New Transfer Created*\n*Transfer#:* ${data.transferId}    *Created By:* ${data.createdBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}\n*Tracking:* ${trackingText}`,
         },
       },
       {
@@ -247,23 +211,10 @@ export class SlackService {
 
     const blocks: any[] = [
       {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `${statusEmoji} Transfer Delivery Logged`,
-          emoji: true,
-        },
-      },
-      {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: [
-            `*Transfer#:* ${data.transferId}    *Status:* ${statusText}`,
-            `*Received By:* ${data.receivedBy}    *Shipment Type:* ${data.shipmentType}`,
-            `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
-            `*Tracking:* ${trackingText}`,
-          ].join('\n'),
+          text: `*${statusEmoji} Transfer Delivery Logged*\n*Transfer#:* ${data.transferId}    *Status:* ${statusText}\n*Received By:* ${data.receivedBy}    *Shipment Type:* ${data.shipmentType}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Tracking:* ${trackingText}`,
         },
       },
       {
@@ -293,21 +244,10 @@ export class SlackService {
   }): Promise<void> {
     const blocks = [
       {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `❌ Production Order Cancelled`,
-          emoji: true,
-        },
-      },
-      {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: [
-            `*PO#:* ${data.poNumber}    *Cancelled By:* ${data.cancelledBy}`,
-            `*Vendor:* ${data.vendor || 'N/A'}`,
-          ].join('\n'),
+          text: `*❌ Production Order Cancelled*\n*PO#:* ${data.poNumber}    *Cancelled By:* ${data.cancelledBy}\n*Vendor:* ${data.vendor || 'N/A'}`,
         },
       },
       {
@@ -336,25 +276,16 @@ export class SlackService {
     destination: string;
     shipmentType: string;
     items: Array<{ sku: string; quantity: number }>;
+    restockedItems?: Array<{ sku: string; quantity: number }>;
   }): Promise<void> {
-    const blocks = [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `❌ Transfer Cancelled`,
-          emoji: true,
-        },
-      },
+    let headerText = `*❌ Transfer Cancelled*\n*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}`;
+    
+    const blocks: any[] = [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: [
-            `*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}`,
-            `*Origin:* ${data.origin}    *Destination:* ${data.destination}`,
-            `*Shipment Type:* ${data.shipmentType}`,
-          ].join('\n'),
+          text: headerText,
         },
       },
       {
@@ -365,6 +296,17 @@ export class SlackService {
         },
       },
     ];
+
+    // Add restocked items section if any were restocked
+    if (data.restockedItems && data.restockedItems.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*📦 Restocked to ${data.origin}:*\n${this.formatSkuList(data.restockedItems)}`,
+        },
+      });
+    }
 
     await this.client.chat.postMessage({
       channel: this.channelId,
