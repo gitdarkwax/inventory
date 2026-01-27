@@ -1,11 +1,12 @@
 /**
  * Cron API Route - Hourly Auto Refresh
  * This route is called by Vercel Cron to refresh inventory data every hour
+ * 
+ * IMPORTANT: This simply calls the main /api/refresh endpoint to ensure
+ * identical behavior between manual and automatic refreshes.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { InventoryCacheService } from '@/lib/inventory-cache';
-import { fetchInventoryData, fetchForecastingData } from '@/app/api/refresh/route';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds
@@ -26,53 +27,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const startTime = Date.now();
-    console.log('🕐 Starting hourly cron refresh...');
+    console.log('🕐 Starting hourly cron refresh (calling main refresh endpoint)...');
 
-    // Fetch inventory data
-    const inventoryData = await fetchInventoryData();
-    console.log(`✅ Inventory data fetched: ${inventoryData.totalSKUs} SKUs`);
+    // Get the base URL for internal API call
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : process.env.NEXTAUTH_URL || 'http://localhost:3000';
 
-    // Fetch forecasting data
-    const rawForecastingData = await fetchForecastingData();
-    console.log(`✅ Forecasting data fetched: ${rawForecastingData.length} SKUs`);
+    // Call the main refresh endpoint with cron secret for auth
+    const refreshResponse = await fetch(`${baseUrl}/api/refresh`, {
+      method: 'GET',
+      headers: {
+        'x-auto-refresh': 'true',
+        'x-cron-secret': cronSecret,
+      },
+    });
 
-    // Build SKU to product name map from inventory data
-    const skuToProductName = new Map<string, string>();
-    for (const item of inventoryData.inventory) {
-      skuToProductName.set(item.sku, item.productTitle);
+    const refreshResult = await refreshResponse.json();
+
+    if (!refreshResponse.ok) {
+      console.error('❌ Main refresh endpoint failed:', refreshResult);
+      return NextResponse.json(
+        { error: 'Refresh failed', details: refreshResult.error },
+        { status: refreshResponse.status }
+      );
     }
 
-    // Enrich forecasting data with product names from inventory
-    const forecastingData = rawForecastingData.map(item => ({
-      ...item,
-      productName: item.productName || skuToProductName.get(item.sku) || '',
-    }));
-
-    // Save to cache
-    const cache = new InventoryCacheService();
-    await cache.saveCache({
-      inventory: inventoryData,
-      forecasting: { forecasting: forecastingData },
-    }, 'hourly auto refresh');
-
-    const duration = Date.now() - startTime;
-    console.log(`✅ Hourly cron refresh complete in ${duration}ms`);
+    console.log(`✅ Hourly cron refresh complete via main endpoint`);
 
     return NextResponse.json({
       success: true,
-      message: 'Hourly refresh completed',
-      timestamp: new Date().toISOString(),
-      duration: `${duration}ms`,
-      data: {
-        inventory: {
-          totalSKUs: inventoryData.totalSKUs,
-          totalUnits: inventoryData.totalUnits,
-        },
-        forecasting: {
-          totalSKUs: forecastingData.length,
-        },
-      },
+      message: 'Hourly refresh completed (via main endpoint)',
+      ...refreshResult,
     });
   } catch (error) {
     console.error('❌ Cron refresh failed:', error);
