@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { ProductionOrdersService } from '@/lib/production-orders';
+import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +78,18 @@ export async function POST(request: NextRequest) {
       poNumber
     );
 
+    // Send Slack notification (non-blocking)
+    sendSlackNotification(async () => {
+      const slack = new SlackService();
+      await slack.notifyPOCreated({
+        poNumber: newOrder.id,
+        createdBy: session.user?.name || 'Unknown',
+        vendor: vendor || '',
+        eta: eta || null,
+        items: items,
+      });
+    });
+
     return NextResponse.json({ order: newOrder }, { status: 201 });
 
   } catch (error) {
@@ -120,6 +133,10 @@ export async function PATCH(request: NextRequest) {
 
     // If deliveries are provided, log them
     if (deliveries && deliveries.length > 0) {
+      // Get the order before update to calculate pending items
+      const ordersBefore = await ProductionOrdersService.loadOrders();
+      const orderBefore = ordersBefore.orders.find(o => o.id === orderId);
+      
       const updatedOrder = await ProductionOrdersService.logDelivery(
         orderId, 
         deliveries,
@@ -132,6 +149,30 @@ export async function PATCH(request: NextRequest) {
           { status: 404 }
         );
       }
+
+      // Send Slack notification (non-blocking)
+      sendSlackNotification(async () => {
+        const slack = new SlackService();
+        
+        // Calculate pending items
+        const pendingItems = updatedOrder.items
+          .filter(item => (item.receivedQuantity || 0) < item.quantity)
+          .map(item => ({
+            sku: item.sku,
+            quantity: item.quantity - (item.receivedQuantity || 0),
+          }));
+
+        await slack.notifyPODelivery({
+          poNumber: updatedOrder.id,
+          status: updatedOrder.status === 'completed' ? 'delivered' : 'partial',
+          vendor: updatedOrder.vendor || '',
+          receivedBy: userName,
+          location: 'China WH', // POs are received at China WH
+          deliveredItems: deliveries,
+          pendingItems: pendingItems.length > 0 ? pendingItems : undefined,
+        });
+      });
+
       return NextResponse.json({ order: updatedOrder });
     }
 

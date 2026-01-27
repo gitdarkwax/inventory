@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { TransfersService, CarrierType, TransferType } from '@/lib/transfers';
 import { InventoryCacheService } from '@/lib/inventory-cache';
+import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
 
@@ -161,6 +162,22 @@ export async function POST(request: NextRequest) {
       notes
     );
 
+    // Send Slack notification (non-blocking)
+    sendSlackNotification(async () => {
+      const slack = new SlackService();
+      await slack.notifyTransferCreated({
+        transferId: newTransfer.id,
+        createdBy: session.user?.name || 'Unknown',
+        origin,
+        destination,
+        shipmentType: transferType,
+        carrier,
+        trackingNumber,
+        eta: eta || null,
+        items,
+      });
+    });
+
     return NextResponse.json({ transfer: newTransfer }, { status: 201 });
 
   } catch (error) {
@@ -212,6 +229,11 @@ export async function PATCH(request: NextRequest) {
     const userName = session.user.name || 'Unknown';
     const userEmail = session.user.email || 'unknown@example.com';
 
+    // Get the transfer before update to detect status changes
+    const transfersBefore = await TransfersService.loadTransfers();
+    const transferBefore = transfersBefore.transfers.find(t => t.id === transferId);
+    const previousStatus = transferBefore?.status;
+
     const updatedTransfer = await TransfersService.updateTransfer(
       transferId, 
       {
@@ -234,6 +256,45 @@ export async function PATCH(request: NextRequest) {
         { error: 'Transfer not found' },
         { status: 404 }
       );
+    }
+
+    // Send Slack notification if delivery was logged (status changed to partial or delivered)
+    const isDeliveryLogged = (status === 'partial' || status === 'delivered') && 
+                             previousStatus !== status &&
+                             previousStatus !== 'delivered';
+    
+    if (isDeliveryLogged) {
+      sendSlackNotification(async () => {
+        const slack = new SlackService();
+        
+        // Calculate delivered and pending items
+        const deliveredItems = updatedTransfer.items
+          .filter(item => (item.receivedQuantity || 0) > 0)
+          .map(item => ({
+            sku: item.sku,
+            quantity: item.receivedQuantity || 0,
+          }));
+
+        const pendingItems = updatedTransfer.items
+          .filter(item => (item.receivedQuantity || 0) < item.quantity)
+          .map(item => ({
+            sku: item.sku,
+            quantity: item.quantity - (item.receivedQuantity || 0),
+          }));
+
+        await slack.notifyTransferDelivery({
+          transferId: updatedTransfer.id,
+          status: updatedTransfer.status === 'delivered' ? 'delivered' : 'partial',
+          receivedBy: userName,
+          origin: updatedTransfer.origin,
+          destination: updatedTransfer.destination,
+          shipmentType: updatedTransfer.transferType || 'Unknown',
+          carrier: updatedTransfer.carrier,
+          trackingNumber: updatedTransfer.trackingNumber,
+          deliveredItems,
+          pendingItems: pendingItems.length > 0 ? pendingItems : undefined,
+        });
+      });
     }
 
     return NextResponse.json({ transfer: updatedTransfer });

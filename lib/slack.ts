@@ -1,9 +1,19 @@
 /**
- * Slack Notification Service
- * Simple client for sending inventory-related messages to Slack
+ * Slack Notification Service for Inventory App
+ * Sends notifications to #pos-transfers channel for PO and Transfer events
  */
 
 import { WebClient } from '@slack/web-api';
+
+// Tracking URL patterns for different carriers
+const TRACKING_URLS: Record<string, string> = {
+  'UPS': 'https://www.ups.com/track?tracknum=',
+  'FedEx': 'https://www.fedex.com/fedextrack/?trknbr=',
+  'USPS': 'https://tools.usps.com/go/TrackConfirmAction?tLabels=',
+  'DHL': 'https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=',
+  'Amazon': 'https://www.amazon.com/progress-tracker/package/ref=ppx_yo_dt_b_track_package?itemId=',
+  'Other': '',
+};
 
 export class SlackService {
   private client: WebClient;
@@ -11,10 +21,10 @@ export class SlackService {
 
   constructor() {
     const token = process.env.SLACK_BOT_TOKEN;
-    const channelId = process.env.SLACK_CHANNEL_ID;
+    const channelId = process.env.SLACK_CHANNEL_POS_TRANSFERS || 'C0AB5HYDJ8M';
 
-    if (!token || !channelId) {
-      throw new Error('Missing Slack credentials');
+    if (!token) {
+      throw new Error('Missing SLACK_BOT_TOKEN');
     }
 
     this.client = new WebClient(token);
@@ -22,130 +32,280 @@ export class SlackService {
   }
 
   /**
-   * Send a simple text message
+   * Get tracking URL for a carrier and tracking number
    */
-  async sendMessage(text: string): Promise<void> {
-    await this.client.chat.postMessage({
-      channel: this.channelId,
-      text,
-    });
+  private getTrackingUrl(carrier: string | undefined, trackingNumber: string | undefined): string | null {
+    if (!trackingNumber) return null;
+    const baseUrl = TRACKING_URLS[carrier || 'Other'] || '';
+    return baseUrl ? `${baseUrl}${trackingNumber}` : null;
   }
 
   /**
-   * Send a formatted block message
+   * Format SKU/Qty list for Slack
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async sendBlocks(text: string, blocks: any[]): Promise<void> {
+  private formatSkuList(items: Array<{ sku: string; quantity: number }>): string {
+    return items.map(item => `• ${item.sku}: ${item.quantity}`).join('\n');
+  }
+
+  /**
+   * Send notification when a PO is created
+   */
+  async notifyPOCreated(data: {
+    poNumber: string;
+    createdBy: string;
+    vendor: string;
+    eta: string | null;
+    items: Array<{ sku: string; quantity: number }>;
+  }): Promise<void> {
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `📦 New Production Order Created`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*PO#:*\n${data.poNumber}` },
+          { type: 'mrkdwn', text: `*Created By:*\n${data.createdBy}` },
+          { type: 'mrkdwn', text: `*Vendor:*\n${data.vendor || 'N/A'}` },
+          { type: 'mrkdwn', text: `*ETA:*\n${data.eta || 'Not set'}` },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Items:*\n${this.formatSkuList(data.items)}`,
+        },
+      },
+    ];
+
     await this.client.chat.postMessage({
       channel: this.channelId,
-      text, // Fallback text
+      text: `New PO Created: ${data.poNumber}`,
       blocks,
     });
   }
 
   /**
-   * Send a low stock alert
+   * Send notification when a PO delivery is logged
    */
-  async sendLowStockAlert(data: {
-    date: string;
-    lowStockItems: Array<{ sku: string; quantity: number; threshold: number }>;
+  async notifyPODelivery(data: {
+    poNumber: string;
+    status: 'partial' | 'delivered';
+    vendor: string;
+    receivedBy: string;
+    location: string;
+    deliveredItems: Array<{ sku: string; quantity: number }>;
+    pendingItems?: Array<{ sku: string; quantity: number }>;
   }): Promise<void> {
-    const blocks = [
+    const statusEmoji = data.status === 'delivered' ? '✅' : '📬';
+    const statusText = data.status === 'delivered' ? 'Fully Delivered' : 'Partial Delivery';
+
+    const blocks: any[] = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `⚠️ Low Stock Alert - ${data.date}`,
+          text: `${statusEmoji} PO Delivery Logged`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*PO#:*\n${data.poNumber}` },
+          { type: 'mrkdwn', text: `*Status:*\n${statusText}` },
+          { type: 'mrkdwn', text: `*Vendor:*\n${data.vendor || 'N/A'}` },
+          { type: 'mrkdwn', text: `*Received By:*\n${data.receivedBy}` },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Location:*\n${data.location}`,
         },
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*${data.lowStockItems.length} items are below threshold:*`,
+          text: `*Delivered Items:*\n${this.formatSkuList(data.deliveredItems)}`,
         },
       },
-      ...data.lowStockItems.slice(0, 10).map(item => ({
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*SKU:*\n${item.sku}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Qty:* ${item.quantity} / ${item.threshold}`,
-          },
-        ],
-      })),
     ];
 
-    if (data.lowStockItems.length > 10) {
+    // Add pending items if partial delivery
+    if (data.status === 'partial' && data.pendingItems && data.pendingItems.length > 0) {
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `_...and ${data.lowStockItems.length - 10} more items_`,
+          text: `*⏳ Pending Items:*\n${this.formatSkuList(data.pendingItems)}`,
         },
-        fields: [],
       });
     }
 
-    await this.sendBlocks(
-      `Low Stock Alert - ${data.date}: ${data.lowStockItems.length} items below threshold`,
-      blocks
-    );
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `PO Delivery: ${data.poNumber} - ${statusText}`,
+      blocks,
+    });
   }
 
   /**
-   * Send an inventory summary
+   * Send notification when a Transfer is created
    */
-  async sendInventorySummary(data: {
-    date: string;
-    totalSKUs: number;
-    totalUnits: number;
-    lowStockCount: number;
-    outOfStockCount: number;
+  async notifyTransferCreated(data: {
+    transferId: string;
+    createdBy: string;
+    origin: string;
+    destination: string;
+    shipmentType: string;
+    carrier?: string;
+    trackingNumber?: string;
+    eta: string | null;
+    items: Array<{ sku: string; quantity: number }>;
   }): Promise<void> {
+    const trackingUrl = this.getTrackingUrl(data.carrier, data.trackingNumber);
+    const trackingText = data.trackingNumber
+      ? (trackingUrl ? `<${trackingUrl}|${data.trackingNumber}>` : data.trackingNumber)
+      : 'N/A';
+
     const blocks = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `📦 Inventory Summary - ${data.date}`,
+          text: `🚚 New Transfer Created`,
+          emoji: true,
         },
       },
       {
         type: 'section',
         fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Total SKUs:*\n${data.totalSKUs.toLocaleString()}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Total Units:*\n${data.totalUnits.toLocaleString()}`,
-          },
+          { type: 'mrkdwn', text: `*Transfer#:*\n${data.transferId}` },
+          { type: 'mrkdwn', text: `*Created By:*\n${data.createdBy}` },
+          { type: 'mrkdwn', text: `*Origin:*\n${data.origin}` },
+          { type: 'mrkdwn', text: `*Destination:*\n${data.destination}` },
         ],
       },
       {
         type: 'section',
         fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Low Stock:*\n${data.lowStockCount} items`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Out of Stock:*\n${data.outOfStockCount} items`,
-          },
+          { type: 'mrkdwn', text: `*Shipment Type:*\n${data.shipmentType}` },
+          { type: 'mrkdwn', text: `*Tracking:*\n${trackingText}` },
+          { type: 'mrkdwn', text: `*ETA:*\n${data.eta || 'Not set'}` },
         ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Items:*\n${this.formatSkuList(data.items)}`,
+        },
       },
     ];
 
-    await this.sendBlocks(
-      `Inventory Summary - ${data.date}: ${data.totalUnits.toLocaleString()} units across ${data.totalSKUs.toLocaleString()} SKUs`,
-      blocks
-    );
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `New Transfer: ${data.transferId} - ${data.origin} → ${data.destination}`,
+      blocks,
+    });
+  }
+
+  /**
+   * Send notification when a Transfer delivery is logged
+   */
+  async notifyTransferDelivery(data: {
+    transferId: string;
+    status: 'partial' | 'delivered';
+    receivedBy: string;
+    origin: string;
+    destination: string;
+    shipmentType: string;
+    carrier?: string;
+    trackingNumber?: string;
+    deliveredItems: Array<{ sku: string; quantity: number }>;
+    pendingItems?: Array<{ sku: string; quantity: number }>;
+  }): Promise<void> {
+    const statusEmoji = data.status === 'delivered' ? '✅' : '📬';
+    const statusText = data.status === 'delivered' ? 'Fully Delivered' : 'Partial Delivery';
+    const trackingUrl = this.getTrackingUrl(data.carrier, data.trackingNumber);
+    const trackingText = data.trackingNumber
+      ? (trackingUrl ? `<${trackingUrl}|${data.trackingNumber}>` : data.trackingNumber)
+      : 'N/A';
+
+    const blocks: any[] = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `${statusEmoji} Transfer Delivery Logged`,
+          emoji: true,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Transfer#:*\n${data.transferId}` },
+          { type: 'mrkdwn', text: `*Status:*\n${statusText}` },
+          { type: 'mrkdwn', text: `*Received By:*\n${data.receivedBy}` },
+          { type: 'mrkdwn', text: `*Shipment Type:*\n${data.shipmentType}` },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Origin:*\n${data.origin}` },
+          { type: 'mrkdwn', text: `*Destination:*\n${data.destination}` },
+          { type: 'mrkdwn', text: `*Tracking:*\n${trackingText}` },
+        ],
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Delivered Items:*\n${this.formatSkuList(data.deliveredItems)}`,
+        },
+      },
+    ];
+
+    // Add pending items if partial delivery
+    if (data.status === 'partial' && data.pendingItems && data.pendingItems.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*⏳ Pending Items:*\n${this.formatSkuList(data.pendingItems)}`,
+        },
+      });
+    }
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `Transfer Delivery: ${data.transferId} - ${statusText}`,
+      blocks,
+    });
+  }
+}
+
+/**
+ * Helper to safely send Slack notification (doesn't throw on failure)
+ */
+export async function sendSlackNotification(
+  notifyFn: () => Promise<void>
+): Promise<void> {
+  try {
+    await notifyFn();
+    console.log('✅ Slack notification sent');
+  } catch (error) {
+    // Log but don't throw - Slack failures shouldn't break the main flow
+    console.error('⚠️ Failed to send Slack notification:', error);
   }
 }
