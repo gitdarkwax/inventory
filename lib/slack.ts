@@ -374,9 +374,8 @@ export class SlackService {
       blocks,
     });
   }
-}
 
-/**
+  /**
    * Send notification for low stock alert
    */
   async notifyLowStock(data: {
