@@ -293,9 +293,8 @@ export class SlackService {
       blocks,
     });
   }
-}
 
-/**
+  /**
    * Send notification when a PO is cancelled
    */
   async notifyPOCancelled(data: {
