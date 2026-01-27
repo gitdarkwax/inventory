@@ -2374,6 +2374,11 @@ export default function Dashboard({ session }: DashboardProps) {
     return getModelPriority(b) - getModelPriority(a);
   });
 
+  // Get all product groups from UNFILTERED inventory for the dropdown (so options don't disappear when filtering)
+  const allInventoryProductGroups = [...new Set(
+    (inventoryData?.inventory || []).map(item => extractProductModel(item.productTitle || '', item.sku || ''))
+  )].sort((a, b) => getModelPriority(b) - getModelPriority(a));
+
   // Group location detail items by product model
   const groupedLocationDetail = filteredLocationDetail.reduce((groups, item) => {
     const model = extractProductModel(item.productTitle, item.sku);
@@ -2817,7 +2822,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 Clear all
                               </button>
                             </div>
-                            {sortedGroupNames.map(group => (
+                            {allInventoryProductGroups.map(group => (
                               <label
                                 key={group}
                                 className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer"
