@@ -2461,7 +2461,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed in LA to cover the period selected under the "Units needed in LA" drop down menu.\nCurrent stock available in LA plus In Air inventory is factored into the calculation.\n(Target Days × Burn Rate) - (LA Inventory + In Air - committed)' },
-    { name: 'Ship Type', description: 'Recommended shipping method based on days of stock = (LA + incoming) / unitsPerDay:\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list & China = 0 → Phase Out' },
+    { name: 'Ship Type', description: 'Recommended shipping method based on days of stock:\n\nSea inventory is only included if its ETA is before the Runway Air date (when LA + Air runs out). This prevents triggering unnecessary air shipments when sea is arriving soon.\n\nDays of Stock = (LA + Air + Effective Sea) / Burn Rate\n• ≤15 days & China > 0 → Express\n• ≤60 days & China > 0 → Slow Air\n• ≤90 days & China > 0 → Sea\n• >90 days & China > 0 → No Action\n• <60 days & China = 0 → No CN Inv\n• Phase out list & China = 0 → Phase Out' },
     { name: 'Prod Status', description: 'Production action based on runway = (LA + In Air + In Sea) / Burn Rate:\n• >90 days & active PO → More in Prod\n• >90 days & no PO → No Action\n• 60-90 days & active PO → Get Prod Status\n• 60-90 days & no PO → No Action\n• ≤60 days & active PO → Push Vendor\n• ≤60 days & no PO → Order More' },
     { name: 'Runway Air', description: 'Days of stock based on LA + air shipments only:\n(LA Office + LA WH + In Air) / Burn Rate\nColor: Red if < 60 days' },
     { name: 'Runway', description: 'Days of stock based on LA + all air and sea shipments:\n(LA Office + LA WH + In Air + In Sea) / Burn Rate\nColor: Red if < 90 days' },
@@ -3868,9 +3868,37 @@ export default function Dashboard({ session }: DashboardProps) {
                   };
                   
                   // Calculate ship type
-                  const getShipType = (laInventory: number, incoming: number, chinaInventory: number, unitsPerDay: number): string => {
-                    const laTotal = laInventory + incoming;
-                    const daysOfStock = unitsPerDay > 0 ? laTotal / unitsPerDay : 999;
+                  // New logic: Only include sea inventory if it arrives before runway air runs out
+                  const getShipType = (
+                    laInventory: number, 
+                    inboundAir: number, 
+                    inboundSea: number,
+                    seaTransfers: TransferDetail[],
+                    chinaInventory: number, 
+                    unitsPerDay: number
+                  ): string => {
+                    // Calculate runway air date (when we run out based on LA + Air only)
+                    const runwayAirDays = unitsPerDay > 0 ? (laInventory + inboundAir) / unitsPerDay : 999;
+                    const runwayAirDate = new Date();
+                    runwayAirDate.setDate(runwayAirDate.getDate() + runwayAirDays);
+                    
+                    // Check if sea transfers will arrive before runway air runs out
+                    let effectiveSeaQty = 0;
+                    if (seaTransfers.length > 0 && inboundSea > 0) {
+                      for (const transfer of seaTransfers) {
+                        if (transfer.expectedArrivalAt) {
+                          const seaEta = new Date(transfer.expectedArrivalAt);
+                          // If sea arrives before runway air date, include it
+                          if (seaEta <= runwayAirDate) {
+                            effectiveSeaQty += transfer.quantity;
+                          }
+                        }
+                        // If no ETA, don't include the sea quantity (conservative approach)
+                      }
+                    }
+                    
+                    const effectiveIncoming = inboundAir + effectiveSeaQty;
+                    const daysOfStock = unitsPerDay > 0 ? (laInventory + effectiveIncoming) / unitsPerDay : 999;
                     
                     if (chinaInventory > 0) {
                       if (daysOfStock <= 15) return 'Express';
@@ -3958,7 +3986,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       
                       // For phase out SKUs: show "Phase Out" for ship type only if no China inventory
                       // If there's China inventory, use normal ship type logic
-                      const shipType = (isPhaseOut && chinaInventory <= 0) ? 'Phase Out' : getShipType(laInventory, incoming, chinaInventory, unitsPerDay);
+                      const shipType = (isPhaseOut && chinaInventory <= 0) ? 'Phase Out' : getShipType(laInventory, inboundAir, inboundSea, seaTransfers, chinaInventory, unitsPerDay);
                       
                       // Calculate Runway Air (days of LA + Inbound Air only)
                       const runwayAir = unitsPerDay > 0 ? Math.round((laInventory + inboundAir) / unitsPerDay) : 999;
