@@ -1078,6 +1078,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
+    // Close delivery form and show confirmation
+    setShowTransferDeliveryForm(false);
     setShowLogDeliveryConfirm(true);
   };
 
@@ -7637,23 +7639,12 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                       <div className="px-6 py-4 space-y-4">
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                          <p className="text-sm text-yellow-800 font-medium">⚠️ This action will update inventory</p>
-                          <p className="text-xs text-yellow-700 mt-1">
-                            {selectedTransfer.destination === 'ShipBob' ? (
-                              <>
-                                <strong>ShipBob:</strong> Manages its own inventory - no Shopify update<br/>
-                                <strong>This App:</strong> Received quantities will be <strong>subtracted</strong> from "{
-                                  selectedTransfer.transferType === 'Sea' ? 'In Sea' : 'In Air'
-                                }" incoming
-                              </>
-                            ) : (
-                              <>
-                                <strong>Shopify:</strong> Stock will be <strong>added</strong> to {selectedTransfer.destination}'s "On Hand"<br/>
-                                <strong>This App:</strong> Received quantities will be <strong>subtracted</strong> from "{
-                                  selectedTransfer.transferType === 'Sea' ? 'In Sea' : 'In Air'
-                                }" incoming
-                              </>
-                            )}
+                          <p className="text-sm text-yellow-800 font-medium">⚠️ Confirm Delivery</p>
+                          <p className="text-sm text-yellow-700 mt-1">
+                            {selectedTransfer.destination === 'ShipBob' 
+                              ? 'ShipBob manages its own inventory'
+                              : `Stock will be added to ${selectedTransfer.destination}`
+                            }
                           </p>
                         </div>
                         
@@ -7694,7 +7685,10 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                         <button
                           type="button"
-                          onClick={() => setShowLogDeliveryConfirm(false)}
+                          onClick={() => {
+                            setShowLogDeliveryConfirm(false);
+                            setShowTransferDeliveryForm(true);
+                          }}
                           className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                         >
                           Back
@@ -7709,7 +7703,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                           }`}
                         >
-                          {isLoggingDelivery ? 'Updating Shopify...' : 'Confirm & Update Shopify'}
+                          {isLoggingDelivery ? 'Updating...' : 'Confirm Delivery'}
                         </button>
                       </div>
                     </div>
