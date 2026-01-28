@@ -2108,8 +2108,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'KeyTag';
     }
 
-    // Tesla Charger (MBT prefix)
-    if (/^MBT/i.test(skuUpper)) {
+    // Tesla Charger (MBT prefix, CTC-BKC)
+    if (/^MBT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
       return 'Tesla Charger';
     }
 
