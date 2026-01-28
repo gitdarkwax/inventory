@@ -2017,13 +2017,6 @@ export default function Dashboard({ session }: DashboardProps) {
     showTrackerNotification('success', 'Drafts Merged', `Successfully merged counts. Now have ${mergedSkuCount} SKUs counted.`);
   };
 
-  // Load available drafts when tracker location changes
-  useEffect(() => {
-    if (activeTab === 'warehouse') {
-      loadAvailableDrafts(trackerLocation);
-    }
-  }, [trackerLocation, activeTab]);
-
   // Load logs from Google Drive for specific location
   const loadTrackerLogs = async (location: TrackerLocation) => {
     setIsLoadingLogs(true);
