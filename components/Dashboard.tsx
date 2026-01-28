@@ -1741,6 +1741,61 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showTrackerProductDropdown]);
 
+  // Global ESC key handler to close modals
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // Close modals in priority order (confirmations first, then forms)
+        if (showLogDeliveryConfirm) {
+          setShowLogDeliveryConfirm(false);
+        } else if (showMarkInTransitConfirm) {
+          setShowMarkInTransitConfirm(false);
+          setTransferToMarkInTransit(null);
+        } else if (showImmediateTransferConfirm) {
+          setShowImmediateTransferConfirm(false);
+          setPendingImmediateTransfer(null);
+        } else if (showDeliveryConfirm) {
+          setShowDeliveryConfirm(false);
+        } else if (showCancelConfirm) {
+          setShowCancelConfirm(false);
+        } else if (showCancelTransferConfirm) {
+          setShowCancelTransferConfirm(false);
+        } else if (showTrackerConfirm) {
+          setShowTrackerConfirm(false);
+        } else if (showTrackerClearConfirm) {
+          setShowTrackerClearConfirm(false);
+        } else if (showTransferDeliveryForm) {
+          setShowTransferDeliveryForm(false);
+        } else if (showDeliveryForm) {
+          setShowDeliveryForm(false);
+        } else if (showEditTransferForm) {
+          setShowEditTransferForm(false);
+        } else if (showEditForm) {
+          setShowEditForm(false);
+        } else if (showNewTransferForm) {
+          setShowNewTransferForm(false);
+        } else if (showNewOrderForm) {
+          setShowNewOrderForm(false);
+        } else if (showColumnDefinitions) {
+          setShowColumnDefinitions(false);
+        } else if (showPhaseOutModal) {
+          setShowPhaseOutModal(false);
+        } else if (showTrackerLogs) {
+          setShowTrackerLogs(false);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => document.removeEventListener('keydown', handleEscKey);
+  }, [
+    showLogDeliveryConfirm, showMarkInTransitConfirm, showImmediateTransferConfirm,
+    showDeliveryConfirm, showCancelConfirm, showCancelTransferConfirm,
+    showTrackerConfirm, showTrackerClearConfirm, showTransferDeliveryForm,
+    showDeliveryForm, showEditTransferForm, showEditForm, showNewTransferForm,
+    showNewOrderForm, showColumnDefinitions, showPhaseOutModal, showTrackerLogs
+  ]);
+
   // Load tracker drafts and last submission info from Google Drive on mount
   useEffect(() => {
     const loadAllDraftsAndSubmissions = async () => {
