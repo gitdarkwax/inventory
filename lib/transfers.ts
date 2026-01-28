@@ -8,6 +8,7 @@ export interface TransferItem {
   sku: string;
   quantity: number;
   receivedQuantity?: number;
+  pallet?: string; // For sea shipments: Pallet 1, Pallet 2, etc.
 }
 
 export interface ActivityLogEntry {

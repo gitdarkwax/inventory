@@ -293,7 +293,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const [newTransferOrigin, setNewTransferOrigin] = useState<string>('');
   const [newTransferDestination, setNewTransferDestination] = useState<string>('');
-  const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
+  const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string; pallet?: string }[]>([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
   const [newTransferType, setNewTransferType] = useState<TransferType | ''>('');
   const [newTransferCarrier, setNewTransferCarrier] = useState<CarrierType>('');
   const [newTransferTracking, setNewTransferTracking] = useState('');
@@ -628,7 +628,11 @@ export default function Dashboard({ session }: DashboardProps) {
     
     const validItems = newTransferItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({ 
+        sku: item.sku.trim().toUpperCase(), 
+        quantity: parseInt(item.quantity),
+        ...(newTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {})
+      }));
 
     if (validItems.length === 0) {
       showProdNotification('error', 'Missing Items', 'Please add at least one SKU with quantity');
@@ -754,7 +758,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferOrigin('');
         setNewTransferDestination('');
         setNewTransferType('');
-        setNewTransferItems([{ sku: '', quantity: '' }]);
+        setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
         setNewTransferCarrier('');
         setNewTransferTracking('');
         setNewTransferEta('');
@@ -869,7 +873,7 @@ export default function Dashboard({ session }: DashboardProps) {
       setNewTransferOrigin('');
       setNewTransferDestination('');
       setNewTransferType('');
-      setNewTransferItems([{ sku: '', quantity: '' }]);
+      setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
       setNewTransferCarrier('');
       setNewTransferTracking('');
       setNewTransferEta('');
@@ -7206,7 +7210,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                                 e.stopPropagation();
                                                 setNewTransferOrigin(transfer.origin);
                                                 setNewTransferDestination(transfer.destination);
-                                                setNewTransferItems(transfer.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                                setNewTransferItems(transfer.items.map(i => ({ 
+                                                  sku: i.sku, 
+                                                  quantity: String(i.quantity),
+                                                  pallet: i.pallet || 'Pallet 1'
+                                                })));
                                                 setNewTransferCarrier(transfer.carrier || '');
                                                 setNewTransferTracking('');
                                                 setNewTransferEta('');
@@ -7346,6 +7354,21 @@ export default function Dashboard({ session }: DashboardProps) {
                                   }}
                                   className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
                                 />
+                                {newTransferType === 'Sea' && (
+                                  <select
+                                    value={item.pallet || 'Pallet 1'}
+                                    onChange={(e) => {
+                                      const updated = [...newTransferItems];
+                                      updated[index].pallet = e.target.value;
+                                      setNewTransferItems(updated);
+                                    }}
+                                    className="w-28 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                                  >
+                                    {Array.from({ length: 20 }, (_, i) => (
+                                      <option key={i + 1} value={`Pallet ${i + 1}`}>Pallet {i + 1}</option>
+                                    ))}
+                                  </select>
+                                )}
                                 {newTransferItems.length > 1 && (
                                   <button
                                     onClick={() => setNewTransferItems(newTransferItems.filter((_, i) => i !== index))}
@@ -7358,7 +7381,10 @@ export default function Dashboard({ session }: DashboardProps) {
                             );
                           })}
                           <button
-                            onClick={() => setNewTransferItems([...newTransferItems, { sku: '', quantity: '' }])}
+                            onClick={() => {
+                              const lastPallet = newTransferItems[newTransferItems.length - 1]?.pallet || 'Pallet 1';
+                              setNewTransferItems([...newTransferItems, { sku: '', quantity: '', pallet: lastPallet }]);
+                            }}
                             className="text-sm text-blue-600 hover:text-blue-800"
                           >
                             + Add another SKU
@@ -7420,7 +7446,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             setShowNewTransferForm(false);
                             setNewTransferOrigin('');
                             setNewTransferDestination('');
-                            setNewTransferItems([{ sku: '', quantity: '' }]);
+                            setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
                             setNewTransferCarrier('');
                             setNewTransferTracking('');
                             setNewTransferEta('');
