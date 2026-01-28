@@ -7063,10 +7063,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                             <table className="min-w-full divide-y divide-gray-200">
                                               <thead className="bg-gray-100">
                                                 <tr>
+                                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                                                   {transfer.transferType === 'Sea' && transfer.items.some(i => i.pallet) && (
                                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pallet</th>
                                                   )}
-                                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
                                                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total Qty</th>
                                                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Delivered</th>
                                                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
@@ -7089,10 +7089,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                                     const pending = item.quantity - delivered;
                                                     return (
                                                       <tr key={idx}>
-                                                        {hasPallets && (
-                                                          <td className="px-4 py-2 text-sm text-blue-600 font-medium">{item.pallet || '—'}</td>
-                                                        )}
                                                         <td className="px-4 py-2 text-sm text-gray-900 font-mono">{item.sku}</td>
+                                                        {hasPallets && (
+                                                          <td className="px-4 py-2 text-sm text-gray-900">{item.pallet || '—'}</td>
+                                                        )}
                                                         <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
                                                         <td className="px-4 py-2 text-sm text-green-600 text-right">{delivered.toLocaleString()}</td>
                                                         <td className={`px-4 py-2 text-sm text-right ${pending > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
@@ -7103,10 +7103,10 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   });
                                                 })()}
                                                 <tr className="bg-gray-100">
+                                                  <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
                                                   {transfer.transferType === 'Sea' && transfer.items.some(i => i.pallet) && (
                                                     <td className="px-4 py-2 text-sm font-medium text-gray-900"></td>
                                                   )}
-                                                  <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
                                                   <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
                                                     {transfer.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
                                                   </td>
