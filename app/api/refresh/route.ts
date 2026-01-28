@@ -350,7 +350,7 @@ export async function checkLowStockAlerts(
   inventoryData: Awaited<ReturnType<typeof fetchInventoryData>>,
   skuToProductName: Map<string, string>
 ): Promise<void> {
-  const LOW_STOCK_THRESHOLD = 100;
+  const LOW_STOCK_THRESHOLD = 200;
   const LOCATIONS = ['LA Office', 'DTLA WH'];
   const LOCATION_LABEL = 'LA';
 
