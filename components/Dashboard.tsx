@@ -3849,14 +3849,20 @@ export default function Dashboard({ session }: DashboardProps) {
                     return inv.locations['China WH'] || 0;
                   };
                   
-                  // Special case: MBT3Y-DG burn rate combines these SKUs
-                  const mbt3yDgCombinedSkus = ['MBT24-DG', 'MBT25P-DG', 'MBT3Y-DG', 'MBTCT-DG', 'MBTMX-DG'];
+                  // Special case: SKUs that combine burn rates from multiple related SKUs
+                  const combinedBurnRateSkus: Record<string, string[]> = {
+                    'MBT3Y-DG': ['MBT24-DG', 'MBT25P-DG', 'MBT3Y-DG', 'MBTCT-DG', 'MBTMX-DG'],
+                    'MBT3YRH-DG': ['MBT24RH-DG', 'MBT25PRH-DG', 'MBT3YRH-DG', 'MBTCTRH-DG', 'MBTMXRH-DG'],
+                  };
                   
                   // Get units per day based on selected burn period
                   const getUnitsPerDay = (sku: string): number => {
-                    // Special case: MBT3Y-DG uses combined burn rate of multiple SKUs
-                    if (sku.toUpperCase() === 'MBT3Y-DG') {
-                      return mbt3yDgCombinedSkus.reduce((total, combinedSku) => {
+                    const skuUpper = sku.toUpperCase();
+                    
+                    // Check if this SKU uses combined burn rate
+                    const combinedSkus = combinedBurnRateSkus[skuUpper];
+                    if (combinedSkus) {
+                      return combinedSkus.reduce((total, combinedSku) => {
                         const forecast = forecastingData.forecasting.find(f => f.sku.toUpperCase() === combinedSku.toUpperCase());
                         if (!forecast) return total;
                         switch (planningBurnPeriod) {
@@ -3880,9 +3886,12 @@ export default function Dashboard({ session }: DashboardProps) {
                   
                   // Get 21-day burn rate specifically (used for gap-based Need calculation)
                   const get21DayBurnRate = (sku: string): number => {
-                    // Special case: MBT3Y-DG uses combined burn rate of multiple SKUs
-                    if (sku.toUpperCase() === 'MBT3Y-DG') {
-                      return mbt3yDgCombinedSkus.reduce((total, combinedSku) => {
+                    const skuUpper = sku.toUpperCase();
+                    
+                    // Check if this SKU uses combined burn rate
+                    const combinedSkus = combinedBurnRateSkus[skuUpper];
+                    if (combinedSkus) {
+                      return combinedSkus.reduce((total, combinedSku) => {
                         const forecast = forecastingData.forecasting.find(f => f.sku.toUpperCase() === combinedSku.toUpperCase());
                         return total + (forecast?.avgDaily21d || 0);
                       }, 0);
