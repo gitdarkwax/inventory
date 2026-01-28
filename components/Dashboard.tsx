@@ -129,6 +129,7 @@ interface TransferItem {
   sku: string;
   quantity: number;
   receivedQuantity?: number;
+  pallet?: string; // For sea shipments: Pallet 1, Pallet 2, etc.
 }
 
 type TransferStatus = 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
