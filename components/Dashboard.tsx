@@ -339,7 +339,6 @@ export default function Dashboard({ session }: DashboardProps) {
     notes?: string;
   } | null>(null);
   const [isExecutingImmediateTransfer, setIsExecutingImmediateTransfer] = useState(false);
-  const [isValidatingTransfer, setIsValidatingTransfer] = useState(false);
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
@@ -924,70 +923,10 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
-  // Validate inventory at origin before allowing Mark In Transit
-  // First refreshes data from Shopify to ensure accurate stock levels
-  const validateAndShowMarkInTransit = async (transfer: Transfer) => {
-    setIsValidatingTransfer(true);
-    showProdNotification('warning', 'Refreshing Data', 'Getting latest inventory from Shopify...');
-    
-    try {
-      // Step 1: Refresh inventory data from Shopify
-      const refreshResponse = await fetch('/api/refresh');
-      if (!refreshResponse.ok) {
-        const data = await refreshResponse.json();
-        throw new Error(data.error || 'Failed to refresh inventory');
-      }
-      
-      // Step 2: Reload cache with fresh data (both inventory and incoming)
-      const cacheResponse = await fetch('/api/inventory');
-      if (!cacheResponse.ok) {
-        throw new Error('Failed to load refreshed inventory');
-      }
-      const freshData = await cacheResponse.json();
-      setInventoryData(freshData);
-      
-      // Also reload incoming cache to preserve in-transit data
-      await loadIncomingFromCache();
-      
-      // Step 3: Check inventory levels at origin with fresh data
-      const originDetails = freshData?.locationDetails?.[transfer.origin];
-      if (!originDetails) {
-        showProdNotification('error', 'Validation Error', `Could not find inventory data for ${transfer.origin}`);
-        return;
-      }
-
-      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
-      
-      for (const item of transfer.items) {
-        const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku === item.sku);
-        const availableAtOrigin = detail?.onHand || 0;
-        
-        if (availableAtOrigin < item.quantity) {
-          insufficientStock.push({
-            sku: item.sku,
-            requested: item.quantity,
-            available: availableAtOrigin,
-          });
-        }
-      }
-
-      if (insufficientStock.length > 0) {
-        const stockDetails = insufficientStock
-          .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${transfer.origin}`)
-          .join('\n');
-        showProdNotification('error', 'Insufficient Stock', stockDetails);
-        return;
-      }
-
-      // Validation passed - show confirmation modal
-      setTransferToMarkInTransit(transfer);
-      setShowMarkInTransitConfirm(true);
-    } catch (err) {
-      console.error('Failed to validate transfer:', err);
-      showProdNotification('error', 'Validation Failed', err instanceof Error ? err.message : 'Failed to refresh inventory');
-    } finally {
-      setIsValidatingTransfer(false);
-    }
+  // Show Mark In Transit confirmation modal
+  const showMarkInTransitConfirmation = (transfer: Transfer) => {
+    setTransferToMarkInTransit(transfer);
+    setShowMarkInTransitConfirm(true);
   };
 
   // Confirm Mark In Transit - updates Shopify inventory then transfer status
@@ -7261,16 +7200,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   type="button"
                                                   onClick={(e) => { 
                                                     e.stopPropagation(); 
-                                                    validateAndShowMarkInTransit(transfer);
+                                                    showMarkInTransitConfirmation(transfer);
                                                   }}
-                                                  disabled={isMarkingInTransit || isValidatingTransfer}
+                                                  disabled={isMarkingInTransit}
                                                   className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                                                    isMarkingInTransit || isValidatingTransfer
+                                                    isMarkingInTransit
                                                       ? 'bg-green-400 text-white cursor-not-allowed'
                                                       : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                                                   }`}
                                                 >
-                                                  {isValidatingTransfer ? 'Refreshing...' : 'Mark In Transit'}
+                                                  Mark In Transit
                                                 </button>
                                               )}
                                               {/* In Transit or Partial status: show Log Delivery green button */}
@@ -7579,14 +7518,14 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           type="button"
                           onClick={createTransfer}
-                          disabled={isCreatingTransfer || isValidatingTransfer}
+                          disabled={isCreatingTransfer}
                           className={`px-4 py-2 rounded-md text-sm font-medium ${
-                            isCreatingTransfer || isValidatingTransfer
+                            isCreatingTransfer
                               ? 'bg-blue-400 text-white cursor-not-allowed' 
                               : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
                           }`}
                         >
-                          {isValidatingTransfer ? 'Refreshing...' : isCreatingTransfer ? 'Creating...' : (newTransferType === 'Immediate' ? 'Transfer Now' : 'Create Transfer')}
+                          {isCreatingTransfer ? 'Creating...' : (newTransferType === 'Immediate' ? 'Transfer Now' : 'Create Transfer')}
                         </button>
                       </div>
                     </div>
