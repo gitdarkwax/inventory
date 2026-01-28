@@ -2240,6 +2240,11 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'RimCase';
     }
 
+    // AirPods Cases (MBAPP prefix or title contains "AirPods")
+    if (/^MBAPP/i.test(skuUpper) || /airpods/i.test(productTitle)) {
+      return 'AirPods Cases';
+    }
+
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
     const simplified = productTitle.split(/[-|]/)[0].trim();
     return simplified.length > 40 ? simplified.substring(0, 40) + '...' : simplified;
@@ -2505,18 +2510,19 @@ export default function Dashboard({ session }: DashboardProps) {
     
     // Accessories - ordered by priority
     if (groupName === 'Wallets') return -10;
-    if (groupName === 'RimCase') return -15;
-    if (groupName === 'Wrist Straps') return -20;
-    if (groupName === 'KeyTag') return -30;
-    if (groupName === 'MagSticks') return -35;
-    if (groupName === 'Tesla Charger') return -40;
-    if (groupName === 'Chargers') return -50;
-    if (groupName === 'Color Accessories') return -60;
-    if (groupName === 'Screen Protectors') return -70;
+    if (groupName === 'Chargers') return -20;
+    if (groupName === 'Tesla Charger') return -30;
+    if (groupName === 'RimCase') return -40;
+    if (groupName === 'KeyTag') return -50;
+    if (groupName === 'MagSticks') return -60;
+    if (groupName === 'Color Accessories') return -70;
     if (groupName === 'Lens Protectors') return -80;
+    if (groupName === 'Screen Protectors') return -90;
+    if (groupName === 'Wrist Straps') return -100;
+    if (groupName === 'AirPods Cases') return -110;
     
     // Other products - at the end
-    return -100;
+    return -120;
   };
 
   // Sort group names by revenue priority (higher priority = first)
