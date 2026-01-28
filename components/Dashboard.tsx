@@ -651,71 +651,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // For Immediate transfers, refresh data and validate before showing confirmation
+    // For Immediate transfers, show confirmation modal
     if (newTransferType === 'Immediate') {
-      setIsValidatingTransfer(true);
-      showProdNotification('warning', 'Refreshing Data', 'Getting latest inventory from Shopify...');
-      
-      try {
-        // Step 1: Refresh inventory data from Shopify
-        const refreshResponse = await fetch('/api/refresh');
-        if (!refreshResponse.ok) {
-          const data = await refreshResponse.json();
-          throw new Error(data.error || 'Failed to refresh inventory');
-        }
-        
-        // Step 2: Reload cache with fresh data (both inventory and incoming)
-        const cacheResponse = await fetch('/api/inventory');
-        if (!cacheResponse.ok) {
-          throw new Error('Failed to load refreshed inventory');
-        }
-        const freshData = await cacheResponse.json();
-        setInventoryData(freshData);
-        
-        // Also reload incoming cache to preserve in-transit data
-        await loadIncomingFromCache();
-        
-        // Step 3: Check inventory levels at origin with fresh data
-        const originDetails = freshData?.locationDetails?.[newTransferOrigin];
-        if (!originDetails) {
-          showProdNotification('error', 'Validation Error', `Could not find inventory data for ${newTransferOrigin}`);
-          setIsValidatingTransfer(false);
-          return;
-        }
-
-        const insufficientStock: { sku: string; requested: number; available: number }[] = [];
-        
-        for (const item of validItems) {
-          const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
-          const availableAtOrigin = detail?.onHand || 0;
-          
-          if (availableAtOrigin < item.quantity) {
-            insufficientStock.push({
-              sku: item.sku,
-              requested: item.quantity,
-              available: availableAtOrigin,
-            });
-          }
-        }
-
-        if (insufficientStock.length > 0) {
-          const stockDetails = insufficientStock
-            .map(s => `${s.sku}: need ${s.requested}, only ${s.available} at ${newTransferOrigin}`)
-            .join('\n');
-          showProdNotification('error', 'Insufficient Stock', stockDetails);
-          setIsValidatingTransfer(false);
-          return;
-        }
-        
-        setIsValidatingTransfer(false);
-      } catch (err) {
-        console.error('Failed to validate transfer:', err);
-        showProdNotification('error', 'Validation Failed', err instanceof Error ? err.message : 'Failed to refresh inventory');
-        setIsValidatingTransfer(false);
-        return;
-      }
-
-      // Validation passed - show confirmation modal
       setPendingImmediateTransfer({
         origin: newTransferOrigin,
         destination: newTransferDestination,
