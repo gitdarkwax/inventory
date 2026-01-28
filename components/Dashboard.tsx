@@ -3853,6 +3853,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   const combinedBurnRateSkus: Record<string, string[]> = {
                     'MBT3Y-DG': ['MBT24-DG', 'MBT25P-DG', 'MBT3Y-DG', 'MBTCT-DG', 'MBTMX-DG'],
                     'MBT3YRH-DG': ['MBT24RH-DG', 'MBT25PRH-DG', 'MBT3YRH-DG', 'MBTCTRH-DG', 'MBTMXRH-DG'],
+                    'CTC-BKC': ['MBT24-DG', 'MBT24RH-DG', 'MBT25P-DG', 'MBT25PRH-DG', 'MBTCT-DG', 'MBTCTRH-DG', 'MBTMX-DG', 'MBTMXRH-DG'],
                   };
                   
                   // Get units per day based on selected burn period
