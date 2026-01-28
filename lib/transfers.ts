@@ -357,7 +357,7 @@ export class TransfersService {
       });
       
       if (isDeliveryUpdate) {
-        // Format delivery details: "SKU: delivered of total"
+        // Format delivery details: "SKU: qty, SKU: qty"
         const deliveryDetails = updates.items
           .filter(newItem => {
             const oldItem = transfer.items.find(i => i.sku === newItem.sku);
@@ -366,12 +366,10 @@ export class TransfersService {
           .map(newItem => {
             const oldItem = transfer.items.find(i => i.sku === newItem.sku);
             const thisDelivery = (newItem.receivedQuantity || 0) - (oldItem?.receivedQuantity || 0);
-            const totalDelivered = newItem.receivedQuantity || 0;
-            const totalQty = newItem.quantity;
-            return `${newItem.sku}: ${thisDelivery.toLocaleString()} delivered (${totalDelivered.toLocaleString()} of ${totalQty.toLocaleString()})`;
+            return `${newItem.sku}: ${thisDelivery.toLocaleString()}`;
           })
           .join(', ');
-        changes.push(`Delivery: ${deliveryDetails}`);
+        changes.push(deliveryDetails);
         transfer.items = updates.items;
       } else {
         const oldItems = transfer.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
@@ -418,14 +416,19 @@ export class TransfersService {
     
     // Add activity log entry if there were changes
     if (changes.length > 0 && changedBy && changedByEmail) {
-      // Determine action type based on changes
-      const isDeliveryLog = changes.some(c => c.startsWith('Delivery:'));
-      const isStatusDelivered = updates.status === 'delivered';
-      const isStatusPartial = updates.status === 'partial';
+      // Check if this is a delivery update (has SKU: qty format without Status: prefix)
+      const deliveryItemsChange = changes.find(c => /^[A-Z0-9-]+:\s*[\d,]+/.test(c) && !c.startsWith('Status:'));
+      const statusChange = changes.find(c => c.startsWith('Status:'));
+      const isDeliveryLog = !!deliveryItemsChange;
       
       let action = 'Transfer Updated';
+      let details = changes.join('; ');
+      
       if (isDeliveryLog) {
-        action = isStatusDelivered ? 'Delivery Logged (Completed)' : 'Delivery Logged';
+        // Format: "Delivery Logged: SKU: qty, SKU: qty"
+        action = `Delivery Logged: ${deliveryItemsChange}`;
+        // Details only shows status if present
+        details = statusChange || '';
       } else if (updates.status === 'cancelled') {
         action = 'Transfer Cancelled';
       } else if (updates.status === 'in_transit') {
@@ -437,7 +440,7 @@ export class TransfersService {
         action,
         changedBy,
         changedByEmail,
-        details: changes.join('; '),
+        details: details || undefined,
       });
     }
     
