@@ -52,6 +52,19 @@ export class SlackService {
   }
 
   /**
+   * Format ETA date as "Jan 25, 2026"
+   */
+  private formatEta(eta: string | null | undefined): string {
+    if (!eta) return 'Not set';
+    try {
+      const date = new Date(eta);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return eta; // Return as-is if parsing fails
+    }
+  }
+
+  /**
    * Send notification when a PO is created
    */
   async notifyPOCreated(data: {
@@ -66,7 +79,7 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*📦 New Production Order Created*\n*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}\n*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${data.eta || 'Not set'}`,
+          text: `*📦 New Production Order Created*\n*PO#:* ${data.poNumber}    *Created By:* ${data.createdBy}\n*Vendor:* ${data.vendor || 'N/A'}    *ETA:* ${this.formatEta(data.eta)}`,
         },
       },
       {
@@ -159,7 +172,7 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*🚚 Transfer In Transit*\n*Transfer#:* ${data.transferId}    *Marked By:* ${data.markedBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}    *ETA:* ${data.eta || 'Not set'}\n*Tracking:* ${trackingText}`,
+          text: `*🚚 Transfer In Transit*\n*Transfer#:* ${data.transferId}    *Marked By:* ${data.markedBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}    *ETA:* ${this.formatEta(data.eta)}\n*Tracking:* ${trackingText}`,
         },
       },
       {
