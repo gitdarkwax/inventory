@@ -3849,8 +3849,25 @@ export default function Dashboard({ session }: DashboardProps) {
                     return inv.locations['China WH'] || 0;
                   };
                   
+                  // Special case: MBT3Y-DG burn rate combines these SKUs
+                  const mbt3yDgCombinedSkus = ['MBT24-DG', 'MBT25P-DG', 'MBT3Y-DG', 'MBTCT-DG', 'MBTMX-DG'];
+                  
                   // Get units per day based on selected burn period
                   const getUnitsPerDay = (sku: string): number => {
+                    // Special case: MBT3Y-DG uses combined burn rate of multiple SKUs
+                    if (sku.toUpperCase() === 'MBT3Y-DG') {
+                      return mbt3yDgCombinedSkus.reduce((total, combinedSku) => {
+                        const forecast = forecastingData.forecasting.find(f => f.sku.toUpperCase() === combinedSku.toUpperCase());
+                        if (!forecast) return total;
+                        switch (planningBurnPeriod) {
+                          case '7d': return total + forecast.avgDaily7d;
+                          case '21d': return total + forecast.avgDaily21d;
+                          case '90d': return total + forecast.avgDaily90d;
+                          default: return total + forecast.avgDaily21d;
+                        }
+                      }, 0);
+                    }
+                    
                     const forecast = forecastingData.forecasting.find(f => f.sku === sku);
                     if (!forecast) return 0;
                     switch (planningBurnPeriod) {
@@ -3863,6 +3880,14 @@ export default function Dashboard({ session }: DashboardProps) {
                   
                   // Get 21-day burn rate specifically (used for gap-based Need calculation)
                   const get21DayBurnRate = (sku: string): number => {
+                    // Special case: MBT3Y-DG uses combined burn rate of multiple SKUs
+                    if (sku.toUpperCase() === 'MBT3Y-DG') {
+                      return mbt3yDgCombinedSkus.reduce((total, combinedSku) => {
+                        const forecast = forecastingData.forecasting.find(f => f.sku.toUpperCase() === combinedSku.toUpperCase());
+                        return total + (forecast?.avgDaily21d || 0);
+                      }, 0);
+                    }
+                    
                     const forecast = forecastingData.forecasting.find(f => f.sku === sku);
                     return forecast?.avgDaily21d || 0;
                   };
