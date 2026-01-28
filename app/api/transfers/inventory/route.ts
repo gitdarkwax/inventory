@@ -31,6 +31,8 @@ interface MarkInTransitRequest {
   destination: string;
   shipmentType: ShipmentType;
   items: TransferItem[];
+  note?: string | null;
+  expectedArrivalAt?: string | null;
 }
 
 interface LogDeliveryRequest {
@@ -237,14 +239,17 @@ export async function POST(request: NextRequest) {
 
         // Step 3 (Air/Sea only): Add to incoming cache in our app
         if (!isImmediate && (shipmentType === 'Air Express' || shipmentType === 'Air Slow' || shipmentType === 'Sea')) {
+          const { note, expectedArrivalAt } = body as MarkInTransitRequest;
           await cacheService.addToIncoming(
             destination,
             shipmentType,
             items,
             transferId,
-            new Date().toISOString()
+            new Date().toISOString(),
+            note,
+            expectedArrivalAt
           );
-          console.log(`✅ Added to incoming cache: ${items.length} SKUs for ${destination}`);
+          console.log(`✅ Added to incoming cache: ${items.length} SKUs for ${destination}${expectedArrivalAt ? ` (ETA: ${expectedArrivalAt})` : ''}`);
         }
 
         console.log(`✅ Transfer ${transferId} Shopify adjustment complete`);

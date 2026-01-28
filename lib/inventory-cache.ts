@@ -65,6 +65,7 @@ export interface IncomingTransferDetail {
   quantity: number;
   note: string | null;
   createdAt: string;
+  expectedArrivalAt: string | null;
 }
 
 export interface IncomingInventoryBySku {
@@ -246,6 +247,7 @@ export class InventoryCacheService {
    * @param transferId - The transfer ID for tracking
    * @param createdAt - When the transfer was created
    * @param note - Optional note for the transfer
+   * @param expectedArrivalAt - Optional expected arrival date
    */
   async addToIncoming(
     destination: string,
@@ -253,7 +255,8 @@ export class InventoryCacheService {
     items: Array<{ sku: string; quantity: number }>,
     transferId: string,
     createdAt: string,
-    note?: string | null
+    note?: string | null,
+    expectedArrivalAt?: string | null
   ): Promise<void> {
     // Retry loading cache up to 3 times
     let cache: CachedInventoryData | null = null;
@@ -296,6 +299,7 @@ export class InventoryCacheService {
         quantity: item.quantity,
         note: note || null,
         createdAt,
+        expectedArrivalAt: expectedArrivalAt || null,
       };
 
       if (isAir) {

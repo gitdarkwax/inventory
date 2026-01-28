@@ -189,8 +189,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [incomingInventoryCache, setIncomingInventoryCache] = useState<Record<string, Record<string, {
     inboundAir: number;
     inboundSea: number;
-    airTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string }>;
-    seaTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string }>;
+    airTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string; expectedArrivalAt: string | null }>;
+    seaTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string; expectedArrivalAt: string | null }>;
   }>>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<string>('sku');
@@ -368,7 +368,7 @@ export default function Dashboard({ session }: DashboardProps) {
             tags: ['Air'],
             note: t.note,
             createdAt: t.createdAt,
-            expectedArrivalAt: null,
+            expectedArrivalAt: t.expectedArrivalAt || null,
           })),
           seaTransfers: data.seaTransfers.map(t => ({
             id: t.transferId,
@@ -377,7 +377,7 @@ export default function Dashboard({ session }: DashboardProps) {
             tags: ['Sea'],
             note: t.note,
             createdAt: t.createdAt,
-            expectedArrivalAt: null,
+            expectedArrivalAt: t.expectedArrivalAt || null,
           })),
         };
       }
@@ -1003,6 +1003,8 @@ export default function Dashboard({ session }: DashboardProps) {
           destination: transferToMarkInTransit.destination,
           shipmentType: transferToMarkInTransit.transferType,
           items: transferToMarkInTransit.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
+          note: transferToMarkInTransit.notes || null,
+          expectedArrivalAt: transferToMarkInTransit.eta || null,
         }),
       });
 
