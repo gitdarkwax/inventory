@@ -314,7 +314,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Delete draft for a location (after successful submission)
+// DELETE - Delete draft for a location (clears for everyone)
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth();
@@ -325,20 +325,50 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location') || 'LA Office';
     const draftFileName = getDraftFileName(location);
+    const sanitizedLocation = location.replace(/\s/g, '-').toLowerCase();
 
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
+    
+    let deletedCount = 0;
 
+    // Delete the main shared draft file
+    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
     if (fileId) {
       await drive.files.delete({
         fileId,
         supportsAllDrives: true,
       });
+      deletedCount++;
     }
 
-    return NextResponse.json({ success: true });
+    // Also clean up any old per-user draft files from previous implementation
+    const oldDraftPattern = `warehouse-draft-${sanitizedLocation}-`;
+    const oldDraftsResponse = await drive.files.list({
+      q: `parents='${folderId}' and name contains '${oldDraftPattern}' and mimeType='application/json'`,
+      driveId: sharedDriveId,
+      corpora: 'drive',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      fields: 'files(id, name)',
+    });
+
+    if (oldDraftsResponse.data.files) {
+      for (const file of oldDraftsResponse.data.files) {
+        try {
+          await drive.files.delete({
+            fileId: file.id!,
+            supportsAllDrives: true,
+          });
+          deletedCount++;
+        } catch (err) {
+          console.error(`Failed to delete old draft ${file.name}:`, err);
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, deletedCount });
   } catch (error) {
     console.error('Failed to delete draft:', error);
     return NextResponse.json(

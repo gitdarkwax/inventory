@@ -1765,12 +1765,12 @@ export default function Dashboard({ session }: DashboardProps) {
               if (data.currentUser) {
                 setCurrentUserName(data.currentUser);
               }
+              const localKey = `trackerCounts_${loc.replace(/\s/g, '_')}`;
+              
               if (data.draft) {
                 hasDraft = true;
-                const localKey = `trackerCounts_${loc.replace(/\s/g, '_')}`;
                 const localSaved = localStorage.getItem(localKey);
                 const localCounts = localSaved ? JSON.parse(localSaved) : {};
-                const localCountedSkus = Object.keys(localCounts).filter(k => localCounts[k] !== null);
                 
                 // Always load the shared draft counts (merged from all contributors)
                 // Merge with any local unsaved work
@@ -1797,6 +1797,17 @@ export default function Dashboard({ session }: DashboardProps) {
                   setCountDetails(data.draft.countDetails || {});
                   setDraftContributors(data.draft.contributors || []);
                 }
+              } else {
+                // No draft on server - clear local counts (draft was cleared by someone)
+                setTrackerCounts(prev => ({
+                  ...prev,
+                  [loc]: {},
+                }));
+                localStorage.removeItem(localKey);
+                setTrackerDraftInfo(prev => ({
+                  ...prev,
+                  [loc]: null,
+                }));
               }
             }
           } catch (error) {
@@ -1864,6 +1875,8 @@ export default function Dashboard({ session }: DashboardProps) {
       const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}`);
       if (response.ok) {
         const data = await response.json();
+        const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
+        
         if (data.currentUser) {
           setCurrentUserName(data.currentUser);
         }
@@ -1873,7 +1886,6 @@ export default function Dashboard({ session }: DashboardProps) {
             ...prev,
             [location]: data.draft.counts,
           }));
-          const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
           localStorage.setItem(localKey, JSON.stringify(data.draft.counts));
           
           setTrackerDraftInfo(prev => ({
@@ -1882,6 +1894,19 @@ export default function Dashboard({ session }: DashboardProps) {
           }));
           setCountDetails(data.draft.countDetails || {});
           setDraftContributors(data.draft.contributors || []);
+        } else {
+          // No draft on server - clear local counts (draft was cleared by someone)
+          setTrackerCounts(prev => ({
+            ...prev,
+            [location]: {},
+          }));
+          localStorage.removeItem(localKey);
+          setTrackerDraftInfo(prev => ({
+            ...prev,
+            [location]: null,
+          }));
+          setCountDetails({});
+          setDraftContributors([]);
         }
       }
     } catch (error) {
@@ -2037,8 +2062,14 @@ export default function Dashboard({ session }: DashboardProps) {
     
     // Delete shared draft from Google Drive (clears for everyone)
     try {
-      await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}`, { method: 'DELETE' });
-      showTrackerNotification('success', 'Draft Cleared', `All counts for ${location} have been cleared for everyone.`);
+      const deleteResponse = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}`, { method: 'DELETE' });
+      if (deleteResponse.ok) {
+        showTrackerNotification('success', 'Draft Cleared', `All counts for ${location} have been cleared for everyone.`);
+      } else {
+        const errorData = await deleteResponse.json();
+        console.error('Delete draft failed:', errorData);
+        showTrackerNotification('error', 'Clear Failed', errorData.error || 'Failed to clear the shared draft.');
+      }
     } catch (error) {
       console.error('Failed to delete draft:', error);
       showTrackerNotification('error', 'Clear Failed', 'Failed to clear the shared draft.');
