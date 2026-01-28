@@ -1,8 +1,8 @@
 /**
  * Warehouse Draft API
- * Stores and retrieves draft inventory counts from Google Drive
- * Supports multiple locations: LA Office, LA Warehouse, China
- * Supports per-person drafts for multi-person counting
+ * Stores and retrieves shared draft inventory counts from Google Drive
+ * Single shared draft per location - auto-merges when anyone saves
+ * Tracks who counted each SKU for attribution
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,33 +13,29 @@ export const dynamic = 'force-dynamic';
 
 const SHARED_DRIVE_NAME = 'ProjectionsVsActual Cache';
 
-// Get draft file name for a specific location and user
-const getDraftFileName = (location: string, userName?: string) => {
+// Get draft file name for a specific location (single shared draft)
+const getDraftFileName = (location: string) => {
   const sanitizedLocation = location.replace(/\s/g, '-').toLowerCase();
-  if (userName) {
-    const sanitizedUser = userName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
-    return `warehouse-draft-${sanitizedLocation}-${sanitizedUser}.json`;
-  }
   return `warehouse-draft-${sanitizedLocation}.json`;
 };
 
-// Get pattern to match all drafts for a location
-const getDraftPattern = (location: string) => {
-  const sanitizedLocation = location.replace(/\s/g, '-').toLowerCase();
-  return `warehouse-draft-${sanitizedLocation}`;
-};
-
-interface DraftData {
-  counts: Record<string, number | null>;
-  savedAt: string;
-  savedBy: string;
+// Structure for tracking who counted each SKU
+interface SkuCount {
+  value: number;
+  countedBy: string;
+  countedAt: string;
 }
 
-export interface DraftListItem {
-  fileName: string;
-  savedBy: string;
-  savedAt: string;
-  skuCount: number;
+interface SharedDraftData {
+  counts: Record<string, SkuCount | null>;
+  lastSavedAt: string;
+  lastSavedBy: string;
+  contributors: string[]; // List of people who have contributed
+}
+
+// Simple counts format for frontend
+interface SimpleCounts {
+  [sku: string]: number | null;
 }
 
 async function getDriveClient() {
@@ -126,7 +122,32 @@ async function findFile(
   return null;
 }
 
-// GET - Retrieve draft for a location or list all drafts
+async function loadExistingDraft(
+  drive: ReturnType<typeof google.drive>,
+  folderId: string,
+  sharedDriveId: string,
+  fileName: string
+): Promise<SharedDraftData | null> {
+  const fileId = await findFile(drive, folderId, sharedDriveId, fileName);
+  if (!fileId) return null;
+
+  const response = await drive.files.get({
+    fileId,
+    alt: 'media',
+    supportsAllDrives: true,
+  });
+
+  let draft: SharedDraftData | null = null;
+  if (typeof response.data === 'string') {
+    draft = JSON.parse(response.data);
+  } else if (response.data && typeof response.data === 'object') {
+    draft = response.data as SharedDraftData;
+  }
+
+  return draft;
+}
+
+// GET - Retrieve shared draft for a location (merged counts from all contributors)
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
@@ -136,110 +157,43 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location') || 'LA Office';
-    const listAll = searchParams.get('list') === 'true';
-    const specificFileName = searchParams.get('fileName'); // For fetching a specific draft to merge
     const userName = session.user.name || 'Unknown';
 
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
+    const draftFileName = getDraftFileName(location);
 
-    // Fetch a specific draft by filename (for merging)
-    if (specificFileName) {
-      const fileId = await findFile(drive, folderId, sharedDriveId, specificFileName);
+    const draft = await loadExistingDraft(drive, folderId, sharedDriveId, draftFileName);
 
-      if (!fileId) {
-        return NextResponse.json({ error: 'Draft not found' }, { status: 404 });
-      }
-
-      const response = await drive.files.get({
-        fileId,
-        alt: 'media',
-        supportsAllDrives: true,
+    if (!draft) {
+      return NextResponse.json({ 
+        draft: null,
+        currentUser: userName,
       });
+    }
 
-      let draft: DraftData | null = null;
-      if (typeof response.data === 'string') {
-        draft = JSON.parse(response.data);
-      } else if (response.data && typeof response.data === 'object') {
-        draft = response.data as DraftData;
+    // Convert to simple counts format for frontend
+    const simpleCounts: SimpleCounts = {};
+    const countDetails: Record<string, { countedBy: string; countedAt: string }> = {};
+    
+    for (const [sku, data] of Object.entries(draft.counts)) {
+      if (data !== null) {
+        simpleCounts[sku] = data.value;
+        countDetails[sku] = { countedBy: data.countedBy, countedAt: data.countedAt };
       }
-
-      return NextResponse.json({ draft, fileName: specificFileName });
     }
 
-    // List all drafts for this location
-    if (listAll) {
-      const pattern = getDraftPattern(location);
-      const response = await drive.files.list({
-        q: `parents='${folderId}' and name contains '${pattern}' and mimeType='application/json'`,
-        driveId: sharedDriveId,
-        corpora: 'drive',
-        includeItemsFromAllDrives: true,
-        supportsAllDrives: true,
-        fields: 'files(id, name)',
-      });
-
-      const drafts: DraftListItem[] = [];
-      
-      if (response.data.files) {
-        for (const file of response.data.files) {
-          try {
-            const fileResponse = await drive.files.get({
-              fileId: file.id!,
-              alt: 'media',
-              supportsAllDrives: true,
-            });
-
-            let draftData: DraftData | null = null;
-            if (typeof fileResponse.data === 'string') {
-              draftData = JSON.parse(fileResponse.data);
-            } else if (fileResponse.data && typeof fileResponse.data === 'object') {
-              draftData = fileResponse.data as DraftData;
-            }
-
-            if (draftData) {
-              drafts.push({
-                fileName: file.name!,
-                savedBy: draftData.savedBy,
-                savedAt: draftData.savedAt,
-                skuCount: Object.keys(draftData.counts).filter(k => draftData!.counts[k] !== null).length,
-              });
-            }
-          } catch (err) {
-            console.error(`Failed to read draft ${file.name}:`, err);
-          }
-        }
-      }
-
-      // Sort by savedAt descending (newest first)
-      drafts.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
-
-      return NextResponse.json({ drafts, currentUser: userName });
-    }
-
-    // Get current user's draft for this location
-    const draftFileName = getDraftFileName(location, userName);
-    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
-
-    if (!fileId) {
-      return NextResponse.json({ draft: null });
-    }
-
-    const response = await drive.files.get({
-      fileId,
-      alt: 'media',
-      supportsAllDrives: true,
+    return NextResponse.json({ 
+      draft: {
+        counts: simpleCounts,
+        countDetails, // Who counted each SKU
+        savedAt: draft.lastSavedAt,
+        savedBy: draft.lastSavedBy,
+        contributors: draft.contributors || [],
+      },
+      currentUser: userName,
     });
-
-    let draft: DraftData | null = null;
-    if (typeof response.data === 'string') {
-      draft = JSON.parse(response.data);
-    } else if (response.data && typeof response.data === 'object') {
-      draft = response.data as DraftData;
-    }
-
-    return NextResponse.json({ draft });
   } catch (error) {
     console.error('Failed to load draft:', error);
     return NextResponse.json(
@@ -249,7 +203,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Save draft for a location (per-user draft)
+// POST - Save and merge draft for a location
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
@@ -263,21 +217,48 @@ export async function POST(request: NextRequest) {
     }
 
     const userName = session.user.name || 'Unknown';
-    const draftFileName = getDraftFileName(location, userName);
+    const now = new Date().toISOString();
+    const draftFileName = getDraftFileName(location);
 
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
-    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
+    
+    // Load existing draft to merge with
+    const existingDraft = await loadExistingDraft(drive, folderId, sharedDriveId, draftFileName);
+    
+    // Start with existing counts or empty
+    const mergedCounts: Record<string, SkuCount | null> = existingDraft?.counts || {};
+    const contributors = new Set<string>(existingDraft?.contributors || []);
+    contributors.add(userName);
 
-    const draft: DraftData = {
-      counts,
-      savedAt: new Date().toISOString(),
-      savedBy: userName,
+    // Merge incoming counts
+    for (const [sku, value] of Object.entries(counts as SimpleCounts)) {
+      if (value !== null) {
+        // User is setting a count for this SKU
+        mergedCounts[sku] = {
+          value: value as number,
+          countedBy: userName,
+          countedAt: now,
+        };
+      } else if (mergedCounts[sku] && mergedCounts[sku]?.countedBy === userName) {
+        // User is clearing their own count
+        mergedCounts[sku] = null;
+      }
+      // If value is null but SKU was counted by someone else, keep their count
+    }
+
+    const newDraft: SharedDraftData = {
+      counts: mergedCounts,
+      lastSavedAt: now,
+      lastSavedBy: userName,
+      contributors: Array.from(contributors),
     };
 
-    const fileContent = JSON.stringify(draft, null, 2);
+    const fileContent = JSON.stringify(newDraft, null, 2);
     const { Readable } = require('stream');
+
+    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
 
     if (fileId) {
       await drive.files.update({
@@ -302,11 +283,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Return merged counts in simple format
+    const simpleCounts: SimpleCounts = {};
+    const countDetails: Record<string, { countedBy: string; countedAt: string }> = {};
+    
+    for (const [sku, data] of Object.entries(mergedCounts)) {
+      if (data !== null) {
+        simpleCounts[sku] = data.value;
+        countDetails[sku] = { countedBy: data.countedBy, countedAt: data.countedAt };
+      }
+    }
+
+    const skuCount = Object.values(mergedCounts).filter(v => v !== null).length;
+
     return NextResponse.json({ 
       success: true, 
-      savedAt: draft.savedAt,
-      savedBy: draft.savedBy,
-      skuCount: Object.keys(counts).filter(k => counts[k] !== null).length 
+      savedAt: now,
+      savedBy: userName,
+      skuCount,
+      mergedCounts: simpleCounts,
+      countDetails,
+      contributors: Array.from(contributors),
     });
   } catch (error) {
     console.error('Failed to save draft:', error);
@@ -317,7 +314,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Delete draft for a location (per-user or all)
+// DELETE - Delete draft for a location (after successful submission)
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth();
@@ -327,48 +324,18 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location') || 'LA Office';
-    const deleteAll = searchParams.get('all') === 'true';
-    const userName = session.user.name || 'Unknown';
+    const draftFileName = getDraftFileName(location);
 
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
     const folderId = await findOrCreateFolder(drive, sharedDriveId);
+    const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
 
-    if (deleteAll) {
-      // Delete all drafts for this location (used after successful submission)
-      const pattern = getDraftPattern(location);
-      const response = await drive.files.list({
-        q: `parents='${folderId}' and name contains '${pattern}' and mimeType='application/json'`,
-        driveId: sharedDriveId,
-        corpora: 'drive',
-        includeItemsFromAllDrives: true,
+    if (fileId) {
+      await drive.files.delete({
+        fileId,
         supportsAllDrives: true,
-        fields: 'files(id, name)',
       });
-
-      if (response.data.files) {
-        for (const file of response.data.files) {
-          try {
-            await drive.files.delete({
-              fileId: file.id!,
-              supportsAllDrives: true,
-            });
-          } catch (err) {
-            console.error(`Failed to delete draft ${file.name}:`, err);
-          }
-        }
-      }
-    } else {
-      // Delete only current user's draft
-      const draftFileName = getDraftFileName(location, userName);
-      const fileId = await findFile(drive, folderId, sharedDriveId, draftFileName);
-
-      if (fileId) {
-        await drive.files.delete({
-          fileId,
-          supportsAllDrives: true,
-        });
-      }
     }
 
     return NextResponse.json({ success: true });

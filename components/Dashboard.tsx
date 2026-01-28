@@ -446,26 +446,9 @@ export default function Dashboard({ session }: DashboardProps) {
   } | null>(null);
   const [trackerTestMode, setTrackerTestMode] = useState(false);
   
-  // Multi-person draft merge state
-  const [availableDrafts, setAvailableDrafts] = useState<Array<{
-    fileName: string;
-    savedBy: string;
-    savedAt: string;
-    skuCount: number;
-  }>>([]);
-  const [showMergeDraftsModal, setShowMergeDraftsModal] = useState(false);
-  const [selectedDraftsToMerge, setSelectedDraftsToMerge] = useState<string[]>([]);
-  const [isMergingDrafts, setIsMergingDrafts] = useState(false);
-  const [mergeConflicts, setMergeConflicts] = useState<Array<{
-    sku: string;
-    existingValue: number;
-    existingBy: string;
-    newValue: number;
-    newBy: string;
-    selectedValue: 'existing' | 'new';
-  }>>([]);
-  const [showMergeConflictModal, setShowMergeConflictModal] = useState(false);
-  const [pendingMergeData, setPendingMergeData] = useState<Record<string, number | null>>({});
+  // Shared draft state (auto-merged from all contributors)
+  const [draftContributors, setDraftContributors] = useState<string[]>([]);
+  const [countDetails, setCountDetails] = useState<Record<string, { countedBy: string; countedAt: string }>>({});
   const [currentUserName, setCurrentUserName] = useState<string>('');
 
   // Load phase out SKUs
@@ -1733,13 +1716,6 @@ export default function Dashboard({ session }: DashboardProps) {
           setShowPhaseOutModal(false);
         } else if (showTrackerLogs) {
           setShowTrackerLogs(false);
-        } else if (showMergeConflictModal) {
-          setShowMergeConflictModal(false);
-          setMergeConflicts([]);
-          setPendingMergeData({});
-        } else if (showMergeDraftsModal) {
-          setShowMergeDraftsModal(false);
-          setSelectedDraftsToMerge([]);
         }
       }
     };
@@ -1751,8 +1727,7 @@ export default function Dashboard({ session }: DashboardProps) {
     showDeliveryConfirm, showCancelConfirm, showCancelTransferConfirm,
     showTrackerConfirm, showTrackerClearConfirm, showTransferDeliveryForm,
     showDeliveryForm, showEditTransferForm, showEditForm, showNewTransferForm,
-    showNewOrderForm, showColumnDefinitions, showPhaseOutModal, showTrackerLogs,
-    showMergeConflictModal, showMergeDraftsModal
+    showNewOrderForm, showColumnDefinitions, showPhaseOutModal, showTrackerLogs
   ]);
 
   // Load tracker drafts and last submission info from Google Drive on mount
@@ -1778,15 +1753,18 @@ export default function Dashboard({ session }: DashboardProps) {
           }
         }
         
-        // Then try to load drafts and last submission from Google Drive for each location
+        // Then try to load shared drafts and last submission from Google Drive for each location
         for (const loc of locations) {
           let hasDraft = false;
           
-          // Load draft
+          // Load shared draft (auto-merged from all contributors)
           try {
             const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(loc)}`);
             if (response.ok) {
               const data = await response.json();
+              if (data.currentUser) {
+                setCurrentUserName(data.currentUser);
+              }
               if (data.draft) {
                 hasDraft = true;
                 const localKey = `trackerCounts_${loc.replace(/\s/g, '_')}`;
@@ -1794,17 +1772,31 @@ export default function Dashboard({ session }: DashboardProps) {
                 const localCounts = localSaved ? JSON.parse(localSaved) : {};
                 const localCountedSkus = Object.keys(localCounts).filter(k => localCounts[k] !== null);
                 
-                if (localCountedSkus.length === 0) {
-                  setTrackerCounts(prev => ({
-                    ...prev,
-                    [loc]: data.draft.counts,
-                  }));
-                  localStorage.setItem(localKey, JSON.stringify(data.draft.counts));
+                // Always load the shared draft counts (merged from all contributors)
+                // Merge with any local unsaved work
+                const mergedCounts = { ...data.draft.counts };
+                for (const [sku, value] of Object.entries(localCounts)) {
+                  if (value !== null && !mergedCounts[sku]) {
+                    mergedCounts[sku] = value;
+                  }
                 }
+                
+                setTrackerCounts(prev => ({
+                  ...prev,
+                  [loc]: mergedCounts,
+                }));
+                localStorage.setItem(localKey, JSON.stringify(mergedCounts));
+                
                 setTrackerDraftInfo(prev => ({
                   ...prev,
                   [loc]: { savedAt: data.draft.savedAt, savedBy: data.draft.savedBy },
                 }));
+                
+                // Store count details and contributors for the current location
+                if (loc === 'LA Office') {
+                  setCountDetails(data.draft.countDetails || {});
+                  setDraftContributors(data.draft.contributors || []);
+                }
               }
             }
           } catch (error) {
@@ -1839,9 +1831,6 @@ export default function Dashboard({ session }: DashboardProps) {
             }
           }
         }
-        
-        // Load available drafts for the first location (will update when location changes)
-        await loadAvailableDrafts('LA Office');
       } finally {
         setIsLoadingDraft(false);
       }
@@ -1849,10 +1838,10 @@ export default function Dashboard({ session }: DashboardProps) {
     loadAllDraftsAndSubmissions();
   }, []);
 
-  // Load available drafts when tracker location changes
+  // Load shared draft when tracker location changes
   useEffect(() => {
     if (activeTab === 'warehouse') {
-      loadAvailableDrafts(trackerLocation);
+      loadSharedDraft(trackerLocation);
     }
   }, [trackerLocation, activeTab]);
 
@@ -1869,7 +1858,38 @@ export default function Dashboard({ session }: DashboardProps) {
     });
   };
 
-  // Save draft to Google Drive for specific location
+  // Load shared draft for a location
+  const loadSharedDraft = async (location: TrackerLocation) => {
+    try {
+      const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.currentUser) {
+          setCurrentUserName(data.currentUser);
+        }
+        if (data.draft) {
+          // Update counts with merged draft from server
+          setTrackerCounts(prev => ({
+            ...prev,
+            [location]: data.draft.counts,
+          }));
+          const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
+          localStorage.setItem(localKey, JSON.stringify(data.draft.counts));
+          
+          setTrackerDraftInfo(prev => ({
+            ...prev,
+            [location]: { savedAt: data.draft.savedAt, savedBy: data.draft.savedBy },
+          }));
+          setCountDetails(data.draft.countDetails || {});
+          setDraftContributors(data.draft.contributors || []);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load shared draft:', error);
+    }
+  };
+
+  // Save draft to Google Drive for specific location (auto-merges with existing)
   const saveDraftToGoogleDrive = async (location: TrackerLocation) => {
     setIsSavingDraft(true);
     try {
@@ -1886,135 +1906,41 @@ export default function Dashboard({ session }: DashboardProps) {
       }
       
       const result = await response.json();
+      
+      // Update local state with merged counts from server
+      if (result.mergedCounts) {
+        setTrackerCounts(prev => ({
+          ...prev,
+          [location]: result.mergedCounts,
+        }));
+        const localKey = `trackerCounts_${location.replace(/\s/g, '_')}`;
+        localStorage.setItem(localKey, JSON.stringify(result.mergedCounts));
+      }
+      
       setTrackerDraftInfo(prev => ({
         ...prev,
         [location]: { savedAt: result.savedAt, savedBy: result.savedBy },
       }));
+      
+      if (result.countDetails) {
+        setCountDetails(result.countDetails);
+      }
+      if (result.contributors) {
+        setDraftContributors(result.contributors);
+      }
+      
       // Clear last submission info when a new draft is saved
       setTrackerLastSubmission(prev => ({ ...prev, [location]: null }));
-      showTrackerNotification('success', 'Draft Saved', `${result.skuCount} SKUs for ${location} saved to Google Drive.`);
-      // Refresh available drafts list
-      await loadAvailableDrafts(location);
+      
+      const contributorCount = result.contributors?.length || 1;
+      showTrackerNotification('success', 'Draft Saved & Merged', 
+        `${result.skuCount} SKUs total from ${contributorCount} contributor${contributorCount !== 1 ? 's' : ''}.`);
     } catch (error) {
       console.error('Failed to save draft:', error);
       showTrackerNotification('error', 'Save Failed', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsSavingDraft(false);
     }
-  };
-
-  // Load available drafts from all team members for a location
-  const loadAvailableDrafts = async (location: TrackerLocation) => {
-    try {
-      const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}&list=true`);
-      if (response.ok) {
-        const data = await response.json();
-        setCurrentUserName(data.currentUser || '');
-        setAvailableDrafts(data.drafts || []);
-      }
-    } catch (error) {
-      console.error('Failed to load available drafts:', error);
-    }
-  };
-
-  // Merge drafts from other team members
-  const mergeDrafts = async () => {
-    if (selectedDraftsToMerge.length === 0) return;
-    
-    setIsMergingDrafts(true);
-    setGlobalStatus({ message: 'Merging Drafts...', subMessage: 'Loading counts from team members' });
-    
-    try {
-      const currentCounts = trackerCounts[trackerLocation];
-      const mergedCounts: Record<string, number | null> = { ...currentCounts };
-      const conflicts: typeof mergeConflicts = [];
-      
-      // Track who counted what for conflict detection
-      const countedBy: Record<string, { value: number; by: string }> = {};
-      
-      // First, record current user's counts
-      for (const [sku, value] of Object.entries(currentCounts)) {
-        if (value !== null) {
-          countedBy[sku] = { value, by: currentUserName || 'You' };
-        }
-      }
-      
-      // Load and merge each selected draft
-      for (const fileName of selectedDraftsToMerge) {
-        const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}&fileName=${encodeURIComponent(fileName)}`);
-        if (!response.ok) continue;
-        
-        const data = await response.json();
-        if (!data.draft) continue;
-        
-        const draftCounts = data.draft.counts;
-        const draftBy = data.draft.savedBy;
-        
-        for (const [sku, value] of Object.entries(draftCounts)) {
-          if (value === null) continue;
-          
-          // Check for conflict
-          if (countedBy[sku] && countedBy[sku].value !== value) {
-            conflicts.push({
-              sku,
-              existingValue: countedBy[sku].value,
-              existingBy: countedBy[sku].by,
-              newValue: value as number,
-              newBy: draftBy,
-              selectedValue: 'existing', // Default to keeping existing
-            });
-          } else {
-            // No conflict, merge the count
-            mergedCounts[sku] = value as number;
-            countedBy[sku] = { value: value as number, by: draftBy };
-          }
-        }
-      }
-      
-      // If there are conflicts, show the conflict resolution modal
-      if (conflicts.length > 0) {
-        setMergeConflicts(conflicts);
-        setPendingMergeData(mergedCounts);
-        setShowMergeDraftsModal(false);
-        setShowMergeConflictModal(true);
-      } else {
-        // No conflicts, apply the merge directly
-        applyMerge(mergedCounts);
-      }
-    } catch (error) {
-      console.error('Failed to merge drafts:', error);
-      showTrackerNotification('error', 'Merge Failed', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setIsMergingDrafts(false);
-      setGlobalStatus(null);
-    }
-  };
-
-  // Apply merged counts (after conflict resolution if needed)
-  const applyMerge = (mergedCounts: Record<string, number | null>) => {
-    // Apply conflict resolutions if any
-    for (const conflict of mergeConflicts) {
-      mergedCounts[conflict.sku] = conflict.selectedValue === 'existing' 
-        ? conflict.existingValue 
-        : conflict.newValue;
-    }
-    
-    // Update state and localStorage
-    setTrackerCounts(prev => ({
-      ...prev,
-      [trackerLocation]: mergedCounts,
-    }));
-    const localKey = `trackerCounts_${trackerLocation.replace(/\s/g, '_')}`;
-    localStorage.setItem(localKey, JSON.stringify(mergedCounts));
-    
-    // Clear merge state
-    setShowMergeConflictModal(false);
-    setMergeConflicts([]);
-    setPendingMergeData({});
-    setSelectedDraftsToMerge([]);
-    
-    const mergedSkuCount = Object.values(mergedCounts).filter(v => v !== null).length;
-    showTrackerNotification('success', 'Drafts Merged', `Successfully merged counts. Now have ${mergedSkuCount} SKUs counted.`);
   };
 
   // Load logs from Google Drive for specific location
@@ -5169,18 +5095,6 @@ export default function Dashboard({ session }: DashboardProps) {
                           >
                             {isSavingDraft ? '⏳ Saving...' : '💾 Save Draft'}
                           </button>
-                          {/* Merge Drafts Button - shown when there are other drafts to merge */}
-                          {availableDrafts.filter(d => d.savedBy !== currentUserName).length > 0 && (
-                            <button
-                              onClick={() => {
-                                setSelectedDraftsToMerge([]);
-                                setShowMergeDraftsModal(true);
-                              }}
-                              className="px-4 py-2 text-sm font-medium rounded-md bg-purple-600 text-white hover:bg-purple-700"
-                            >
-                              🔀 Merge Drafts ({availableDrafts.filter(d => d.savedBy !== currentUserName).length})
-                            </button>
-                          )}
                           {/* Submit Button - hidden on mobile (portrait & landscape) */}
                           <button
                             onClick={() => setShowTrackerConfirm(true)}
@@ -5562,12 +5476,13 @@ export default function Dashboard({ session }: DashboardProps) {
                                       console.error('Failed to save log to Google Drive:', logError);
                                     }
                                     
-                                    // Delete ALL drafts from Google Drive for this location (data is now in logs)
+                                    // Delete shared draft from Google Drive for this location (data is now in logs)
                                     try {
-                                      await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}&all=true`, { method: 'DELETE' });
-                                      setAvailableDrafts([]);
+                                      await fetch(`/api/warehouse/draft?location=${encodeURIComponent(trackerLocation)}`, { method: 'DELETE' });
+                                      setDraftContributors([]);
+                                      setCountDetails({});
                                     } catch (draftError) {
-                                      console.error('Failed to delete drafts:', draftError);
+                                      console.error('Failed to delete draft:', draftError);
                                     }
                                     
                                     // Always clear local draft info after successful submission
@@ -5805,183 +5720,6 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                     )}
 
-                    {/* Merge Drafts Modal */}
-                    {showMergeDraftsModal && (
-                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-                          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                            <h3 className="text-lg font-semibold text-gray-900">🔀 Merge Team Drafts</h3>
-                            <button
-                              onClick={() => {
-                                setShowMergeDraftsModal(false);
-                                setSelectedDraftsToMerge([]);
-                              }}
-                              className="text-gray-400 hover:text-gray-600"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                          <div className="flex-1 overflow-y-auto p-6">
-                            <p className="text-sm text-gray-600 mb-4">
-                              Select drafts from other team members to merge into your current counts.
-                              If the same SKU was counted by multiple people, you&apos;ll be asked to resolve the conflict.
-                            </p>
-                            {availableDrafts.filter(d => d.savedBy !== currentUserName).length === 0 ? (
-                              <p className="text-gray-500 text-center py-4">No other drafts available to merge.</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {availableDrafts
-                                  .filter(d => d.savedBy !== currentUserName)
-                                  .map((draft) => (
-                                    <label 
-                                      key={draft.fileName} 
-                                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                                        selectedDraftsToMerge.includes(draft.fileName)
-                                          ? 'border-purple-500 bg-purple-50'
-                                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                      }`}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={selectedDraftsToMerge.includes(draft.fileName)}
-                                        onChange={(e) => {
-                                          if (e.target.checked) {
-                                            setSelectedDraftsToMerge(prev => [...prev, draft.fileName]);
-                                          } else {
-                                            setSelectedDraftsToMerge(prev => prev.filter(f => f !== draft.fileName));
-                                          }
-                                        }}
-                                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                                      />
-                                      <div className="ml-3 flex-1">
-                                        <p className="text-sm font-medium text-gray-900">{draft.savedBy}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {draft.skuCount} SKUs • {new Date(draft.savedAt).toLocaleString()}
-                                        </p>
-                                      </div>
-                                    </label>
-                                  ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                            <button
-                              onClick={() => {
-                                setShowMergeDraftsModal(false);
-                                setSelectedDraftsToMerge([]);
-                              }}
-                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={mergeDrafts}
-                              disabled={selectedDraftsToMerge.length === 0 || isMergingDrafts}
-                              className={`px-4 py-2 rounded-md text-sm font-medium ${
-                                selectedDraftsToMerge.length === 0 || isMergingDrafts
-                                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                  : 'bg-purple-600 text-white hover:bg-purple-700'
-                              }`}
-                            >
-                              {isMergingDrafts ? 'Merging...' : `Merge ${selectedDraftsToMerge.length} Draft${selectedDraftsToMerge.length !== 1 ? 's' : ''}`}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Merge Conflict Resolution Modal */}
-                    {showMergeConflictModal && mergeConflicts.length > 0 && (
-                      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-                          <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">⚠️ Resolve Conflicts</h3>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {mergeConflicts.length} SKU{mergeConflicts.length !== 1 ? 's were' : ' was'} counted by multiple people. 
-                              Choose which count to keep for each.
-                            </p>
-                          </div>
-                          <div className="flex-1 overflow-y-auto p-6">
-                            <div className="space-y-4">
-                              {mergeConflicts.map((conflict, idx) => (
-                                <div key={conflict.sku} className="border border-yellow-200 bg-yellow-50 rounded-lg p-4">
-                                  <p className="font-mono font-medium text-gray-900 mb-3">{conflict.sku}</p>
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <label 
-                                      className={`flex flex-col p-3 border rounded-lg cursor-pointer transition-colors ${
-                                        conflict.selectedValue === 'existing'
-                                          ? 'border-blue-500 bg-blue-50'
-                                          : 'border-gray-200 hover:border-gray-300'
-                                      }`}
-                                    >
-                                      <div className="flex items-center mb-2">
-                                        <input
-                                          type="radio"
-                                          name={`conflict-${idx}`}
-                                          checked={conflict.selectedValue === 'existing'}
-                                          onChange={() => {
-                                            setMergeConflicts(prev => prev.map((c, i) => 
-                                              i === idx ? { ...c, selectedValue: 'existing' } : c
-                                            ));
-                                          }}
-                                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                                        />
-                                        <span className="ml-2 text-sm font-medium text-gray-700">Keep existing</span>
-                                      </div>
-                                      <p className="text-2xl font-bold text-center text-blue-600">{conflict.existingValue.toLocaleString()}</p>
-                                      <p className="text-xs text-center text-gray-500 mt-1">by {conflict.existingBy}</p>
-                                    </label>
-                                    <label 
-                                      className={`flex flex-col p-3 border rounded-lg cursor-pointer transition-colors ${
-                                        conflict.selectedValue === 'new'
-                                          ? 'border-purple-500 bg-purple-50'
-                                          : 'border-gray-200 hover:border-gray-300'
-                                      }`}
-                                    >
-                                      <div className="flex items-center mb-2">
-                                        <input
-                                          type="radio"
-                                          name={`conflict-${idx}`}
-                                          checked={conflict.selectedValue === 'new'}
-                                          onChange={() => {
-                                            setMergeConflicts(prev => prev.map((c, i) => 
-                                              i === idx ? { ...c, selectedValue: 'new' } : c
-                                            ));
-                                          }}
-                                          className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
-                                        />
-                                        <span className="ml-2 text-sm font-medium text-gray-700">Use new</span>
-                                      </div>
-                                      <p className="text-2xl font-bold text-center text-purple-600">{conflict.newValue.toLocaleString()}</p>
-                                      <p className="text-xs text-center text-gray-500 mt-1">by {conflict.newBy}</p>
-                                    </label>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-                            <button
-                              onClick={() => {
-                                setShowMergeConflictModal(false);
-                                setMergeConflicts([]);
-                                setPendingMergeData({});
-                              }}
-                              className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-md text-sm font-medium"
-                            >
-                              Cancel Merge
-                            </button>
-                            <button
-                              onClick={() => applyMerge(pendingMergeData)}
-                              className="px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 rounded-md text-sm font-medium"
-                            >
-                              Apply Merge
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
                     {/* Toast Notification */}
                     {trackerNotification && (
                       <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
