@@ -109,45 +109,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check stock availability at origin location
-    try {
-      const cacheService = new InventoryCacheService();
-      const inventoryCache = await cacheService.loadCache();
-      if (inventoryCache?.inventory?.inventory) {
-        const insufficientStock: { sku: string; requested: number; available: number }[] = [];
-        
-        for (const item of items) {
-          const inventoryItem = inventoryCache.inventory.inventory.find(inv => inv.sku === item.sku);
-          const availableAtOrigin = inventoryItem?.locations?.[origin] || 0;
-          
-          if (availableAtOrigin < item.quantity) {
-            insufficientStock.push({
-              sku: item.sku,
-              requested: item.quantity,
-              available: availableAtOrigin,
-            });
-          }
-        }
-        
-        if (insufficientStock.length > 0) {
-          const errorDetails = insufficientStock
-            .map(s => `${s.sku}: requested ${s.requested}, only ${s.available} available`)
-            .join('; ');
-          
-          return NextResponse.json(
-            { 
-              error: 'Insufficient stock at origin location',
-              details: errorDetails,
-              insufficientStock,
-            },
-            { status: 400 }
-          );
-        }
-      }
-    } catch (stockCheckError) {
-      console.warn('Could not verify stock levels:', stockCheckError);
-      // Continue with transfer creation even if stock check fails
-    }
+    // Stock validation is done when marking in transit, not during creation
+    // This allows users to always create draft transfers
 
     const newTransfer = await TransfersService.createTransfer(
       origin,

@@ -705,16 +705,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferNotes('');
         showProdNotification('success', 'Transfer Created', `Transfer ${data.transfer.id} created successfully`);
       } else {
-        // Handle insufficient stock error with details
-        if (data.insufficientStock) {
-          const stockDetails = data.insufficientStock
-            .map((s: { sku: string; requested: number; available: number }) => 
-              `${s.sku}: need ${s.requested}, only ${s.available} at ${newTransferOrigin}`)
-            .join('\n');
-          showProdNotification('error', 'Insufficient Stock', stockDetails);
-        } else {
-          showProdNotification('error', 'Create Failed', data.error || 'Failed to create transfer');
-        }
+        showProdNotification('error', 'Create Failed', data.error || 'Failed to create transfer');
       }
     } catch (err) {
       console.error('Failed to create transfer:', err);
@@ -727,6 +718,33 @@ export default function Dashboard({ session }: DashboardProps) {
   // Confirm and execute immediate transfer (creates + executes in one step)
   const confirmImmediateTransfer = async () => {
     if (!pendingImmediateTransfer || isExecutingImmediateTransfer) return;
+    
+    // Check stock availability at origin before proceeding
+    const originDetails = inventoryData?.locationDetails?.[pendingImmediateTransfer.origin];
+    if (originDetails) {
+      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+      
+      for (const item of pendingImmediateTransfer.items) {
+        const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
+        const availableAtOrigin = detail?.onHand || 0;
+        
+        if (availableAtOrigin < item.quantity) {
+          insufficientStock.push({
+            sku: item.sku,
+            requested: item.quantity,
+            available: availableAtOrigin,
+          });
+        }
+      }
+      
+      if (insufficientStock.length > 0) {
+        const stockDetails = insufficientStock
+          .map(s => `${s.sku}: need ${s.requested.toLocaleString()}, only ${s.available.toLocaleString()} at ${pendingImmediateTransfer.origin}`)
+          .join('\n');
+        showProdNotification('error', 'Insufficient Stock', stockDetails);
+        return;
+      }
+    }
     
     setIsExecutingImmediateTransfer(true);
 
@@ -750,15 +768,7 @@ export default function Dashboard({ session }: DashboardProps) {
       const createData = await createResponse.json();
 
       if (!createResponse.ok) {
-        if (createData.insufficientStock) {
-          const stockDetails = createData.insufficientStock
-            .map((s: { sku: string; requested: number; available: number }) => 
-              `${s.sku}: need ${s.requested}, only ${s.available} at ${pendingImmediateTransfer.origin}`)
-            .join('\n');
-          showProdNotification('error', 'Insufficient Stock', stockDetails);
-        } else {
-          showProdNotification('error', 'Create Failed', createData.error || 'Failed to create transfer');
-        }
+        showProdNotification('error', 'Create Failed', createData.error || 'Failed to create transfer');
         return;
       }
 
@@ -873,6 +883,33 @@ export default function Dashboard({ session }: DashboardProps) {
     if (!transferToMarkInTransit || isMarkingInTransit) return;
     
     const isImmediate = transferToMarkInTransit.transferType === 'Immediate';
+    
+    // Check stock availability at origin before proceeding
+    const originDetails = inventoryData?.locationDetails?.[transferToMarkInTransit.origin];
+    if (originDetails) {
+      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
+      
+      for (const item of transferToMarkInTransit.items) {
+        const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
+        const availableAtOrigin = detail?.onHand || 0;
+        
+        if (availableAtOrigin < item.quantity) {
+          insufficientStock.push({
+            sku: item.sku,
+            requested: item.quantity,
+            available: availableAtOrigin,
+          });
+        }
+      }
+      
+      if (insufficientStock.length > 0) {
+        const stockDetails = insufficientStock
+          .map(s => `${s.sku}: need ${s.requested.toLocaleString()}, only ${s.available.toLocaleString()} at ${transferToMarkInTransit.origin}`)
+          .join('\n');
+        showProdNotification('error', 'Insufficient Stock', stockDetails);
+        return;
+      }
+    }
     
     setIsMarkingInTransit(true);
     setGlobalStatus({ 
