@@ -2311,10 +2311,9 @@ export default function Dashboard({ session }: DashboardProps) {
     return transfers.map(t => {
       const lines = [];
       const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', dateOpts) : '';
-      lines.push(`${t.name} - Created: ${createdDate}`);
-      if (t.expectedArrivalAt) {
-        lines.push(`Expected arrival: ${new Date(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}`);
-      }
+      const etaStr = t.expectedArrivalAt ? ` | ETA: ${new Date(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}` : '';
+      lines.push(`${t.name}${etaStr}`);
+      lines.push(`Created: ${createdDate}`);
       const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
       lines.push(`Qty: ${t.quantity}${tagsStr ? ` - ${tagsStr}` : ''}`);
       return lines.join('\n');
