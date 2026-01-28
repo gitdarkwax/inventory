@@ -1909,22 +1909,8 @@ export default function Dashboard({ session }: DashboardProps) {
       const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}&list=true`);
       if (response.ok) {
         const data = await response.json();
-        setAvailableDrafts(data.drafts || []);
-      }
-    } catch (error) {
-      console.error('Failed to load available drafts:', error);
-    }
-  };
-
-  // Load all available drafts for a location (for merging)
-  const loadAvailableDrafts = async (location: TrackerLocation) => {
-    try {
-      const response = await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}&list=true`);
-      if (response.ok) {
-        const data = await response.json();
         setCurrentUserName(data.currentUser || '');
         setAvailableDrafts(data.drafts || []);
-        setCurrentUserName(data.currentUser || '');
       }
     } catch (error) {
       console.error('Failed to load available drafts:', error);
