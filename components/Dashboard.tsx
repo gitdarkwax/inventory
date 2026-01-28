@@ -312,7 +312,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editTransferOrigin, setEditTransferOrigin] = useState('');
   const [editTransferDestination, setEditTransferDestination] = useState('');
   const [editTransferType, setEditTransferType] = useState<TransferType | ''>('');
-  const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string; pallet?: string }[]>([]);
   const [editTransferCarrier, setEditTransferCarrier] = useState<CarrierType>('');
   const [editTransferTracking, setEditTransferTracking] = useState('');
   const [editTransferEta, setEditTransferEta] = useState('');
@@ -1189,7 +1189,11 @@ export default function Dashboard({ session }: DashboardProps) {
     
     const validItems = editTransferItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({ 
+        sku: item.sku.trim().toUpperCase(), 
+        quantity: parseInt(item.quantity),
+        ...(editTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {})
+      }));
 
     if (validItems.length === 0) {
       showProdNotification('error', 'Missing Items', 'Please add at least one SKU with quantity');
@@ -7206,7 +7210,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   setEditTransferOrigin(transfer.origin);
                                                   setEditTransferDestination(transfer.destination);
                                                   setEditTransferType(transfer.transferType || '');
-                                                  setEditTransferItems(transfer.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                                  setEditTransferItems(transfer.items.map(i => ({ 
+                                                    sku: i.sku, 
+                                                    quantity: String(i.quantity),
+                                                    pallet: i.pallet || 'Pallet 1'
+                                                  })));
                                                   setEditTransferCarrier(transfer.carrier || '');
                                                   setEditTransferTracking(transfer.trackingNumber || '');
                                                   setEditTransferEta(transfer.eta || '');
@@ -7606,6 +7614,21 @@ export default function Dashboard({ session }: DashboardProps) {
                                   }}
                                   className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
                                 />
+                                {editTransferType === 'Sea' && (
+                                  <select
+                                    value={item.pallet || 'Pallet 1'}
+                                    onChange={(e) => {
+                                      const updated = [...editTransferItems];
+                                      updated[index].pallet = e.target.value;
+                                      setEditTransferItems(updated);
+                                    }}
+                                    className="w-28 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                                  >
+                                    {Array.from({ length: 20 }, (_, i) => (
+                                      <option key={i + 1} value={`Pallet ${i + 1}`}>Pallet {i + 1}</option>
+                                    ))}
+                                  </select>
+                                )}
                                 {editTransferItems.length > 1 && (
                                   <button
                                     onClick={() => setEditTransferItems(editTransferItems.filter((_, i) => i !== index))}
@@ -7618,7 +7641,10 @@ export default function Dashboard({ session }: DashboardProps) {
                             );
                           })}
                           <button
-                            onClick={() => setEditTransferItems([...editTransferItems, { sku: '', quantity: '' }])}
+                            onClick={() => {
+                              const lastPallet = editTransferItems[editTransferItems.length - 1]?.pallet || 'Pallet 1';
+                              setEditTransferItems([...editTransferItems, { sku: '', quantity: '', pallet: lastPallet }]);
+                            }}
                             className="text-sm text-blue-600 hover:text-blue-800"
                           >
                             + Add another SKU
