@@ -390,6 +390,9 @@ export default function Dashboard({ session }: DashboardProps) {
   // Refresh state
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Global status overlay state
+  const [globalStatus, setGlobalStatus] = useState<{ message: string; subMessage?: string } | null>(null);
+
   // Phase out state
   const [showPhaseOutModal, setShowPhaseOutModal] = useState(false);
   const [phaseOutSkus, setPhaseOutSkus] = useState<string[]>([]);
@@ -996,6 +999,10 @@ export default function Dashboard({ session }: DashboardProps) {
     const isImmediate = transferToMarkInTransit.transferType === 'Immediate';
     
     setIsMarkingInTransit(true);
+    setGlobalStatus({ 
+      message: isImmediate ? 'Processing Immediate Transfer...' : 'Marking Transfer In Transit...', 
+      subMessage: 'Updating Shopify inventory' 
+    });
     try {
       // Step 1: Update Shopify inventory
       const inventoryResponse = await fetch('/api/transfers/inventory', {
@@ -1059,6 +1066,7 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Failed to mark in transit:', err);
       showProdNotification('error', 'Update Failed', 'Failed to process transfer');
     } finally {
+      setGlobalStatus(null);
       setIsMarkingInTransit(false);
     }
   };
@@ -1104,6 +1112,7 @@ export default function Dashboard({ session }: DashboardProps) {
     }
 
     setIsLoggingDelivery(true);
+    setGlobalStatus({ message: 'Logging Transfer Delivery...', subMessage: 'Updating Shopify inventory' });
     try {
       // Step 1: Update Shopify inventory (add to destination on_hand) and update incoming cache
       const inventoryResponse = await fetch('/api/transfers/inventory', {
@@ -1179,6 +1188,7 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Failed to log transfer delivery:', err);
       showProdNotification('error', 'Log Failed', 'Failed to log delivery');
     } finally {
+      setGlobalStatus(null);
       setIsLoggingDelivery(false);
     }
   };
@@ -1443,6 +1453,7 @@ export default function Dashboard({ session }: DashboardProps) {
     
     setIsLoggingDelivery(true);
     setIsUpdatingShopify(true);
+    setGlobalStatus({ message: 'Logging Delivery to Shopify...', subMessage: 'Updating inventory counts' });
     
     try {
       // Step 1: Get location ID for the delivery location
@@ -1540,6 +1551,7 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Delivery error:', err);
       showProdNotification('error', 'Delivery Failed', err instanceof Error ? err.message : 'Failed to process delivery');
     } finally {
+      setGlobalStatus(null);
       setIsLoggingDelivery(false);
       setIsUpdatingShopify(false);
     }
@@ -1631,6 +1643,9 @@ export default function Dashboard({ session }: DashboardProps) {
     setIsRefreshing(true);
     setInventoryError(null);
     setForecastingError(null);
+    if (!isAutoRefresh) {
+      setGlobalStatus({ message: 'Refreshing Data from Shopify...', subMessage: 'This may take up to 30 seconds' });
+    }
     try {
       const headers: HeadersInit = {};
       if (isAutoRefresh) {
@@ -1648,6 +1663,7 @@ export default function Dashboard({ session }: DashboardProps) {
       setInventoryError(errorMsg);
       setForecastingError(errorMsg);
     } finally {
+      setGlobalStatus(null);
       setIsRefreshing(false);
     }
   };
@@ -2734,7 +2750,21 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Main Dashboard View
   return (
-    <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
+    <>
+      {/* Global Status Overlay */}
+      {globalStatus && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+            <p className="text-lg font-semibold text-gray-900">{globalStatus.message}</p>
+            {globalStatus.subMessage && (
+              <p className="text-sm text-gray-500 mt-2">{globalStatus.subMessage}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
         {/* Header */}
         <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
@@ -5375,6 +5405,10 @@ export default function Dashboard({ session }: DashboardProps) {
                             <button
                               onClick={async () => {
                                   setIsSubmittingTracker(true);
+                                  setGlobalStatus({ 
+                                    message: trackerTestMode ? 'Processing Test Submission...' : 'Updating Shopify Inventory...', 
+                                    subMessage: 'Please do not close this window' 
+                                  });
                                   try {
                                     // Get the location ID for current tracker location
                                     const locationId = inventoryData?.locationIds?.[trackerLocation];
@@ -5546,6 +5580,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     showTrackerNotification('error', 'Submission Failed', 
                                       error instanceof Error ? error.message : 'Unknown error');
                                   } finally {
+                                    setGlobalStatus(null);
                                     setIsSubmittingTracker(false);
                                     setShowTrackerConfirm(false);
                                   }
@@ -8283,5 +8318,6 @@ export default function Dashboard({ session }: DashboardProps) {
         )}
       </div>
     </div>
+    </>
   );
 }
