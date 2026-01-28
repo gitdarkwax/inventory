@@ -2022,7 +2022,7 @@ export default function Dashboard({ session }: DashboardProps) {
     setTimeout(() => setProdNotification(null), type === 'error' ? 8000 : 5000);
   };
 
-  // Clear tracker counts for current location (called from modal)
+  // Clear tracker counts for current location (clears for everyone)
   const clearTrackerCounts = async (location: TrackerLocation) => {
     // Use startTransition to prevent blocking the UI
     startTransition(() => {
@@ -2035,15 +2035,19 @@ export default function Dashboard({ session }: DashboardProps) {
     localStorage.removeItem(localKey);
     setShowTrackerClearConfirm(false);
     
-    // Delete draft from Google Drive
+    // Delete shared draft from Google Drive (clears for everyone)
     try {
       await fetch(`/api/warehouse/draft?location=${encodeURIComponent(location)}`, { method: 'DELETE' });
+      showTrackerNotification('success', 'Draft Cleared', `All counts for ${location} have been cleared for everyone.`);
     } catch (error) {
       console.error('Failed to delete draft:', error);
+      showTrackerNotification('error', 'Clear Failed', 'Failed to clear the shared draft.');
     }
     
-    // Clear draft info
+    // Clear draft info and contributor data
     setTrackerDraftInfo(prev => ({ ...prev, [location]: null }));
+    setDraftContributors([]);
+    setCountDetails({});
     
     // Load the last submission from logs to show in badge
     try {
@@ -5262,8 +5266,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             <h3 className="text-lg font-semibold text-gray-900">Clear All Counts</h3>
                           </div>
                           <div className="px-6 py-4">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-600 mb-2">
                               Are you sure you want to clear all counted values for <strong>{trackerLocation}</strong>?
+                            </p>
+                            <p className="text-sm text-red-600 font-medium">
+                              ⚠️ This will clear the shared draft for everyone on the team.
                             </p>
                             <p className="text-sm text-gray-500 mt-2">
                               This will remove {allItemsWithCounts.length} counted SKUs. This action cannot be undone.
