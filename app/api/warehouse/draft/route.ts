@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { auth, canWrite } from '@/lib/auth';
 import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
@@ -210,6 +210,11 @@ export async function POST(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    // Check write access
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Read-only access. You do not have permission to save drafts.' }, { status: 403 });
+    }
 
     const { counts, location = 'LA Office' } = await request.json();
     if (!counts) {
@@ -320,6 +325,11 @@ export async function DELETE(request: NextRequest) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    // Check write access
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Read-only access. You do not have permission to clear drafts.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);

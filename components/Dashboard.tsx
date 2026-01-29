@@ -89,6 +89,7 @@ interface DashboardProps {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      role?: 'write' | 'readonly';
     };
   };
 }
@@ -160,6 +161,9 @@ type TabType = 'inventory' | 'forecasting' | 'planning' | 'production' | 'wareho
 type ProductionViewType = 'orders' | 'transfers';
 
 export default function Dashboard({ session }: DashboardProps) {
+  // Check if user has read-only access
+  const isReadOnly = session.user?.role === 'readonly';
+  
   // Tab state - persist to localStorage
   const [activeTab, setActiveTab] = useState<TabType>('inventory');
   const [isTabInitialized, setIsTabInitialized] = useState(false);
@@ -4913,26 +4917,30 @@ export default function Dashboard({ session }: DashboardProps) {
                         {item.onHand.toLocaleString()}
                       </td>
                       <td className="px-1 sm:px-4 py-2 sm:py-3 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          value={countedValue ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value === '' ? null : parseInt(e.target.value);
-                            setTrackerCounts(prev => ({
-                              ...prev,
-                              [trackerLocation]: { ...prev[trackerLocation], [item.sku]: val },
-                            }));
-                          }}
-                          onBlur={(e) => {
-                            const val = e.target.value === '' ? null : parseInt(e.target.value);
-                            saveTrackerCount(trackerLocation, item.sku, val);
-                          }}
-                          className="w-14 sm:w-20 px-1 sm:px-2 py-1 text-base md:text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="—"
-                        />
+                        {isReadOnly ? (
+                          <span className="text-gray-500">{countedValue ?? '—'}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={countedValue ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? null : parseInt(e.target.value);
+                              setTrackerCounts(prev => ({
+                                ...prev,
+                                [trackerLocation]: { ...prev[trackerLocation], [item.sku]: val },
+                              }));
+                            }}
+                            onBlur={(e) => {
+                              const val = e.target.value === '' ? null : parseInt(e.target.value);
+                              saveTrackerCount(trackerLocation, item.sku, val);
+                            }}
+                            className="w-14 sm:w-20 px-1 sm:px-2 py-1 text-base md:text-sm text-center border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="—"
+                          />
+                        )}
                       </td>
                       <td className={`px-1 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-center font-medium ${
                         difference === null ? 'text-gray-400' :
@@ -5115,8 +5123,8 @@ export default function Dashboard({ session }: DashboardProps) {
                           >
                             📋 View Logs
                           </button>
-                          {/* Clear Button */}
-                          {allItemsWithCounts.length > 0 && (
+                          {/* Clear Button - hidden for read-only users */}
+                          {!isReadOnly && allItemsWithCounts.length > 0 && (
                             <button
                               onClick={() => setShowTrackerClearConfirm(true)}
                               className="px-4 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
@@ -5124,30 +5132,34 @@ export default function Dashboard({ session }: DashboardProps) {
                               🗑️ Clear All
                             </button>
                           )}
-                          {/* Save Draft Button */}
-                          <button
-                            onClick={() => saveDraftToGoogleDrive(trackerLocation)}
-                            disabled={isSavingDraft || allItemsWithCounts.length === 0}
-                            className={`px-4 py-2 text-sm font-medium rounded-md ${
-                              isSavingDraft || allItemsWithCounts.length === 0
-                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                            }`}
-                          >
-                            {isSavingDraft ? '⏳ Saving...' : '💾 Save Draft'}
-                          </button>
-                          {/* Submit Button - hidden on mobile (portrait & landscape) */}
-                          <button
-                            onClick={() => setShowTrackerConfirm(true)}
-                            disabled={allItemsWithCounts.length === 0}
-                            className={`hidden md:block px-4 py-2 text-sm font-medium rounded-md ${
-                              allItemsWithCounts.length === 0 
-                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                                : 'bg-green-600 text-white hover:bg-green-700'
-                            }`}
-                          >
-                            ✅ Submit to Shopify
-                          </button>
+                          {/* Save Draft Button - hidden for read-only users */}
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => saveDraftToGoogleDrive(trackerLocation)}
+                              disabled={isSavingDraft || allItemsWithCounts.length === 0}
+                              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                                isSavingDraft || allItemsWithCounts.length === 0
+                                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                              }`}
+                            >
+                              {isSavingDraft ? '⏳ Saving...' : '💾 Save Draft'}
+                            </button>
+                          )}
+                          {/* Submit Button - hidden on mobile and for read-only users */}
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => setShowTrackerConfirm(true)}
+                              disabled={allItemsWithCounts.length === 0}
+                              className={`hidden md:block px-4 py-2 text-sm font-medium rounded-md ${
+                                allItemsWithCounts.length === 0 
+                                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                                  : 'bg-green-600 text-white hover:bg-green-700'
+                              }`}
+                            >
+                              ✅ Submit to Shopify
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -5853,23 +5865,25 @@ export default function Dashboard({ session }: DashboardProps) {
                   </button>
                 </div>
                 
-                {/* Action Button */}
-                {productionViewType === 'orders' ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowNewOrderForm(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                  >
-                    + New Production Order
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowNewTransferForm(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                  >
-                    + New Transfer
-                  </button>
+                {/* Action Button - hidden for read-only users */}
+                {!isReadOnly && (
+                  productionViewType === 'orders' ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewOrderForm(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                    >
+                      + New Production Order
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewTransferForm(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                    >
+                      + New Transfer
+                    </button>
+                  )
                 )}
               </div>
               
@@ -6340,71 +6354,73 @@ export default function Dashboard({ session }: DashboardProps) {
                                         </details>
                                       </div>
                                     )}
-                                    {/* Actions */}
-                                    <div className="flex gap-2 pt-2">
-                                      {!['completed', 'cancelled'].includes(order.status) ? (
-                                        <>
+                                    {/* Actions - hidden for read-only users */}
+                                    {!isReadOnly && (
+                                      <div className="flex gap-2 pt-2">
+                                        {!['completed', 'cancelled'].includes(order.status) ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeliveryItems(
+                                                  order.items
+                                                    .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
+                                                    .map(item => ({ 
+                                                      sku: item.sku, 
+                                                      quantity: String(item.quantity - (item.receivedQuantity || 0))
+                                                    }))
+                                                );
+                                                setShowDeliveryForm(true);
+                                              }}
+                                              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                                            >
+                                              Log Delivery
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                                setEditOrderVendor(order.vendor || '');
+                                                setEditOrderEta(order.eta || '');
+                                                setEditOrderNotes(order.notes || '');
+                                                setShowEditForm(true);
+                                              }}
+                                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                                            >
+                                              Edit
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowCancelConfirm(true);
+                                              }}
+                                              className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
+                                            >
+                                              Cancel Order
+                                            </button>
+                                          </>
+                                        ) : (
                                           <button
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setDeliveryItems(
-                                                order.items
-                                                  .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
-                                                  .map(item => ({ 
-                                                    sku: item.sku, 
-                                                    quantity: String(item.quantity - (item.receivedQuantity || 0))
-                                                  }))
-                                              );
-                                              setShowDeliveryForm(true);
-                                            }}
-                                            className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
-                                          >
-                                            Log Delivery
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
-                                              setEditOrderVendor(order.vendor || '');
-                                              setEditOrderEta(order.eta || '');
-                                              setEditOrderNotes(order.notes || '');
-                                              setShowEditForm(true);
+                                              setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                              setNewOrderVendor(order.vendor || '');
+                                              setNewOrderEta('');
+                                              setNewOrderNotes(order.notes || '');
+                                              setSelectedOrder(null);
+                                              setShowNewOrderForm(true);
                                             }}
                                             className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                                           >
-                                            Edit
+                                            Duplicate Order
                                           </button>
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setShowCancelConfirm(true);
-                                            }}
-                                            className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
-                                          >
-                                            Cancel Order
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
-                                            setNewOrderVendor(order.vendor || '');
-                                            setNewOrderEta('');
-                                            setNewOrderNotes(order.notes || '');
-                                            setSelectedOrder(null);
-                                            setShowNewOrderForm(true);
-                                          }}
-                                          className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                                        >
-                                          Duplicate Order
-                                        </button>
-                                      )}
-                                    </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -7292,103 +7308,105 @@ export default function Dashboard({ session }: DashboardProps) {
                                             </details>
                                           </div>
                                         )}
-                                        {/* Actions */}
-                                        <div className="flex gap-2 pt-2">
-                                          {!['delivered', 'cancelled'].includes(transfer.status) ? (
-                                            <>
-                                              {/* Draft status: show Mark In Transit green button */}
-                                              {transfer.status === 'draft' && (
+                                        {/* Actions - hidden for read-only users */}
+                                        {!isReadOnly && (
+                                          <div className="flex gap-2 pt-2">
+                                            {!['delivered', 'cancelled'].includes(transfer.status) ? (
+                                              <>
+                                                {/* Draft status: show Mark In Transit green button */}
+                                                {transfer.status === 'draft' && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      showMarkInTransitConfirmation(transfer);
+                                                    }}
+                                                    disabled={isMarkingInTransit}
+                                                    className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                                                      isMarkingInTransit
+                                                        ? 'bg-green-400 text-white cursor-not-allowed'
+                                                        : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                                                    }`}
+                                                  >
+                                                    Mark In Transit
+                                                  </button>
+                                                )}
+                                                {/* In Transit or Partial status: show Log Delivery green button */}
+                                                {['in_transit', 'partial'].includes(transfer.status) && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => { 
+                                                      e.stopPropagation();
+                                                      setSelectedTransfer(transfer);
+                                                      setTransferDeliveryItems(
+                                                        transfer.items.map(item => ({
+                                                          sku: item.sku,
+                                                          quantity: '',
+                                                        }))
+                                                      );
+                                                      setShowTransferDeliveryForm(true);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                                                  >
+                                                    Log Delivery
+                                                  </button>
+                                                )}
                                                 <button
                                                   type="button"
                                                   onClick={(e) => { 
                                                     e.stopPropagation(); 
-                                                    showMarkInTransitConfirmation(transfer);
+                                                    setEditTransferOrigin(transfer.origin);
+                                                    setEditTransferDestination(transfer.destination);
+                                                    setEditTransferType(transfer.transferType || '');
+                                                    setEditTransferItems(transfer.items.map(i => ({ 
+                                                      sku: i.sku, 
+                                                      quantity: String(i.quantity),
+                                                      pallet: i.pallet || 'Pallet 1'
+                                                    })));
+                                                    setEditTransferCarrier(transfer.carrier || '');
+                                                    setEditTransferTracking(transfer.trackingNumber || '');
+                                                    setEditTransferEta(transfer.eta || '');
+                                                    setEditTransferNotes(transfer.notes || '');
+                                                    setShowEditTransferForm(true);
                                                   }}
-                                                  disabled={isMarkingInTransit}
-                                                  className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                                                    isMarkingInTransit
-                                                      ? 'bg-green-400 text-white cursor-not-allowed'
-                                                      : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
-                                                  }`}
+                                                  className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                                                 >
-                                                  Mark In Transit
+                                                  Edit
                                                 </button>
-                                              )}
-                                              {/* In Transit or Partial status: show Log Delivery green button */}
-                                              {['in_transit', 'partial'].includes(transfer.status) && (
                                                 <button
                                                   type="button"
-                                                  onClick={(e) => { 
-                                                    e.stopPropagation();
-                                                    setSelectedTransfer(transfer);
-                                                    setTransferDeliveryItems(
-                                                      transfer.items.map(item => ({
-                                                        sku: item.sku,
-                                                        quantity: '',
-                                                      }))
-                                                    );
-                                                    setShowTransferDeliveryForm(true);
-                                                  }}
-                                                  className="px-3 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 active:bg-green-800"
+                                                  onClick={(e) => { e.stopPropagation(); setShowCancelTransferConfirm(true); }}
+                                                  className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
                                                 >
-                                                  Log Delivery
+                                                  Cancel Transfer
                                                 </button>
-                                              )}
+                                              </>
+                                            ) : (
                                               <button
                                                 type="button"
-                                                onClick={(e) => { 
-                                                  e.stopPropagation(); 
-                                                  setEditTransferOrigin(transfer.origin);
-                                                  setEditTransferDestination(transfer.destination);
-                                                  setEditTransferType(transfer.transferType || '');
-                                                  setEditTransferItems(transfer.items.map(i => ({ 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setNewTransferOrigin(transfer.origin);
+                                                  setNewTransferDestination(transfer.destination);
+                                                  setNewTransferItems(transfer.items.map(i => ({ 
                                                     sku: i.sku, 
                                                     quantity: String(i.quantity),
                                                     pallet: i.pallet || 'Pallet 1'
                                                   })));
-                                                  setEditTransferCarrier(transfer.carrier || '');
-                                                  setEditTransferTracking(transfer.trackingNumber || '');
-                                                  setEditTransferEta(transfer.eta || '');
-                                                  setEditTransferNotes(transfer.notes || '');
-                                                  setShowEditTransferForm(true);
+                                                  setNewTransferCarrier(transfer.carrier || '');
+                                                  setNewTransferTracking('');
+                                                  setNewTransferEta('');
+                                                  setNewTransferNotes(transfer.notes || '');
+                                                  setSelectedTransfer(null);
+                                                  setShowNewTransferForm(true);
                                                 }}
-                                                className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                                                className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
                                               >
-                                                Edit
+                                                Duplicate Transfer
                                               </button>
-                                              <button
-                                                type="button"
-                                                onClick={(e) => { e.stopPropagation(); setShowCancelTransferConfirm(true); }}
-                                                className="px-3 py-1.5 text-red-600 hover:bg-red-100 active:bg-red-200 rounded-md text-sm font-medium"
-                                              >
-                                                Cancel Transfer
-                                              </button>
-                                            </>
-                                          ) : (
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setNewTransferOrigin(transfer.origin);
-                                                setNewTransferDestination(transfer.destination);
-                                                setNewTransferItems(transfer.items.map(i => ({ 
-                                                  sku: i.sku, 
-                                                  quantity: String(i.quantity),
-                                                  pallet: i.pallet || 'Pallet 1'
-                                                })));
-                                                setNewTransferCarrier(transfer.carrier || '');
-                                                setNewTransferTracking('');
-                                                setNewTransferEta('');
-                                                setNewTransferNotes(transfer.notes || '');
-                                                setSelectedTransfer(null);
-                                                setShowNewTransferForm(true);
-                                              }}
-                                              className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200 active:bg-gray-300"
-                                            >
-                                              Duplicate Transfer
-                                            </button>
-                                          )}
-                                        </div>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     </td>
                                   </tr>

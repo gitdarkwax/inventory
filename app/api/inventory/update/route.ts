@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { auth, canWrite } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for batch updates
@@ -48,6 +48,16 @@ export async function POST(request: NextRequest) {
     // Verify authentication
     const session = await auth();
     if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    // Check write access
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Read-only access. You do not have permission to update inventory.' }, { status: 403 });
+    }
+    
+    // Note: keeping original auth check below for backward compatibility
+    if (false) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

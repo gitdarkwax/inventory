@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { auth, canWrite } from '@/lib/auth';
 import { TransfersService, CarrierType, TransferType } from '@/lib/transfers';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
@@ -41,6 +41,11 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    // Check write access
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Read-only access. You do not have permission to create transfers.' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -142,6 +147,11 @@ export async function PATCH(request: NextRequest) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    // Check write access
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Read-only access. You do not have permission to update transfers.' }, { status: 403 });
     }
 
     const body = await request.json();
