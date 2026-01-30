@@ -9,6 +9,8 @@ import { TransfersService, CarrierType, TransferType } from '@/lib/transfers';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 
+// Note: InventoryCacheService is used for updating incoming inventory when transfers are cancelled
+
 export const dynamic = 'force-dynamic';
 
 // GET - List all transfers
@@ -270,8 +272,26 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    // Send Slack notification if transfer was cancelled
+    // Handle transfer cancellation - update incoming inventory cache and notify
     if (status === 'cancelled' && previousStatus !== 'cancelled') {
+      // Remove from incoming inventory cache if it was in transit (Air/Sea)
+      if (previousStatus === 'in_transit' || previousStatus === 'partial') {
+        const shipType = updatedTransfer.transferType;
+        if (shipType === 'Air Express' || shipType === 'Air Slow' || shipType === 'Sea') {
+          try {
+            const cacheService = new InventoryCacheService();
+            await cacheService.removeTransferFromIncoming(
+              updatedTransfer.destination,
+              updatedTransfer.id
+            );
+            console.log(`✅ Removed cancelled transfer ${updatedTransfer.id} from incoming cache`);
+          } catch (err) {
+            console.error('Failed to remove cancelled transfer from incoming cache:', err);
+          }
+        }
+      }
+
+      // Send Slack notification
       sendSlackNotification(async () => {
         const slack = new SlackService();
         await slack.notifyTransferCancelled({
