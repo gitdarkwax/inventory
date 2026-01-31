@@ -7546,13 +7546,21 @@ export default function Dashboard({ session }: DashboardProps) {
                             <label className="block text-sm font-medium text-gray-700 mb-2">Destination <span className="text-red-500">*</span></label>
                             <select
                               value={newTransferDestination}
-                              onChange={(e) => setNewTransferDestination(e.target.value)}
+                              onChange={(e) => {
+                                const dest = e.target.value;
+                                setNewTransferDestination(dest);
+                                // Auto-set Immediate for Distributor transfers
+                                if (dest === 'Distributor') {
+                                  setNewTransferType('Immediate');
+                                }
+                              }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             >
                               <option value="">Select destination...</option>
                               {transferLocations.filter(loc => loc !== newTransferOrigin).map(loc => (
                                 <option key={loc} value={loc}>{loc}</option>
                               ))}
+                              <option value="Distributor">Distributor</option>
                             </select>
                           </div>
                           <div>
@@ -7561,6 +7569,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               value={newTransferType}
                               onChange={(e) => setNewTransferType(e.target.value as TransferType)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              disabled={newTransferDestination === 'Distributor'}
                             >
                               <option value="">Select shipment type...</option>
                               <option value="Air Express">Air Express</option>
@@ -7777,12 +7786,20 @@ export default function Dashboard({ session }: DashboardProps) {
                             <label className="block text-sm font-medium text-gray-700 mb-2">Destination <span className="text-red-500">*</span></label>
                             <select
                               value={editTransferDestination}
-                              onChange={(e) => setEditTransferDestination(e.target.value)}
+                              onChange={(e) => {
+                                const dest = e.target.value;
+                                setEditTransferDestination(dest);
+                                // Auto-set Immediate for Distributor transfers
+                                if (dest === 'Distributor') {
+                                  setEditTransferType('Immediate');
+                                }
+                              }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             >
                               {transferLocations.filter(loc => loc !== editTransferOrigin).map(loc => (
                                 <option key={loc} value={loc}>{loc}</option>
                               ))}
+                              <option value="Distributor">Distributor</option>
                             </select>
                           </div>
                           <div>
@@ -7791,6 +7808,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               value={editTransferType}
                               onChange={(e) => setEditTransferType(e.target.value as TransferType)}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              disabled={editTransferDestination === 'Distributor'}
                             >
                               <option value="">Select shipment type...</option>
                               <option value="Air Express">Air Express</option>

@@ -162,11 +162,17 @@ export async function POST(request: NextRequest) {
       
       const isImmediate = shipmentType === 'Immediate';
       // ShipBob manages its own inventory - skip Shopify destination update for ShipBob
+      // Distributor is an external destination - only subtract from origin, no destination update
       const isShipBobDestination = destination === 'ShipBob';
+      const isDistributorDestination = destination === 'Distributor';
+      const skipDestinationUpdate = isShipBobDestination || isDistributorDestination;
       
       console.log(`📦 ${isImmediate ? 'Processing immediate transfer' : 'Marking transfer in transit'} ${transferId}: ${origin} → ${destination} [${shipmentType}]`);
       if (isShipBobDestination && isImmediate) {
         console.log(`📦 ShipBob destination - will only subtract from origin (ShipBob syncs separately)`);
+      }
+      if (isDistributorDestination && isImmediate) {
+        console.log(`📦 Distributor destination - will only subtract from origin (external transfer)`);
       }
       
       const originLocationId = locationIds[origin];
@@ -175,8 +181,8 @@ export async function POST(request: NextRequest) {
       if (!originLocationId) {
         return NextResponse.json({ error: `Origin location "${origin}" not found in Shopify` }, { status: 400 });
       }
-      // Only require dest location ID if we're going to use it (immediate + not ShipBob)
-      if (!destLocationId && isImmediate && !isShipBobDestination) {
+      // Only require dest location ID if we're going to use it (immediate + not ShipBob/Distributor)
+      if (!destLocationId && isImmediate && !skipDestinationUpdate) {
         return NextResponse.json({ error: `Destination location "${destination}" not found in Shopify` }, { status: 400 });
       }
 
@@ -209,8 +215,8 @@ export async function POST(request: NextRequest) {
           delta: -item.quantity,
         });
 
-        // For Immediate transfers: add to destination's On Hand (skip ShipBob - syncs separately)
-        if (isImmediate && !isShipBobDestination) {
+        // For Immediate transfers: add to destination's On Hand (skip ShipBob/Distributor)
+        if (isImmediate && !skipDestinationUpdate) {
           destAdjustments.push({
             inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
             locationId: `gid://shopify/Location/${destLocationId}`,
@@ -229,12 +235,12 @@ export async function POST(request: NextRequest) {
         await adjustInventory(graphqlUrl, accessToken, originAdjustments, 'movement_updated');
         console.log(`✅ Subtracted from origin ${origin}: ${originAdjustments.length} SKUs`);
 
-        // Step 2 (Immediate only, skip ShipBob): Add to destination's On Hand in Shopify
-        if (isImmediate && destAdjustments.length > 0 && !isShipBobDestination) {
+        // Step 2 (Immediate only, skip ShipBob/Distributor): Add to destination's On Hand in Shopify
+        if (isImmediate && destAdjustments.length > 0 && !skipDestinationUpdate) {
           await adjustInventory(graphqlUrl, accessToken, destAdjustments, 'received');
           console.log(`✅ Added to destination ${destination}: ${destAdjustments.length} SKUs`);
-        } else if (isImmediate && isShipBobDestination) {
-          console.log(`⏭️ Skipped ShipBob destination Shopify update (syncs separately)`);
+        } else if (isImmediate && skipDestinationUpdate) {
+          console.log(`⏭️ Skipped ${destination} destination Shopify update (external/3PL)`);
         }
 
         // Step 3 (Air/Sea only): Add to incoming cache in our app
