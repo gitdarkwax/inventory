@@ -157,13 +157,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { transferId, origin, destination, transferType, items, carrier, trackingNumber, eta, notes, status, restockedItems } = body as {
+    const { transferId, origin, destination, transferType, items, carrier, trackingNumber, eta, notes, status, restockedItems, receivedItems } = body as {
       transferId: string;
       origin?: string;
       destination?: string;
       transferType?: TransferType;
       items?: { sku: string; quantity: number; receivedQuantity?: number }[];
       restockedItems?: { sku: string; quantity: number }[];
+      receivedItems?: { sku: string; quantity: number }[];
       carrier?: CarrierType;
       trackingNumber?: string;
       eta?: string;
@@ -194,13 +195,29 @@ export async function PATCH(request: NextRequest) {
     const transferBefore = transfersBefore.transfers.find(t => t.id === transferId);
     const previousStatus = transferBefore?.status;
 
+    // If receivedItems provided, merge with existing items to set receivedQuantity
+    let itemsToUpdate = items;
+    if (receivedItems && receivedItems.length > 0) {
+      // Get existing items from the transfer
+      const existingTransfer = transfersBefore.transfers.find(t => t.id === transferId);
+      if (existingTransfer) {
+        itemsToUpdate = existingTransfer.items.map(item => {
+          const received = receivedItems.find(r => r.sku === item.sku);
+          return {
+            ...item,
+            receivedQuantity: received ? received.quantity : (item.receivedQuantity || 0),
+          };
+        });
+      }
+    }
+
     const updatedTransfer = await TransfersService.updateTransfer(
       transferId, 
       {
         origin,
         destination,
         transferType,
-        items,
+        items: itemsToUpdate,
         carrier,
         trackingNumber,
         eta,
