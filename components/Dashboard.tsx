@@ -8044,10 +8044,13 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                             <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer</p>
                             <p className="text-sm text-blue-700 mt-1">
-                              • Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong><br/>
-                              {transferToMarkInTransit.destination === 'ShipBob'
-                                ? '• ShipBob manages its own inventory'
-                                : `• Stock will be added to <strong>${transferToMarkInTransit.destination}</strong>`}
+                              • Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong>
+                              {transferToMarkInTransit.destination === 'ShipBob' && (
+                                <><br/>• ShipBob manages its own inventory</>
+                              )}
+                              {transferToMarkInTransit.destination !== 'ShipBob' && transferToMarkInTransit.destination !== 'Distributor' && (
+                                <><br/>• Stock will be added to <strong>{transferToMarkInTransit.destination}</strong></>
+                              )}
                             </p>
                           </div>
                         ) : (
@@ -8140,10 +8143,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                           <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer</p>
                           <p className="text-sm text-blue-700 mt-1">
-                            • Stock will be subtracted from <strong>{pendingImmediateTransfer.origin}</strong><br/>
-                            {pendingImmediateTransfer.destination === 'ShipBob' 
-                              ? '• ShipBob manages its own inventory'
-                              : `• Stock will be added to <strong>${pendingImmediateTransfer.destination}</strong>`}
+                            • Stock will be subtracted from <strong>{pendingImmediateTransfer.origin}</strong>
+                            {pendingImmediateTransfer.destination === 'ShipBob' && (
+                              <><br/>• ShipBob manages its own inventory</>
+                            )}
+                            {pendingImmediateTransfer.destination !== 'ShipBob' && pendingImmediateTransfer.destination !== 'Distributor' && (
+                              <><br/>• Stock will be added to <strong>{pendingImmediateTransfer.destination}</strong></>
+                            )}
                           </p>
                         </div>
 
@@ -8203,7 +8209,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <p className="text-sm text-yellow-700 mt-1">
                             {selectedTransfer.destination === 'ShipBob' 
                               ? 'ShipBob manages its own inventory'
-                              : `Stock will be added to ${selectedTransfer.destination}`
+                              : <>Stock will be added to <strong>{selectedTransfer.destination}</strong></>
                             }
                           </p>
                         </div>
