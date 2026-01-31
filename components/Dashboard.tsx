@@ -235,6 +235,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [showColumnDefinitions, setShowColumnDefinitions] = useState(false);
+  const [showOverviewColumnDefinitions, setShowOverviewColumnDefinitions] = useState(false);
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
   const [planningFilterProducts, setPlanningFilterProducts] = useState<string[]>([]);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -1716,6 +1717,8 @@ export default function Dashboard({ session }: DashboardProps) {
           setShowNewOrderForm(false);
         } else if (showColumnDefinitions) {
           setShowColumnDefinitions(false);
+        } else if (showOverviewColumnDefinitions) {
+          setShowOverviewColumnDefinitions(false);
         } else if (showPhaseOutModal) {
           setShowPhaseOutModal(false);
         } else if (showTrackerLogs) {
@@ -1731,7 +1734,7 @@ export default function Dashboard({ session }: DashboardProps) {
     showDeliveryConfirm, showCancelConfirm, showCancelTransferConfirm,
     showTrackerConfirm, showTrackerClearConfirm, showTransferDeliveryForm,
     showDeliveryForm, showEditTransferForm, showEditForm, showNewTransferForm,
-    showNewOrderForm, showColumnDefinitions, showPhaseOutModal, showTrackerLogs
+    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showTrackerLogs
   ]);
 
   // Load tracker drafts and last submission info from Google Drive on mount
@@ -2572,6 +2575,20 @@ export default function Dashboard({ session }: DashboardProps) {
     return <span className="ml-1">{order === 'asc' ? '↑' : '↓'}</span>;
   };
 
+  // Column definitions for Overview tab
+  const overviewColumnDefinitions = [
+    { name: 'SKU', description: 'Product SKU identifier' },
+    { name: 'Location Columns', description: 'Available inventory at each warehouse location (LA Office, DTLA WH, ShipBob, China WH).\n\nClick a location card above to filter and see detailed breakdown (On Hand, Available, Committed).' },
+    { name: 'On Hand', description: 'Total physical inventory at the location (includes committed units).\n\nShown when filtering by a specific location.' },
+    { name: 'Available', description: 'Units available for sale = On Hand - Committed.\n\nShown when filtering by a specific location.' },
+    { name: 'Committed', description: 'Units reserved for pending orders.\n\nShown when filtering by a specific location.' },
+    { name: 'In Air', description: 'Units in transit via air freight (Air Express or Air Slow transfers).\n\nOnly shown when filtering by a specific location. These are tracked from app transfers, not Shopify.' },
+    { name: 'In Sea', description: 'Units in transit via sea freight.\n\nOnly shown when filtering by a specific location. These are tracked from app transfers, not Shopify.' },
+    { name: 'In Transit', description: 'Total units in transit (In Air + In Sea) from app transfers.\n\nShown in the main overview when not filtering by location.' },
+    { name: 'In Prod', description: 'Pending quantity from open production orders (POs with status "In Production" or "Partial").\n\nCalculated as: Ordered Qty - Received Qty for each PO.' },
+    { name: 'Total', description: 'Total available inventory across all US locations (LA Office + DTLA WH + ShipBob).\n\nDoes not include China WH or in-transit inventory.' },
+  ];
+
   // Column definitions for LA Planning
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
@@ -3042,10 +3059,55 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
                       </div>
                     </div>
-                    <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setShowOverviewColumnDefinitions(true)}
+                        className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap"
+                      >
+                        Column Info
+                      </button>
+                      <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
                   </div>
                 </div>
+
+                {/* Overview Column Definitions Modal */}
+                {showOverviewColumnDefinitions && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+                      <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Overview Column Definitions</h3>
+                        <button
+                          onClick={() => setShowOverviewColumnDefinitions(false)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="overflow-y-auto max-h-[calc(80vh-80px)]">
+                        <table className="min-w-full">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-28">Column</th>
+                              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Description</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {overviewColumnDefinitions.map((col, index) => (
+                              <tr key={col.name} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-6 py-3 text-sm font-medium text-gray-900 align-top">{col.name}</td>
+                                <td className="px-6 py-3 text-sm text-gray-600 whitespace-pre-line">{col.description}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* List View */}
                 {inventoryViewMode === 'list' && (
