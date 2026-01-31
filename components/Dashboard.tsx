@@ -2119,6 +2119,15 @@ export default function Dashboard({ session }: DashboardProps) {
     return selectedLocations.reduce((sum, loc) => sum + (inventoryItem.locations[loc] || 0), 0);
   };
 
+  // Helper to calculate Total for Overview tab
+  // Total = LA Office + DTLA WH + China WH + In Transit (excludes ShipBob)
+  const calculateOverviewTotal = (item: InventoryByLocation, inTransit: number): number => {
+    const laOffice = item.locations['LA Office'] || 0;
+    const dtlaWh = item.locations['DTLA WH'] || 0;
+    const chinaWh = item.locations['China WH'] || 0;
+    return laOffice + dtlaWh + chinaWh + inTransit;
+  };
+
   // Toggle location selection
   const toggleForecastLocation = (location: string) => {
     if (location === 'all') {
@@ -2586,7 +2595,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Sea', description: 'Units in transit via sea freight.\n\nOnly shown when filtering by a specific location. These are tracked from app transfers, not Shopify.' },
     { name: 'In Transit', description: 'Total units in transit (In Air + In Sea) from app transfers.\n\nShown in the main overview when not filtering by location.' },
     { name: 'In Prod', description: 'Pending quantity from open production orders (POs with status "In Production" or "Partial").\n\nCalculated as: Ordered Qty - Received Qty for each PO.' },
-    { name: 'Total', description: 'Total available inventory across all US locations (LA Office + DTLA WH + ShipBob).\n\nDoes not include China WH or in-transit inventory.' },
+    { name: 'Total', description: 'Total inventory = LA Office + DTLA WH + China WH + In Transit.\n\nExcludes ShipBob (3PL managed separately).' },
   ];
 
   // Column definitions for LA Planning
@@ -3226,9 +3235,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
                                     {poQty > 0 ? poQty.toLocaleString() : '—'}
                                   </td>
-                                  <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                    {item.totalAvailable.toLocaleString()}
-                                  </td>
+                                  {(() => {
+                                    const total = calculateOverviewTotal(item, inTransit);
+                                    return (
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${total <= 0 ? 'text-red-600' : total <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                        {total.toLocaleString()}
+                                      </td>
+                                    );
+                                  })()}
                                 </tr>
                               );
                             })
@@ -3334,7 +3348,17 @@ export default function Dashboard({ session }: DashboardProps) {
                           const items = [...groupedInventory[groupName]].sort((a, b) => 
                             shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
                           );
-                          const groupTotal = items.reduce((sum, item) => sum + item.totalAvailable, 0);
+                          // Calculate group total using the new formula (LA + DTLA + China + In Transit, exclude ShipBob)
+                          const groupTotal = items.reduce((sum, item) => {
+                            let inTransit = 0;
+                            for (const [, skuData] of Object.entries(incomingFromTransfersData)) {
+                              const skuIncoming = skuData[item.sku];
+                              if (skuIncoming) {
+                                inTransit += skuIncoming.inboundAir + skuIncoming.inboundSea;
+                              }
+                            }
+                            return sum + calculateOverviewTotal(item, inTransit);
+                          }, 0);
                           return (
                             <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
                               <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
@@ -3407,9 +3431,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
                                             {poQty > 0 ? poQty.toLocaleString() : '—'}
                                           </td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${item.totalAvailable <= 0 ? 'text-red-600' : item.totalAvailable <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
-                                            {item.totalAvailable.toLocaleString()}
-                                          </td>
+                                          {(() => {
+                                            const total = calculateOverviewTotal(item, inTransit);
+                                            return (
+                                              <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${total <= 0 ? 'text-red-600' : total <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                                {total.toLocaleString()}
+                                              </td>
+                                            );
+                                          })()}
                                         </tr>
                                       );
                                     })}
@@ -3446,18 +3475,26 @@ export default function Dashboard({ session }: DashboardProps) {
                         ]);
                       } else {
                         // All locations view
-                        headers = ['SKU', 'Product', ...inventoryData.locations, 'In Transit', 'In Prod', 'Total Available'];
+                        headers = ['SKU', 'Product', ...inventoryData.locations, 'In Transit', 'In Prod', 'Total'];
                         rows = filteredInventory.map(item => {
-                          const inTransit = (item as any).inTransit || 0;
+                          // Calculate in transit from cache
+                          let inTransit = 0;
+                          for (const [, skuData] of Object.entries(incomingFromTransfersData)) {
+                            const skuIncoming = skuData[item.sku];
+                            if (skuIncoming) {
+                              inTransit += skuIncoming.inboundAir + skuIncoming.inboundSea;
+                            }
+                          }
                           const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
                           const locationQtys = inventoryData.locations.map(loc => item.locations?.[loc] ?? 0);
+                          const total = calculateOverviewTotal(item, inTransit);
                           return [
                             item.sku,
                             `"${item.productTitle.replace(/"/g, '""')}"`,
                             ...locationQtys,
                             inTransit,
                             poQty,
-                            item.totalAvailable
+                            total
                           ];
                         });
                       }
