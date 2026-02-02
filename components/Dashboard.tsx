@@ -199,6 +199,7 @@ export default function Dashboard({ session }: DashboardProps) {
   }>>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const [searchSuggestionIndex, setSearchSuggestionIndex] = useState<number>(-1);
   const searchRef = useRef<HTMLDivElement>(null);
   const [sortBy, setSortBy] = useState<string>('sku');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -213,6 +214,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [inventoryLocationFilter, setInventoryLocationFilter] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
   const [showLocationSearchSuggestions, setShowLocationSearchSuggestions] = useState(false);
+  const [locationSearchSuggestionIndex, setLocationSearchSuggestionIndex] = useState<number>(-1);
   const locationSearchRef = useRef<HTMLDivElement>(null);
   const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'inboundAir' | 'inboundSea'>('sku');
   const [locationSortOrder, setLocationSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -224,6 +226,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastingError, setForecastingError] = useState<string | null>(null);
   const [forecastSearchTerm, setForecastSearchTerm] = useState('');
   const [showForecastSearchSuggestions, setShowForecastSearchSuggestions] = useState(false);
+  const [forecastSearchSuggestionIndex, setForecastSearchSuggestionIndex] = useState<number>(-1);
   const forecastSearchRef = useRef<HTMLDivElement>(null);
   const [forecastSortBy, setForecastSortBy] = useState<'sku' | 'avgDaily7d' | 'avgDaily21d' | 'avgDaily90d' | 'avgDailyLastYear30d'>('avgDaily7d');
   const [forecastSortOrder, setForecastSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -239,6 +242,7 @@ export default function Dashboard({ session }: DashboardProps) {
   // Planning state
   const [planningSearchTerm, setPlanningSearchTerm] = useState('');
   const [showPlanningSearchSuggestions, setShowPlanningSearchSuggestions] = useState(false);
+  const [planningSearchSuggestionIndex, setPlanningSearchSuggestionIndex] = useState<number>(-1);
   const planningSearchRef = useRef<HTMLDivElement>(null);
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
@@ -270,6 +274,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [skuSearchQuery, setSkuSearchQuery] = useState('');
   const [skuSearchSelected, setSkuSearchSelected] = useState(''); // The selected SKU for filtering
   const [showSkuSearchSuggestions, setShowSkuSearchSuggestions] = useState(false);
+  const [skuSearchSuggestionIndex, setSkuSearchSuggestionIndex] = useState<number>(-1);
   const [poDateFilter, setPoDateFilter] = useState<string>('all'); // 'all' | '1m' | '3m' | '6m' | '1y' | '2y'
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
   const skuSearchRef = useRef<HTMLDivElement>(null);
@@ -318,6 +323,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
   const [showTransferSkuSearchSuggestions, setShowTransferSkuSearchSuggestions] = useState(false);
+  const [transferSkuSearchSuggestionIndex, setTransferSkuSearchSuggestionIndex] = useState<number>(-1);
   const transferSkuSearchRef = useRef<HTMLDivElement>(null);
   const [transferSkuSuggestionIndex, setTransferSkuSuggestionIndex] = useState<number | null>(null);
   const [isCreatingTransfer, setIsCreatingTransfer] = useState(false);
@@ -422,6 +428,7 @@ export default function Dashboard({ session }: DashboardProps) {
   });
   const [trackerSearchTerm, setTrackerSearchTerm] = useState('');
   const [showTrackerSearchSuggestions, setShowTrackerSearchSuggestions] = useState(false);
+  const [trackerSearchSuggestionIndex, setTrackerSearchSuggestionIndex] = useState<number>(-1);
   const trackerSearchRef = useRef<HTMLDivElement>(null);
   const [trackerSortBy, setTrackerSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
   const [trackerSortOrder, setTrackerSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -2732,55 +2739,83 @@ export default function Dashboard({ session }: DashboardProps) {
                 </div>
               </div>
               <div className="relative" ref={locationSearchRef}>
-                <input 
-                  type="text" 
-                  placeholder="Search by SKU, product, or variant..." 
-                  value={locationSearchTerm} 
-                  onChange={(e) => {
-                    setLocationSearchTerm(e.target.value);
-                    setShowLocationSearchSuggestions(e.target.value.length >= 2);
-                  }}
-                  onFocus={() => {
-                    if (locationSearchTerm.length >= 2) setShowLocationSearchSuggestions(true);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') setShowLocationSearchSuggestions(false);
-                  }}
-                  className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                />
-                {showLocationSearchSuggestions && locationSearchTerm.length >= 2 && locationData && (() => {
+                {(() => {
                   const term = locationSearchTerm.toLowerCase();
-                  const suggestions = locationData
-                    .filter(item => 
-                      item.sku.toLowerCase().includes(term) ||
-                      item.productTitle.toLowerCase().includes(term) ||
-                      item.variantTitle.toLowerCase().includes(term)
-                    )
-                    .slice(0, 8)
-                    .map(item => ({
-                      sku: item.sku,
-                      display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                    }));
-                  
-                  if (suggestions.length === 0) return null;
+                  const suggestions = showLocationSearchSuggestions && locationSearchTerm.length >= 2 && locationData
+                    ? locationData
+                        .filter(item => 
+                          item.sku.toLowerCase().includes(term) ||
+                          item.productTitle.toLowerCase().includes(term) ||
+                          item.variantTitle.toLowerCase().includes(term)
+                        )
+                        .slice(0, 8)
+                        .map(item => ({
+                          sku: item.sku,
+                          display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                        }))
+                    : [];
                   
                   return (
-                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
-                      {suggestions.map(s => (
-                        <button
-                          key={s.sku}
-                          type="button"
-                          onClick={() => {
-                            setLocationSearchTerm(s.sku);
+                    <>
+                      <input 
+                        type="text" 
+                        placeholder="Search by SKU, product, or variant..." 
+                        value={locationSearchTerm} 
+                        onChange={(e) => {
+                          setLocationSearchTerm(e.target.value);
+                          setShowLocationSearchSuggestions(e.target.value.length >= 2);
+                          setLocationSearchSuggestionIndex(-1);
+                        }}
+                        onFocus={() => {
+                          if (locationSearchTerm.length >= 2) setShowLocationSearchSuggestions(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (!showLocationSearchSuggestions || suggestions.length === 0) {
+                            if (e.key === 'Enter') setShowLocationSearchSuggestions(false);
+                            return;
+                          }
+                          if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            setLocationSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                          } else if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            setLocationSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                          } else if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (locationSearchSuggestionIndex >= 0 && locationSearchSuggestionIndex < suggestions.length) {
+                              setLocationSearchTerm(suggestions[locationSearchSuggestionIndex].sku);
+                            }
                             setShowLocationSearchSuggestions(false);
-                          }}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                        >
-                          <span className="font-mono font-medium">{s.sku}</span>
-                          <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
-                        </button>
-                      ))}
-                    </div>
+                            setLocationSearchSuggestionIndex(-1);
+                          } else if (e.key === 'Escape') {
+                            setShowLocationSearchSuggestions(false);
+                            setLocationSearchSuggestionIndex(-1);
+                          }
+                        }}
+                        className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      />
+                      {suggestions.length > 0 && (
+                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                          {suggestions.map((s, idx) => (
+                            <button
+                              key={s.sku}
+                              type="button"
+                              onClick={() => {
+                                setLocationSearchTerm(s.sku);
+                                setShowLocationSearchSuggestions(false);
+                                setLocationSearchSuggestionIndex(-1);
+                              }}
+                              className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                idx === locationSearchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                              }`}
+                            >
+                              <span className="font-mono font-medium">{s.sku}</span>
+                              <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
               </div>
@@ -3162,55 +3197,83 @@ export default function Dashboard({ session }: DashboardProps) {
                         Column Info
                       </button>
                       <div className="relative" ref={searchRef}>
-                        <input 
-                          type="text" 
-                          placeholder="Search by SKU, product, or variant..." 
-                          value={searchTerm} 
-                          onChange={(e) => {
-                            setSearchTerm(e.target.value);
-                            setShowSearchSuggestions(e.target.value.length >= 2);
-                          }}
-                          onFocus={() => {
-                            if (searchTerm.length >= 2) setShowSearchSuggestions(true);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') setShowSearchSuggestions(false);
-                          }}
-                          className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                        />
-                        {showSearchSuggestions && searchTerm.length >= 2 && inventoryData?.inventory && (() => {
+                        {(() => {
                           const term = searchTerm.toLowerCase();
-                          const suggestions = inventoryData.inventory
-                            .filter(item => 
-                              item.sku.toLowerCase().includes(term) ||
-                              item.productTitle.toLowerCase().includes(term) ||
-                              item.variantTitle.toLowerCase().includes(term)
-                            )
-                            .slice(0, 8)
-                            .map(item => ({
-                              sku: item.sku,
-                              display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                            }));
-                          
-                          if (suggestions.length === 0) return null;
+                          const suggestions = showSearchSuggestions && searchTerm.length >= 2 && inventoryData?.inventory
+                            ? inventoryData.inventory
+                                .filter(item => 
+                                  item.sku.toLowerCase().includes(term) ||
+                                  item.productTitle.toLowerCase().includes(term) ||
+                                  item.variantTitle.toLowerCase().includes(term)
+                                )
+                                .slice(0, 8)
+                                .map(item => ({
+                                  sku: item.sku,
+                                  display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                                }))
+                            : [];
                           
                           return (
-                            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
-                              {suggestions.map(s => (
-                                <button
-                                  key={s.sku}
-                                  type="button"
-                                  onClick={() => {
-                                    setSearchTerm(s.sku);
+                            <>
+                              <input 
+                                type="text" 
+                                placeholder="Search by SKU, product, or variant..." 
+                                value={searchTerm} 
+                                onChange={(e) => {
+                                  setSearchTerm(e.target.value);
+                                  setShowSearchSuggestions(e.target.value.length >= 2);
+                                  setSearchSuggestionIndex(-1);
+                                }}
+                                onFocus={() => {
+                                  if (searchTerm.length >= 2) setShowSearchSuggestions(true);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (!showSearchSuggestions || suggestions.length === 0) {
+                                    if (e.key === 'Enter') setShowSearchSuggestions(false);
+                                    return;
+                                  }
+                                  if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    setSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                                  } else if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    setSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                                  } else if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (searchSuggestionIndex >= 0 && searchSuggestionIndex < suggestions.length) {
+                                      setSearchTerm(suggestions[searchSuggestionIndex].sku);
+                                    }
                                     setShowSearchSuggestions(false);
-                                  }}
-                                  className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                                >
-                                  <span className="font-mono font-medium">{s.sku}</span>
-                                  <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
-                                </button>
-                              ))}
-                            </div>
+                                    setSearchSuggestionIndex(-1);
+                                  } else if (e.key === 'Escape') {
+                                    setShowSearchSuggestions(false);
+                                    setSearchSuggestionIndex(-1);
+                                  }
+                                }}
+                                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                              />
+                              {suggestions.length > 0 && (
+                                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                                  {suggestions.map((s, idx) => (
+                                    <button
+                                      key={s.sku}
+                                      type="button"
+                                      onClick={() => {
+                                        setSearchTerm(s.sku);
+                                        setShowSearchSuggestions(false);
+                                        setSearchSuggestionIndex(-1);
+                                      }}
+                                      className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                        idx === searchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                                      }`}
+                                    >
+                                      <span className="font-mono font-medium">{s.sku}</span>
+                                      <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
                           );
                         })()}
                       </div>
@@ -3837,55 +3900,83 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
                     </div>
                     <div className="relative" ref={forecastSearchRef}>
-                      <input 
-                        type="text" 
-                        placeholder="Search by SKU, product, or variant..." 
-                        value={forecastSearchTerm} 
-                        onChange={(e) => {
-                          setForecastSearchTerm(e.target.value);
-                          setShowForecastSearchSuggestions(e.target.value.length >= 2);
-                        }}
-                        onFocus={() => {
-                          if (forecastSearchTerm.length >= 2) setShowForecastSearchSuggestions(true);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') setShowForecastSearchSuggestions(false);
-                        }}
-                        className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      />
-                      {showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
+                      {(() => {
                         const term = forecastSearchTerm.toLowerCase();
-                        const suggestions = inventoryData.inventory
-                          .filter(item => 
-                            item.sku.toLowerCase().includes(term) ||
-                            item.productTitle.toLowerCase().includes(term) ||
-                            item.variantTitle.toLowerCase().includes(term)
-                          )
-                          .slice(0, 8)
-                          .map(item => ({
-                            sku: item.sku,
-                            display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                          }));
-                        
-                        if (suggestions.length === 0) return null;
+                        const suggestions = showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && inventoryData?.inventory
+                          ? inventoryData.inventory
+                              .filter(item => 
+                                item.sku.toLowerCase().includes(term) ||
+                                item.productTitle.toLowerCase().includes(term) ||
+                                item.variantTitle.toLowerCase().includes(term)
+                              )
+                              .slice(0, 8)
+                              .map(item => ({
+                                sku: item.sku,
+                                display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                              }))
+                          : [];
                         
                         return (
-                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
-                            {suggestions.map(s => (
-                              <button
-                                key={s.sku}
-                                type="button"
-                                onClick={() => {
-                                  setForecastSearchTerm(s.sku);
+                          <>
+                            <input 
+                              type="text" 
+                              placeholder="Search by SKU, product, or variant..." 
+                              value={forecastSearchTerm} 
+                              onChange={(e) => {
+                                setForecastSearchTerm(e.target.value);
+                                setShowForecastSearchSuggestions(e.target.value.length >= 2);
+                                setForecastSearchSuggestionIndex(-1);
+                              }}
+                              onFocus={() => {
+                                if (forecastSearchTerm.length >= 2) setShowForecastSearchSuggestions(true);
+                              }}
+                              onKeyDown={(e) => {
+                                if (!showForecastSearchSuggestions || suggestions.length === 0) {
+                                  if (e.key === 'Enter') setShowForecastSearchSuggestions(false);
+                                  return;
+                                }
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setForecastSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setForecastSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (forecastSearchSuggestionIndex >= 0 && forecastSearchSuggestionIndex < suggestions.length) {
+                                    setForecastSearchTerm(suggestions[forecastSearchSuggestionIndex].sku);
+                                  }
                                   setShowForecastSearchSuggestions(false);
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                              >
-                                <span className="font-mono font-medium">{s.sku}</span>
-                                <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
-                              </button>
-                            ))}
-                          </div>
+                                  setForecastSearchSuggestionIndex(-1);
+                                } else if (e.key === 'Escape') {
+                                  setShowForecastSearchSuggestions(false);
+                                  setForecastSearchSuggestionIndex(-1);
+                                }
+                              }}
+                              className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            />
+                            {suggestions.length > 0 && (
+                              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                                {suggestions.map((s, idx) => (
+                                  <button
+                                    key={s.sku}
+                                    type="button"
+                                    onClick={() => {
+                                      setForecastSearchTerm(s.sku);
+                                      setShowForecastSearchSuggestions(false);
+                                      setForecastSearchSuggestionIndex(-1);
+                                    }}
+                                    className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                      idx === forecastSearchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                                    }`}
+                                  >
+                                    <span className="font-mono font-medium">{s.sku}</span>
+                                    <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
@@ -4883,55 +4974,83 @@ export default function Dashboard({ session }: DashboardProps) {
                               Column Info
                             </button>
                             <div className="relative" ref={planningSearchRef}>
-                              <input 
-                                type="text" 
-                                placeholder="Search by SKU, product, or variant..." 
-                                value={planningSearchTerm} 
-                                onChange={(e) => {
-                                  setPlanningSearchTerm(e.target.value);
-                                  setShowPlanningSearchSuggestions(e.target.value.length >= 2);
-                                }}
-                                onFocus={() => {
-                                  if (planningSearchTerm.length >= 2) setShowPlanningSearchSuggestions(true);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') setShowPlanningSearchSuggestions(false);
-                                }}
-                                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                              />
-                              {showPlanningSearchSuggestions && planningSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
+                              {(() => {
                                 const term = planningSearchTerm.toLowerCase();
-                                const suggestions = inventoryData.inventory
-                                  .filter(item => 
-                                    item.sku.toLowerCase().includes(term) ||
-                                    item.productTitle.toLowerCase().includes(term) ||
-                                    item.variantTitle.toLowerCase().includes(term)
-                                  )
-                                  .slice(0, 8)
-                                  .map(item => ({
-                                    sku: item.sku,
-                                    display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                                  }));
-                                
-                                if (suggestions.length === 0) return null;
+                                const suggestions = showPlanningSearchSuggestions && planningSearchTerm.length >= 2 && inventoryData?.inventory
+                                  ? inventoryData.inventory
+                                      .filter(item => 
+                                        item.sku.toLowerCase().includes(term) ||
+                                        item.productTitle.toLowerCase().includes(term) ||
+                                        item.variantTitle.toLowerCase().includes(term)
+                                      )
+                                      .slice(0, 8)
+                                      .map(item => ({
+                                        sku: item.sku,
+                                        display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                                      }))
+                                  : [];
                                 
                                 return (
-                                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
-                                    {suggestions.map(s => (
-                                      <button
-                                        key={s.sku}
-                                        type="button"
-                                        onClick={() => {
-                                          setPlanningSearchTerm(s.sku);
+                                  <>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Search by SKU, product, or variant..." 
+                                      value={planningSearchTerm} 
+                                      onChange={(e) => {
+                                        setPlanningSearchTerm(e.target.value);
+                                        setShowPlanningSearchSuggestions(e.target.value.length >= 2);
+                                        setPlanningSearchSuggestionIndex(-1);
+                                      }}
+                                      onFocus={() => {
+                                        if (planningSearchTerm.length >= 2) setShowPlanningSearchSuggestions(true);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (!showPlanningSearchSuggestions || suggestions.length === 0) {
+                                          if (e.key === 'Enter') setShowPlanningSearchSuggestions(false);
+                                          return;
+                                        }
+                                        if (e.key === 'ArrowDown') {
+                                          e.preventDefault();
+                                          setPlanningSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                                        } else if (e.key === 'ArrowUp') {
+                                          e.preventDefault();
+                                          setPlanningSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                                        } else if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          if (planningSearchSuggestionIndex >= 0 && planningSearchSuggestionIndex < suggestions.length) {
+                                            setPlanningSearchTerm(suggestions[planningSearchSuggestionIndex].sku);
+                                          }
                                           setShowPlanningSearchSuggestions(false);
-                                        }}
-                                        className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                                      >
-                                        <span className="font-mono font-medium">{s.sku}</span>
-                                        <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
-                                      </button>
-                                    ))}
-                                  </div>
+                                          setPlanningSearchSuggestionIndex(-1);
+                                        } else if (e.key === 'Escape') {
+                                          setShowPlanningSearchSuggestions(false);
+                                          setPlanningSearchSuggestionIndex(-1);
+                                        }
+                                      }}
+                                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                                    />
+                                    {suggestions.length > 0 && (
+                                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                                        {suggestions.map((s, idx) => (
+                                          <button
+                                            key={s.sku}
+                                            type="button"
+                                            onClick={() => {
+                                              setPlanningSearchTerm(s.sku);
+                                              setShowPlanningSearchSuggestions(false);
+                                              setPlanningSearchSuggestionIndex(-1);
+                                            }}
+                                            className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                              idx === planningSearchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                                            }`}
+                                          >
+                                            <span className="font-mono font-medium">{s.sku}</span>
+                                            <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
                                 );
                               })()}
                             </div>
@@ -5401,55 +5520,83 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="flex flex-col">
                             <span className="text-[10px] text-gray-400 mb-1">Search</span>
                             <div className="relative" ref={trackerSearchRef}>
-                              <input 
-                                type="text" 
-                                placeholder="Search by SKU, product, or variant..." 
-                                value={trackerSearchTerm} 
-                                onChange={(e) => {
-                                  setTrackerSearchTerm(e.target.value);
-                                  setShowTrackerSearchSuggestions(e.target.value.length >= 2);
-                                }}
-                                onFocus={() => {
-                                  if (trackerSearchTerm.length >= 2) setShowTrackerSearchSuggestions(true);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') setShowTrackerSearchSuggestions(false);
-                                }}
-                                className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                              />
-                              {showTrackerSearchSuggestions && trackerSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
+                              {(() => {
                                 const term = trackerSearchTerm.toLowerCase();
-                                const suggestions = inventoryData.inventory
-                                  .filter(item => 
-                                    item.sku.toLowerCase().includes(term) ||
-                                    item.productTitle.toLowerCase().includes(term) ||
-                                    item.variantTitle.toLowerCase().includes(term)
-                                  )
-                                  .slice(0, 8)
-                                  .map(item => ({
-                                    sku: item.sku,
-                                    display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                                  }));
-                                
-                                if (suggestions.length === 0) return null;
+                                const suggestions = showTrackerSearchSuggestions && trackerSearchTerm.length >= 2 && inventoryData?.inventory
+                                  ? inventoryData.inventory
+                                      .filter(item => 
+                                        item.sku.toLowerCase().includes(term) ||
+                                        item.productTitle.toLowerCase().includes(term) ||
+                                        item.variantTitle.toLowerCase().includes(term)
+                                      )
+                                      .slice(0, 8)
+                                      .map(item => ({
+                                        sku: item.sku,
+                                        display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                                      }))
+                                  : [];
                                 
                                 return (
-                                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
-                                    {suggestions.map(s => (
-                                      <button
-                                        key={s.sku}
-                                        type="button"
-                                        onClick={() => {
-                                          setTrackerSearchTerm(s.sku);
+                                  <>
+                                    <input 
+                                      type="text" 
+                                      placeholder="Search by SKU, product, or variant..." 
+                                      value={trackerSearchTerm} 
+                                      onChange={(e) => {
+                                        setTrackerSearchTerm(e.target.value);
+                                        setShowTrackerSearchSuggestions(e.target.value.length >= 2);
+                                        setTrackerSearchSuggestionIndex(-1);
+                                      }}
+                                      onFocus={() => {
+                                        if (trackerSearchTerm.length >= 2) setShowTrackerSearchSuggestions(true);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (!showTrackerSearchSuggestions || suggestions.length === 0) {
+                                          if (e.key === 'Enter') setShowTrackerSearchSuggestions(false);
+                                          return;
+                                        }
+                                        if (e.key === 'ArrowDown') {
+                                          e.preventDefault();
+                                          setTrackerSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                                        } else if (e.key === 'ArrowUp') {
+                                          e.preventDefault();
+                                          setTrackerSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                                        } else if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          if (trackerSearchSuggestionIndex >= 0 && trackerSearchSuggestionIndex < suggestions.length) {
+                                            setTrackerSearchTerm(suggestions[trackerSearchSuggestionIndex].sku);
+                                          }
                                           setShowTrackerSearchSuggestions(false);
-                                        }}
-                                        className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                                      >
-                                        <span className="font-mono font-medium">{s.sku}</span>
-                                        <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
-                                      </button>
-                                    ))}
-                                  </div>
+                                          setTrackerSearchSuggestionIndex(-1);
+                                        } else if (e.key === 'Escape') {
+                                          setShowTrackerSearchSuggestions(false);
+                                          setTrackerSearchSuggestionIndex(-1);
+                                        }
+                                      }}
+                                      className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                                    />
+                                    {suggestions.length > 0 && (
+                                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                                        {suggestions.map((s, idx) => (
+                                          <button
+                                            key={s.sku}
+                                            type="button"
+                                            onClick={() => {
+                                              setTrackerSearchTerm(s.sku);
+                                              setShowTrackerSearchSuggestions(false);
+                                              setTrackerSearchSuggestionIndex(-1);
+                                            }}
+                                            className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                              idx === trackerSearchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                                            }`}
+                                          >
+                                            <span className="font-mono font-medium">{s.sku}</span>
+                                            <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
                                 );
                               })()}
                             </div>
@@ -6290,63 +6437,93 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="flex items-center gap-2 relative" ref={skuSearchRef}>
                     <label className="text-sm text-gray-600 whitespace-nowrap">Search:</label>
                     <div className="relative">
-                      <input
-                        type="text"
-                        value={skuSearchQuery}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setSkuSearchQuery(value);
-                          setShowSkuSearchSuggestions(value.length >= 2);
-                          if (skuSearchSelected && value.toUpperCase() !== skuSearchSelected) {
-                            setSkuSearchSelected('');
-                          }
-                        }}
-                        onFocus={() => {
-                          if (skuSearchQuery.length >= 2) {
-                            setShowSkuSearchSuggestions(true);
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') setShowSkuSearchSuggestions(false);
-                        }}
-                        placeholder="SKU, product, or variant..."
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
-                      />
-                      {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && inventoryData?.inventory && (() => {
+                      {(() => {
                         const term = skuSearchQuery.toLowerCase();
-                        const suggestions = inventoryData.inventory
-                          .filter(item => 
-                            item.sku.toLowerCase().includes(term) ||
-                            item.productTitle.toLowerCase().includes(term) ||
-                            item.variantTitle.toLowerCase().includes(term)
-                          )
-                          .slice(0, 8)
-                          .map(item => ({
-                            sku: item.sku,
-                            display: `${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                          }));
-                        
-                        if (suggestions.length === 0) return null;
+                        const suggestions = showSkuSearchSuggestions && skuSearchQuery.length >= 2 && inventoryData?.inventory
+                          ? inventoryData.inventory
+                              .filter(item => 
+                                item.sku.toLowerCase().includes(term) ||
+                                item.productTitle.toLowerCase().includes(term) ||
+                                item.variantTitle.toLowerCase().includes(term)
+                              )
+                              .slice(0, 8)
+                              .map(item => ({
+                                sku: item.sku,
+                                display: `${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                              }))
+                          : [];
                         
                         return (
-                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
-                            {suggestions.map(s => (
-                              <button
-                                key={s.sku}
-                                type="button"
-                                onClick={() => {
-                                  setSkuSearchQuery(s.sku);
-                                  setSkuSearchSelected(s.sku);
+                          <>
+                            <input
+                              type="text"
+                              value={skuSearchQuery}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setSkuSearchQuery(value);
+                                setShowSkuSearchSuggestions(value.length >= 2);
+                                setSkuSearchSuggestionIndex(-1);
+                                if (skuSearchSelected && value.toUpperCase() !== skuSearchSelected) {
+                                  setSkuSearchSelected('');
+                                }
+                              }}
+                              onFocus={() => {
+                                if (skuSearchQuery.length >= 2) {
+                                  setShowSkuSearchSuggestions(true);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (!showSkuSearchSuggestions || suggestions.length === 0) {
+                                  if (e.key === 'Enter') setShowSkuSearchSuggestions(false);
+                                  return;
+                                }
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setSkuSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setSkuSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (skuSearchSuggestionIndex >= 0 && skuSearchSuggestionIndex < suggestions.length) {
+                                    setSkuSearchQuery(suggestions[skuSearchSuggestionIndex].sku);
+                                    setSkuSearchSelected(suggestions[skuSearchSuggestionIndex].sku);
+                                    setProductionFilterStatus('all');
+                                  }
                                   setShowSkuSearchSuggestions(false);
-                                  setProductionFilterStatus('all');
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                              >
-                                <span className="font-mono font-medium">{s.sku}</span>
-                                <span className="text-gray-500 ml-2 text-xs truncate block">{s.display}</span>
-                              </button>
-                            ))}
-                          </div>
+                                  setSkuSearchSuggestionIndex(-1);
+                                } else if (e.key === 'Escape') {
+                                  setShowSkuSearchSuggestions(false);
+                                  setSkuSearchSuggestionIndex(-1);
+                                }
+                              }}
+                              placeholder="SKU, product, or variant..."
+                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
+                            />
+                            {suggestions.length > 0 && (
+                              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
+                                {suggestions.map((s, idx) => (
+                                  <button
+                                    key={s.sku}
+                                    type="button"
+                                    onClick={() => {
+                                      setSkuSearchQuery(s.sku);
+                                      setSkuSearchSelected(s.sku);
+                                      setShowSkuSearchSuggestions(false);
+                                      setSkuSearchSuggestionIndex(-1);
+                                      setProductionFilterStatus('all');
+                                    }}
+                                    className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                      idx === skuSearchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                                    }`}
+                                  >
+                                    <span className="font-mono font-medium">{s.sku}</span>
+                                    <span className="text-gray-500 ml-2 text-xs truncate block">{s.display}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
@@ -6397,63 +6574,93 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="flex items-center gap-2 relative" ref={transferSkuSearchRef}>
                     <label className="text-sm text-gray-600 whitespace-nowrap">Search:</label>
                     <div className="relative">
-                      <input
-                        type="text"
-                        value={transferSkuSearchQuery}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setTransferSkuSearchQuery(value);
-                          setShowTransferSkuSearchSuggestions(value.length >= 2);
-                          if (transferSkuSearchSelected && value.toUpperCase() !== transferSkuSearchSelected) {
-                            setTransferSkuSearchSelected('');
-                          }
-                        }}
-                        onFocus={() => {
-                          if (transferSkuSearchQuery.length >= 2) {
-                            setShowTransferSkuSearchSuggestions(true);
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') setShowTransferSkuSearchSuggestions(false);
-                        }}
-                        placeholder="SKU, product, or variant..."
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
-                      />
-                      {showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && inventoryData?.inventory && (() => {
+                      {(() => {
                         const term = transferSkuSearchQuery.toLowerCase();
-                        const suggestions = inventoryData.inventory
-                          .filter(item => 
-                            item.sku.toLowerCase().includes(term) ||
-                            item.productTitle.toLowerCase().includes(term) ||
-                            item.variantTitle.toLowerCase().includes(term)
-                          )
-                          .slice(0, 8)
-                          .map(item => ({
-                            sku: item.sku,
-                            display: `${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
-                          }));
-                        
-                        if (suggestions.length === 0) return null;
+                        const suggestions = showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && inventoryData?.inventory
+                          ? inventoryData.inventory
+                              .filter(item => 
+                                item.sku.toLowerCase().includes(term) ||
+                                item.productTitle.toLowerCase().includes(term) ||
+                                item.variantTitle.toLowerCase().includes(term)
+                              )
+                              .slice(0, 8)
+                              .map(item => ({
+                                sku: item.sku,
+                                display: `${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                              }))
+                          : [];
                         
                         return (
-                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
-                            {suggestions.map(s => (
-                              <button
-                                key={s.sku}
-                                type="button"
-                                onClick={() => {
-                                  setTransferSkuSearchQuery(s.sku);
-                                  setTransferSkuSearchSelected(s.sku);
+                          <>
+                            <input
+                              type="text"
+                              value={transferSkuSearchQuery}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setTransferSkuSearchQuery(value);
+                                setShowTransferSkuSearchSuggestions(value.length >= 2);
+                                setTransferSkuSearchSuggestionIndex(-1);
+                                if (transferSkuSearchSelected && value.toUpperCase() !== transferSkuSearchSelected) {
+                                  setTransferSkuSearchSelected('');
+                                }
+                              }}
+                              onFocus={() => {
+                                if (transferSkuSearchQuery.length >= 2) {
+                                  setShowTransferSkuSearchSuggestions(true);
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (!showTransferSkuSearchSuggestions || suggestions.length === 0) {
+                                  if (e.key === 'Enter') setShowTransferSkuSearchSuggestions(false);
+                                  return;
+                                }
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setTransferSkuSearchSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : 0);
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setTransferSkuSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
+                                } else if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (transferSkuSearchSuggestionIndex >= 0 && transferSkuSearchSuggestionIndex < suggestions.length) {
+                                    setTransferSkuSearchQuery(suggestions[transferSkuSearchSuggestionIndex].sku);
+                                    setTransferSkuSearchSelected(suggestions[transferSkuSearchSuggestionIndex].sku);
+                                    setTransferFilterStatus('all');
+                                  }
                                   setShowTransferSkuSearchSuggestions(false);
-                                  setTransferFilterStatus('all');
-                                }}
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
-                              >
-                                <span className="font-mono font-medium">{s.sku}</span>
-                                <span className="text-gray-500 ml-2 text-xs truncate block">{s.display}</span>
-                              </button>
-                            ))}
-                          </div>
+                                  setTransferSkuSearchSuggestionIndex(-1);
+                                } else if (e.key === 'Escape') {
+                                  setShowTransferSkuSearchSuggestions(false);
+                                  setTransferSkuSearchSuggestionIndex(-1);
+                                }
+                              }}
+                              placeholder="SKU, product, or variant..."
+                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
+                            />
+                            {suggestions.length > 0 && (
+                              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
+                                {suggestions.map((s, idx) => (
+                                  <button
+                                    key={s.sku}
+                                    type="button"
+                                    onClick={() => {
+                                      setTransferSkuSearchQuery(s.sku);
+                                      setTransferSkuSearchSelected(s.sku);
+                                      setShowTransferSkuSearchSuggestions(false);
+                                      setTransferSkuSearchSuggestionIndex(-1);
+                                      setTransferFilterStatus('all');
+                                    }}
+                                    className={`w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 ${
+                                      idx === transferSkuSearchSuggestionIndex ? 'bg-blue-50 text-blue-700' : 'hover:bg-blue-50 hover:text-blue-700'
+                                    }`}
+                                  >
+                                    <span className="font-mono font-medium">{s.sku}</span>
+                                    <span className="text-gray-500 ml-2 text-xs truncate block">{s.display}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
