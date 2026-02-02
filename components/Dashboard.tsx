@@ -198,6 +198,8 @@ export default function Dashboard({ session }: DashboardProps) {
     seaTransfers: Array<{ transferId: string; quantity: number; note: string | null; createdAt: string; expectedArrivalAt: string | null }>;
   }>>>({});
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const [sortBy, setSortBy] = useState<string>('sku');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterLowStock, setFilterLowStock] = useState(false);
@@ -210,6 +212,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [inventoryLocationFilter, setInventoryLocationFilter] = useState<string | null>(null);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
+  const [showLocationSearchSuggestions, setShowLocationSearchSuggestions] = useState(false);
+  const locationSearchRef = useRef<HTMLDivElement>(null);
   const [locationSortBy, setLocationSortBy] = useState<'sku' | 'onHand' | 'available' | 'committed' | 'inboundAir' | 'inboundSea'>('sku');
   const [locationSortOrder, setLocationSortOrder] = useState<'asc' | 'desc'>('asc');
   const [locationViewMode, setLocationViewMode] = useState<'list' | 'grouped'>('grouped');
@@ -219,6 +223,8 @@ export default function Dashboard({ session }: DashboardProps) {
   const [forecastingLoading, setForecastingLoading] = useState(false);
   const [forecastingError, setForecastingError] = useState<string | null>(null);
   const [forecastSearchTerm, setForecastSearchTerm] = useState('');
+  const [showForecastSearchSuggestions, setShowForecastSearchSuggestions] = useState(false);
+  const forecastSearchRef = useRef<HTMLDivElement>(null);
   const [forecastSortBy, setForecastSortBy] = useState<'sku' | 'avgDaily7d' | 'avgDaily21d' | 'avgDaily90d' | 'avgDailyLastYear30d'>('avgDaily7d');
   const [forecastSortOrder, setForecastSortOrder] = useState<'asc' | 'desc'>('desc');
   const [forecastViewMode, setForecastViewMode] = useState<'velocity' | 'daysLeft' | 'runOut'>('velocity');
@@ -232,6 +238,8 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Planning state
   const [planningSearchTerm, setPlanningSearchTerm] = useState('');
+  const [showPlanningSearchSuggestions, setShowPlanningSearchSuggestions] = useState(false);
+  const planningSearchRef = useRef<HTMLDivElement>(null);
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
   const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
   const [showColumnDefinitions, setShowColumnDefinitions] = useState(false);
@@ -413,6 +421,8 @@ export default function Dashboard({ session }: DashboardProps) {
     'China WH': {},
   });
   const [trackerSearchTerm, setTrackerSearchTerm] = useState('');
+  const [showTrackerSearchSuggestions, setShowTrackerSearchSuggestions] = useState(false);
+  const trackerSearchRef = useRef<HTMLDivElement>(null);
   const [trackerSortBy, setTrackerSortBy] = useState<'sku' | 'onHand' | 'counted' | 'difference'>('sku');
   const [trackerSortOrder, setTrackerSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showTrackerConfirm, setShowTrackerConfirm] = useState(false);
@@ -1680,6 +1690,29 @@ export default function Dashboard({ session }: DashboardProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showTrackerProductDropdown]);
 
+  // Close search suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSearchSuggestions(false);
+      }
+      if (locationSearchRef.current && !locationSearchRef.current.contains(event.target as Node)) {
+        setShowLocationSearchSuggestions(false);
+      }
+      if (forecastSearchRef.current && !forecastSearchRef.current.contains(event.target as Node)) {
+        setShowForecastSearchSuggestions(false);
+      }
+      if (planningSearchRef.current && !planningSearchRef.current.contains(event.target as Node)) {
+        setShowPlanningSearchSuggestions(false);
+      }
+      if (trackerSearchRef.current && !trackerSearchRef.current.contains(event.target as Node)) {
+        setShowTrackerSearchSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Global ESC key handler to close modals
   useEffect(() => {
     const handleEscKey = (event: KeyboardEvent) => {
@@ -2281,7 +2314,8 @@ export default function Dashboard({ session }: DashboardProps) {
       
       const matchesSearch = !searchTerm || 
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.productTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
+        (item.productTitle || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.variantTitle || '').toLowerCase().includes(searchTerm.toLowerCase());
       if (filterOutOfStock && item.totalAvailable > 0) return false;
       if (filterLowStock && (item.totalAvailable <= 0 || item.totalAvailable > 10)) return false;
       // Filter by product group (multi-select)
@@ -2362,7 +2396,8 @@ export default function Dashboard({ session }: DashboardProps) {
           const activeSearchTerm = inventoryLocationFilter ? searchTerm : locationSearchTerm;
           const matchesSearch = !activeSearchTerm || 
             item.sku.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
-            item.productTitle.toLowerCase().includes(activeSearchTerm.toLowerCase());
+            item.productTitle.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
+            item.variantTitle.toLowerCase().includes(activeSearchTerm.toLowerCase());
           if (filterOutOfStock && item.available > 0) return false;
           if (filterLowStock && (item.available <= 0 || item.available > 10)) return false;
           // Filter by product group (multi-select)
@@ -2395,7 +2430,8 @@ export default function Dashboard({ session }: DashboardProps) {
       
       const matchesSearch = !forecastSearchTerm || 
         item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
-        item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase());
+        item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
+        (item.variantTitle || '').toLowerCase().includes(forecastSearchTerm.toLowerCase());
       if (forecastFilterCategory !== 'all') {
         const category = findProductCategory(item.sku, item.productName);
         if (!category || category.name !== forecastFilterCategory) return false;
@@ -2696,8 +2732,56 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 </div>
               </div>
-              <input type="text" placeholder="Search by SKU or product..." value={locationSearchTerm} onChange={(e) => setLocationSearchTerm(e.target.value)}
-                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="relative" ref={locationSearchRef}>
+                <input 
+                  type="text" 
+                  placeholder="Search by SKU, product, or variant..." 
+                  value={locationSearchTerm} 
+                  onChange={(e) => {
+                    setLocationSearchTerm(e.target.value);
+                    setShowLocationSearchSuggestions(e.target.value.length >= 2);
+                  }}
+                  onFocus={() => {
+                    if (locationSearchTerm.length >= 2) setShowLocationSearchSuggestions(true);
+                  }}
+                  className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                />
+                {showLocationSearchSuggestions && locationSearchTerm.length >= 2 && locationData && (() => {
+                  const term = locationSearchTerm.toLowerCase();
+                  const suggestions = locationData
+                    .filter(item => 
+                      item.sku.toLowerCase().includes(term) ||
+                      item.productTitle.toLowerCase().includes(term) ||
+                      item.variantTitle.toLowerCase().includes(term)
+                    )
+                    .slice(0, 8)
+                    .map(item => ({
+                      sku: item.sku,
+                      display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                    }));
+                  
+                  if (suggestions.length === 0) return null;
+                  
+                  return (
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                      {suggestions.map(s => (
+                        <button
+                          key={s.sku}
+                          type="button"
+                          onClick={() => {
+                            setLocationSearchTerm(s.sku);
+                            setShowLocationSearchSuggestions(false);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
+                        >
+                          <span className="font-mono font-medium">{s.sku}</span>
+                          <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           </div>
 
@@ -3075,8 +3159,56 @@ export default function Dashboard({ session }: DashboardProps) {
                       >
                         Column Info
                       </button>
-                      <input type="text" placeholder="Search by SKU or product..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <div className="relative" ref={searchRef}>
+                        <input 
+                          type="text" 
+                          placeholder="Search by SKU, product, or variant..." 
+                          value={searchTerm} 
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setShowSearchSuggestions(e.target.value.length >= 2);
+                          }}
+                          onFocus={() => {
+                            if (searchTerm.length >= 2) setShowSearchSuggestions(true);
+                          }}
+                          className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                        />
+                        {showSearchSuggestions && searchTerm.length >= 2 && inventoryData?.items && (() => {
+                          const term = searchTerm.toLowerCase();
+                          const suggestions = inventoryData.items
+                            .filter(item => 
+                              item.sku.toLowerCase().includes(term) ||
+                              item.productTitle.toLowerCase().includes(term) ||
+                              item.variantTitle.toLowerCase().includes(term)
+                            )
+                            .slice(0, 8)
+                            .map(item => ({
+                              sku: item.sku,
+                              display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                            }));
+                          
+                          if (suggestions.length === 0) return null;
+                          
+                          return (
+                            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                              {suggestions.map(s => (
+                                <button
+                                  key={s.sku}
+                                  type="button"
+                                  onClick={() => {
+                                    setSearchTerm(s.sku);
+                                    setShowSearchSuggestions(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
+                                >
+                                  <span className="font-mono font-medium">{s.sku}</span>
+                                  <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3699,8 +3831,56 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
                       )}
                     </div>
-                    <input type="text" placeholder="Search by SKU or product..." value={forecastSearchTerm} onChange={(e) => setForecastSearchTerm(e.target.value)}
-                      className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <div className="relative" ref={forecastSearchRef}>
+                      <input 
+                        type="text" 
+                        placeholder="Search by SKU, product, or variant..." 
+                        value={forecastSearchTerm} 
+                        onChange={(e) => {
+                          setForecastSearchTerm(e.target.value);
+                          setShowForecastSearchSuggestions(e.target.value.length >= 2);
+                        }}
+                        onFocus={() => {
+                          if (forecastSearchTerm.length >= 2) setShowForecastSearchSuggestions(true);
+                        }}
+                        className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      />
+                      {showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && forecastingData?.items && (() => {
+                        const term = forecastSearchTerm.toLowerCase();
+                        const suggestions = forecastingData.items
+                          .filter(item => 
+                            item.sku.toLowerCase().includes(term) ||
+                            item.productName.toLowerCase().includes(term) ||
+                            (item.variantTitle || '').toLowerCase().includes(term)
+                          )
+                          .slice(0, 8)
+                          .map(item => ({
+                            sku: item.sku,
+                            display: `${item.sku} - ${item.productName}${item.variantTitle && item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                          }));
+                        
+                        if (suggestions.length === 0) return null;
+                        
+                        return (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                            {suggestions.map(s => (
+                              <button
+                                key={s.sku}
+                                type="button"
+                                onClick={() => {
+                                  setForecastSearchTerm(s.sku);
+                                  setShowForecastSearchSuggestions(false);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
+                              >
+                                <span className="font-mono font-medium">{s.sku}</span>
+                                <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
 
@@ -4357,7 +4537,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Filter by search term
                       const matchesSearch = !planningSearchTerm || 
                         item.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
-                        item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
+                        item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
+                        (item.variantTitle || '').toLowerCase().includes(planningSearchTerm.toLowerCase());
                       // Filter by product group (multi-select)
                       const itemProductGroup = extractProductModel(item.productTitle, item.sku);
                       const matchesProduct = planningFilterProducts.length === 0 || planningFilterProducts.includes(itemProductGroup);
@@ -4694,8 +4875,56 @@ export default function Dashboard({ session }: DashboardProps) {
                             >
                               Column Info
                             </button>
-                            <input type="text" placeholder="Search by SKU or product..." value={planningSearchTerm} onChange={(e) => setPlanningSearchTerm(e.target.value)}
-                              className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <div className="relative" ref={planningSearchRef}>
+                              <input 
+                                type="text" 
+                                placeholder="Search by SKU, product, or variant..." 
+                                value={planningSearchTerm} 
+                                onChange={(e) => {
+                                  setPlanningSearchTerm(e.target.value);
+                                  setShowPlanningSearchSuggestions(e.target.value.length >= 2);
+                                }}
+                                onFocus={() => {
+                                  if (planningSearchTerm.length >= 2) setShowPlanningSearchSuggestions(true);
+                                }}
+                                className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                              />
+                              {showPlanningSearchSuggestions && planningSearchTerm.length >= 2 && inventoryData?.items && (() => {
+                                const term = planningSearchTerm.toLowerCase();
+                                const suggestions = inventoryData.items
+                                  .filter(item => 
+                                    item.sku.toLowerCase().includes(term) ||
+                                    item.productTitle.toLowerCase().includes(term) ||
+                                    item.variantTitle.toLowerCase().includes(term)
+                                  )
+                                  .slice(0, 8)
+                                  .map(item => ({
+                                    sku: item.sku,
+                                    display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                                  }));
+                                
+                                if (suggestions.length === 0) return null;
+                                
+                                return (
+                                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                                    {suggestions.map(s => (
+                                      <button
+                                        key={s.sku}
+                                        type="button"
+                                        onClick={() => {
+                                          setPlanningSearchTerm(s.sku);
+                                          setShowPlanningSearchSuggestions(false);
+                                        }}
+                                        className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
+                                      >
+                                        <span className="font-mono font-medium">{s.sku}</span>
+                                        <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -4935,7 +5164,8 @@ export default function Dashboard({ session }: DashboardProps) {
                 const filteredData = locationData.filter(item => {
                   const matchesSearch = !trackerSearchTerm || 
                     item.sku.toLowerCase().includes(trackerSearchTerm.toLowerCase()) ||
-                    item.productTitle.toLowerCase().includes(trackerSearchTerm.toLowerCase());
+                    item.productTitle.toLowerCase().includes(trackerSearchTerm.toLowerCase()) ||
+                    (item.variantTitle || '').toLowerCase().includes(trackerSearchTerm.toLowerCase());
                   
                   // Filter by product group
                   const itemProductGroup = extractProductModel(item.productTitle, item.sku);
@@ -5160,13 +5390,56 @@ export default function Dashboard({ session }: DashboardProps) {
                           {/* Search */}
                           <div className="flex flex-col">
                             <span className="text-[10px] text-gray-400 mb-1">Search</span>
-                            <input 
-                              type="text" 
-                              placeholder="Search by SKU or product..." 
-                              value={trackerSearchTerm} 
-                              onChange={(e) => setTrackerSearchTerm(e.target.value)}
-                              className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                            />
+                            <div className="relative" ref={trackerSearchRef}>
+                              <input 
+                                type="text" 
+                                placeholder="Search by SKU, product, or variant..." 
+                                value={trackerSearchTerm} 
+                                onChange={(e) => {
+                                  setTrackerSearchTerm(e.target.value);
+                                  setShowTrackerSearchSuggestions(e.target.value.length >= 2);
+                                }}
+                                onFocus={() => {
+                                  if (trackerSearchTerm.length >= 2) setShowTrackerSearchSuggestions(true);
+                                }}
+                                className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                              />
+                              {showTrackerSearchSuggestions && trackerSearchTerm.length >= 2 && inventoryData?.items && (() => {
+                                const term = trackerSearchTerm.toLowerCase();
+                                const suggestions = inventoryData.items
+                                  .filter(item => 
+                                    item.sku.toLowerCase().includes(term) ||
+                                    item.productTitle.toLowerCase().includes(term) ||
+                                    item.variantTitle.toLowerCase().includes(term)
+                                  )
+                                  .slice(0, 8)
+                                  .map(item => ({
+                                    sku: item.sku,
+                                    display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                                  }));
+                                
+                                if (suggestions.length === 0) return null;
+                                
+                                return (
+                                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
+                                    {suggestions.map(s => (
+                                      <button
+                                        key={s.sku}
+                                        type="button"
+                                        onClick={() => {
+                                          setTrackerSearchTerm(s.sku);
+                                          setShowTrackerSearchSuggestions(false);
+                                        }}
+                                        className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
+                                      >
+                                        <span className="font-mono font-medium">{s.sku}</span>
+                                        <span className="text-gray-500 ml-2 text-xs truncate">{s.display.replace(s.sku + ' - ', '')}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
                           </div>
                         </div>
                       </div>
