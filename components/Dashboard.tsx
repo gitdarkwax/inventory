@@ -6275,16 +6275,16 @@ export default function Dashboard({ session }: DashboardProps) {
                     </select>
                   </div>
                   <div className="flex items-center gap-2 relative" ref={skuSearchRef}>
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Search:</label>
                     <div className="relative">
                       <input
                         type="text"
                         value={skuSearchQuery}
                         onChange={(e) => {
-                          const value = e.target.value.toUpperCase();
+                          const value = e.target.value;
                           setSkuSearchQuery(value);
                           setShowSkuSearchSuggestions(value.length >= 2);
-                          if (skuSearchSelected && value !== skuSearchSelected) {
+                          if (skuSearchSelected && value.toUpperCase() !== skuSearchSelected) {
                             setSkuSearchSelected('');
                           }
                         }}
@@ -6293,33 +6293,41 @@ export default function Dashboard({ session }: DashboardProps) {
                             setShowSkuSearchSuggestions(true);
                           }
                         }}
-                        placeholder="e.g. EC-IP17PM"
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-40 font-mono"
+                        placeholder="SKU, product, or variant..."
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
                       />
-                      {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && (() => {
-                        const matchingSkus = [...new Set(
-                          productionOrders
-                            .flatMap(order => order.items.map(item => item.sku))
-                            .filter(sku => sku.toUpperCase().includes(skuSearchQuery))
-                        )].slice(0, 10);
+                      {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && inventoryData?.items && (() => {
+                        const term = skuSearchQuery.toLowerCase();
+                        const suggestions = inventoryData.items
+                          .filter(item => 
+                            item.sku.toLowerCase().includes(term) ||
+                            item.productTitle.toLowerCase().includes(term) ||
+                            item.variantTitle.toLowerCase().includes(term)
+                          )
+                          .slice(0, 8)
+                          .map(item => ({
+                            sku: item.sku,
+                            display: `${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                          }));
                         
-                        if (matchingSkus.length === 0) return null;
+                        if (suggestions.length === 0) return null;
                         
                         return (
-                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-full max-h-48 overflow-y-auto">
-                            {matchingSkus.map(sku => (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
+                            {suggestions.map(s => (
                               <button
-                                key={sku}
+                                key={s.sku}
                                 type="button"
                                 onClick={() => {
-                                  setSkuSearchQuery(sku);
-                                  setSkuSearchSelected(sku);
+                                  setSkuSearchQuery(s.sku);
+                                  setSkuSearchSelected(s.sku);
                                   setShowSkuSearchSuggestions(false);
                                   setProductionFilterStatus('all');
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
                               >
-                                {sku}
+                                <span className="font-mono font-medium">{s.sku}</span>
+                                <span className="text-gray-500 ml-2 text-xs truncate block">{s.display}</span>
                               </button>
                             ))}
                           </div>
@@ -6371,16 +6379,16 @@ export default function Dashboard({ session }: DashboardProps) {
                     </select>
                   </div>
                   <div className="flex items-center gap-2 relative" ref={transferSkuSearchRef}>
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Search SKU:</label>
+                    <label className="text-sm text-gray-600 whitespace-nowrap">Search:</label>
                     <div className="relative">
                       <input
                         type="text"
                         value={transferSkuSearchQuery}
                         onChange={(e) => {
-                          const value = e.target.value.toUpperCase();
+                          const value = e.target.value;
                           setTransferSkuSearchQuery(value);
                           setShowTransferSkuSearchSuggestions(value.length >= 2);
-                          if (transferSkuSearchSelected && value !== transferSkuSearchSelected) {
+                          if (transferSkuSearchSelected && value.toUpperCase() !== transferSkuSearchSelected) {
                             setTransferSkuSearchSelected('');
                           }
                         }}
@@ -6389,33 +6397,41 @@ export default function Dashboard({ session }: DashboardProps) {
                             setShowTransferSkuSearchSuggestions(true);
                           }
                         }}
-                        placeholder="e.g. EC-IP17PM"
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-40 font-mono"
+                        placeholder="SKU, product, or variant..."
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
                       />
-                      {showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && (() => {
-                        const matchingSkus = [...new Set(
-                          transfers
-                            .flatMap(transfer => transfer.items.map(item => item.sku))
-                            .filter(sku => sku.toUpperCase().includes(transferSkuSearchQuery))
-                        )].slice(0, 10);
+                      {showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && inventoryData?.items && (() => {
+                        const term = transferSkuSearchQuery.toLowerCase();
+                        const suggestions = inventoryData.items
+                          .filter(item => 
+                            item.sku.toLowerCase().includes(term) ||
+                            item.productTitle.toLowerCase().includes(term) ||
+                            item.variantTitle.toLowerCase().includes(term)
+                          )
+                          .slice(0, 8)
+                          .map(item => ({
+                            sku: item.sku,
+                            display: `${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                          }));
                         
-                        if (matchingSkus.length === 0) return null;
+                        if (suggestions.length === 0) return null;
                         
                         return (
-                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-full max-h-48 overflow-y-auto">
-                            {matchingSkus.map(sku => (
+                          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
+                            {suggestions.map(s => (
                               <button
-                                key={sku}
+                                key={s.sku}
                                 type="button"
                                 onClick={() => {
-                                  setTransferSkuSearchQuery(sku);
-                                  setTransferSkuSearchSelected(sku);
+                                  setTransferSkuSearchQuery(s.sku);
+                                  setTransferSkuSearchSelected(s.sku);
                                   setShowTransferSkuSearchSuggestions(false);
                                   setTransferFilterStatus('all');
                                 }}
-                                className="w-full px-3 py-2 text-left text-sm font-mono hover:bg-blue-50 hover:text-blue-700"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 border-b border-gray-100 last:border-b-0"
                               >
-                                {sku}
+                                <span className="font-mono font-medium">{s.sku}</span>
+                                <span className="text-gray-500 ml-2 text-xs truncate block">{s.display}</span>
                               </button>
                             ))}
                           </div>
