@@ -4536,8 +4536,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Filter by search term
                       const matchesSearch = !planningSearchTerm || 
                         item.sku.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
-                        item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase()) ||
-                        (item.variantTitle || '').toLowerCase().includes(planningSearchTerm.toLowerCase());
+                        item.productTitle.toLowerCase().includes(planningSearchTerm.toLowerCase());
                       // Filter by product group (multi-select)
                       const itemProductGroup = extractProductModel(item.productTitle, item.sku);
                       const matchesProduct = planningFilterProducts.length === 0 || planningFilterProducts.includes(itemProductGroup);
