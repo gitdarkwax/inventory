@@ -2430,8 +2430,7 @@ export default function Dashboard({ session }: DashboardProps) {
       
       const matchesSearch = !forecastSearchTerm || 
         item.sku.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
-        item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase()) ||
-        (item.variantTitle || '').toLowerCase().includes(forecastSearchTerm.toLowerCase());
+        item.productName.toLowerCase().includes(forecastSearchTerm.toLowerCase());
       if (forecastFilterCategory !== 'all') {
         const category = findProductCategory(item.sku, item.productName);
         if (!category || category.name !== forecastFilterCategory) return false;
@@ -3845,18 +3844,18 @@ export default function Dashboard({ session }: DashboardProps) {
                         }}
                         className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       />
-                      {showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && forecastingData?.items && (() => {
+                      {showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && inventoryData?.items && (() => {
                         const term = forecastSearchTerm.toLowerCase();
-                        const suggestions = forecastingData.items
+                        const suggestions = inventoryData.items
                           .filter(item => 
                             item.sku.toLowerCase().includes(term) ||
-                            item.productName.toLowerCase().includes(term) ||
-                            (item.variantTitle || '').toLowerCase().includes(term)
+                            item.productTitle.toLowerCase().includes(term) ||
+                            item.variantTitle.toLowerCase().includes(term)
                           )
                           .slice(0, 8)
                           .map(item => ({
                             sku: item.sku,
-                            display: `${item.sku} - ${item.productName}${item.variantTitle && item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
+                            display: `${item.sku} - ${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`
                           }));
                         
                         if (suggestions.length === 0) return null;
