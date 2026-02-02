@@ -3172,9 +3172,9 @@ export default function Dashboard({ session }: DashboardProps) {
                           }}
                           className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         />
-                        {showSearchSuggestions && searchTerm.length >= 2 && inventoryData?.items && (() => {
+                        {showSearchSuggestions && searchTerm.length >= 2 && inventoryData?.inventory && (() => {
                           const term = searchTerm.toLowerCase();
-                          const suggestions = inventoryData.items
+                          const suggestions = inventoryData.inventory
                             .filter(item => 
                               item.sku.toLowerCase().includes(term) ||
                               item.productTitle.toLowerCase().includes(term) ||
@@ -3844,9 +3844,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         }}
                         className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       />
-                      {showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && inventoryData?.items && (() => {
+                      {showForecastSearchSuggestions && forecastSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
                         const term = forecastSearchTerm.toLowerCase();
-                        const suggestions = inventoryData.items
+                        const suggestions = inventoryData.inventory
                           .filter(item => 
                             item.sku.toLowerCase().includes(term) ||
                             item.productTitle.toLowerCase().includes(term) ||
@@ -4888,9 +4888,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }}
                                 className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                               />
-                              {showPlanningSearchSuggestions && planningSearchTerm.length >= 2 && inventoryData?.items && (() => {
+                              {showPlanningSearchSuggestions && planningSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
                                 const term = planningSearchTerm.toLowerCase();
-                                const suggestions = inventoryData.items
+                                const suggestions = inventoryData.inventory
                                   .filter(item => 
                                     item.sku.toLowerCase().includes(term) ||
                                     item.productTitle.toLowerCase().includes(term) ||
@@ -5403,9 +5403,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }}
                                 className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                               />
-                              {showTrackerSearchSuggestions && trackerSearchTerm.length >= 2 && inventoryData?.items && (() => {
+                              {showTrackerSearchSuggestions && trackerSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
                                 const term = trackerSearchTerm.toLowerCase();
-                                const suggestions = inventoryData.items
+                                const suggestions = inventoryData.inventory
                                   .filter(item => 
                                     item.sku.toLowerCase().includes(term) ||
                                     item.productTitle.toLowerCase().includes(term) ||
@@ -6295,9 +6295,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         placeholder="SKU, product, or variant..."
                         className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
                       />
-                      {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && inventoryData?.items && (() => {
+                      {showSkuSearchSuggestions && skuSearchQuery.length >= 2 && inventoryData?.inventory && (() => {
                         const term = skuSearchQuery.toLowerCase();
-                        const suggestions = inventoryData.items
+                        const suggestions = inventoryData.inventory
                           .filter(item => 
                             item.sku.toLowerCase().includes(term) ||
                             item.productTitle.toLowerCase().includes(term) ||
@@ -6399,9 +6399,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         placeholder="SKU, product, or variant..."
                         className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
                       />
-                      {showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && inventoryData?.items && (() => {
+                      {showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2 && inventoryData?.inventory && (() => {
                         const term = transferSkuSearchQuery.toLowerCase();
-                        const suggestions = inventoryData.items
+                        const suggestions = inventoryData.inventory
                           .filter(item => 
                             item.sku.toLowerCase().includes(term) ||
                             item.productTitle.toLowerCase().includes(term) ||
