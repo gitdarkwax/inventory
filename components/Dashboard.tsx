@@ -2743,6 +2743,9 @@ export default function Dashboard({ session }: DashboardProps) {
                   onFocus={() => {
                     if (locationSearchTerm.length >= 2) setShowLocationSearchSuggestions(true);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setShowLocationSearchSuggestions(false);
+                  }}
                   className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                 />
                 {showLocationSearchSuggestions && locationSearchTerm.length >= 2 && locationData && (() => {
@@ -3169,6 +3172,9 @@ export default function Dashboard({ session }: DashboardProps) {
                           }}
                           onFocus={() => {
                             if (searchTerm.length >= 2) setShowSearchSuggestions(true);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') setShowSearchSuggestions(false);
                           }}
                           className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                         />
@@ -3841,6 +3847,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         }}
                         onFocus={() => {
                           if (forecastSearchTerm.length >= 2) setShowForecastSearchSuggestions(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setShowForecastSearchSuggestions(false);
                         }}
                         className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       />
@@ -4885,6 +4894,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                 onFocus={() => {
                                   if (planningSearchTerm.length >= 2) setShowPlanningSearchSuggestions(true);
                                 }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') setShowPlanningSearchSuggestions(false);
+                                }}
                                 className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                               />
                               {showPlanningSearchSuggestions && planningSearchTerm.length >= 2 && inventoryData?.inventory && (() => {
@@ -5399,6 +5411,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }}
                                 onFocus={() => {
                                   if (trackerSearchTerm.length >= 2) setShowTrackerSearchSuggestions(true);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') setShowTrackerSearchSuggestions(false);
                                 }}
                                 className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                               />
@@ -6291,6 +6306,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             setShowSkuSearchSuggestions(true);
                           }
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setShowSkuSearchSuggestions(false);
+                        }}
                         placeholder="SKU, product, or variant..."
                         className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
                       />
@@ -6394,6 +6412,9 @@ export default function Dashboard({ session }: DashboardProps) {
                           if (transferSkuSearchQuery.length >= 2) {
                             setShowTransferSkuSearchSuggestions(true);
                           }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setShowTransferSkuSearchSuggestions(false);
                         }}
                         placeholder="SKU, product, or variant..."
                         className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
