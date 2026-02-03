@@ -254,7 +254,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const productDropdownRef = useRef<HTMLDivElement>(null);
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningRunwayDisplay, setPlanningRunwayDisplay] = useState<'days' | 'dates'>('days');
-  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'runway'>('shipType');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'laRunway' | 'cnRunway'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
 
@@ -2651,9 +2651,10 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed to air-ship to bridge the gap until sea arrives.\n\nLogic:\n1. Calculate Runway Air date (when LA + Air runs out)\n2. Check earliest Sea ETA\n\nIf Sea ETA > Runway Air date (gap exists):\n  Need = Gap Days × 21-day Burn Rate\n\nIf Sea ETA ≤ Runway Air date:\n  Need = 0 (sea arrives before stockout)\n\nIf no sea transfer or no ETA:\n  Need = (Target Days × BR) - (LA + Air - committed)' },
     { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA - Committed + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA - Committed + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
-    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on Runway = (LA + Air + Sea) / BR:\n\n• >90 days + active PO → More in Prod\n• >90 days + no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days + no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days + no PO → Order More' },
+    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on LA Runway = (LA - Committed + Air + Sea) / BR:\n\n• >90 days + active PO → More in Prod\n• >90 days + no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days + no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days + no PO → Order More' },
     { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH - Committed + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
-    { name: 'Runway', description: 'Days until stockout based on all inventory.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
+    { name: 'LA Runway', description: 'Days until stockout based on LA inventory + incoming shipments.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
+    { name: 'CN Runway', description: 'Days until stockout including China warehouse inventory.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea + China WH) / BR\n\nThis shows total runway if all China inventory were shipped.' },
   ];
 
   // Location Detail View
@@ -4549,9 +4550,13 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Uses effective LA inventory (minus committed)
                       const runwayAir = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir) / unitsPerDay) : 999;
                       
-                      // Calculate Runway (days of LA + Inbound Air + Inbound Sea)
+                      // Calculate LA Runway (days of LA + Inbound Air + Inbound Sea)
                       // Uses effective LA inventory (minus committed)
-                      const runway = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
+                      const laRunway = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
+                      
+                      // Calculate CN Runway (days of LA + Inbound Air + Inbound Sea + China)
+                      // Shows total runway including China warehouse inventory
+                      const cnRunway = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea + chinaInventory) / unitsPerDay) : 999;
                       
                       // Calculate LA Need with sea gap logic
                       // If sea transfer exists with ETA after runway air date, calculate need based on gap
@@ -4586,15 +4591,15 @@ export default function Dashboard({ session }: DashboardProps) {
                         laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (effectiveLaInventory + inboundAir)));
                       }
                       
-                      // Determine prod status based on runway and PO (or Phase Out if applicable)
+                      // Determine prod status based on LA runway and PO (or Phase Out if applicable)
                       let prodStatus: string;
                       if (isPhaseOut) {
                         prodStatus = 'Phase Out';
                       } else {
                         const hasPO = poQty > 0;
-                        if (runway > 90) {
+                        if (laRunway > 90) {
                           prodStatus = hasPO ? 'More in Prod' : 'No Action';
-                        } else if (runway > 60) {
+                        } else if (laRunway > 60) {
                           prodStatus = hasPO ? 'Get Prod Status' : 'No Action';
                         } else {
                           prodStatus = hasPO ? 'Push Vendor' : 'Order More';
@@ -4616,7 +4621,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         laNeed: laNeeded,
                         shipType,
                         runwayAir,
-                        runway,
+                        laRunway,
+                        cnRunway,
                         prodStatus,
                       };
                     })
@@ -4665,7 +4671,8 @@ export default function Dashboard({ session }: DashboardProps) {
                         case 'shipType': comparison = (shipTypePriority[a.shipType] || 99) - (shipTypePriority[b.shipType] || 99); break;
                         case 'runwayAir': comparison = a.runwayAir - b.runwayAir; break;
                         case 'prodStatus': comparison = (prodStatusPriority[a.prodStatus] || 99) - (prodStatusPriority[b.prodStatus] || 99); break;
-                        case 'runway': comparison = a.runway - b.runway; break;
+                        case 'laRunway': comparison = a.laRunway - b.laRunway; break;
+                        case 'cnRunway': comparison = a.cnRunway - b.cnRunway; break;
                       }
                       return planningSortOrder === 'asc' ? comparison : -comparison;
                     });
@@ -4752,8 +4759,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
                               Runway Air <SortIcon active={planningSortBy === 'runwayAir'} order={planningSortOrder} />
                             </th>
-                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runway')}>
-                              Runway <SortIcon active={planningSortBy === 'runway'} order={planningSortOrder} />
+                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laRunway')}>
+                              LA Runway <SortIcon active={planningSortBy === 'laRunway'} order={planningSortOrder} />
+                            </th>
+                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('cnRunway')}>
+                              CN Runway <SortIcon active={planningSortBy === 'cnRunway'} order={planningSortOrder} />
                             </th>
                           </tr>
                         </thead>
@@ -4798,10 +4808,16 @@ export default function Dashboard({ session }: DashboardProps) {
                               {formatRunway(item.runwayAir)}
                             </td>
                             <td 
-                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
-                              title={`Runs out: ${getRunoutDate(item.runway)}`}
+                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.laRunway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
+                              title={`Runs out: ${getRunoutDate(item.laRunway)}`}
                             >
-                              {formatRunway(item.runway)}
+                              {formatRunway(item.laRunway)}
+                            </td>
+                            <td 
+                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help text-gray-900`}
+                              title={`Runs out: ${getRunoutDate(item.cnRunway)}`}
+                            >
+                              {formatRunway(item.cnRunway)}
                             </td>
                           </tr>
                         ))}
@@ -5146,7 +5162,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
                                         <th className="w-32 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
                                         <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air</th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway</th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Runway</th>
+                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">CN Runway</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -5189,10 +5206,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                             {formatRunway(item.runwayAir)}
                                           </td>
                                           <td 
-                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
-                                            title={`Runs out: ${getRunoutDate(item.runway)}`}
+                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.laRunway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
+                                            title={`Runs out: ${getRunoutDate(item.laRunway)}`}
                                           >
-                                            {formatRunway(item.runway)}
+                                            {formatRunway(item.laRunway)}
+                                          </td>
+                                          <td 
+                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help text-gray-900`}
+                                            title={`Runs out: ${getRunoutDate(item.cnRunway)}`}
+                                          >
+                                            {formatRunway(item.cnRunway)}
                                           </td>
                                         </tr>
                                       ))}
@@ -5210,7 +5233,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'In Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'In Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'LA Runway', 'CN Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
@@ -5224,7 +5247,8 @@ export default function Dashboard({ session }: DashboardProps) {
                               item.shipType,
                               item.prodStatus,
                               item.runwayAir >= 999 ? 'N/A' : `${item.runwayAir}d`,
-                              item.runway >= 999 ? 'N/A' : `${item.runway}d`,
+                              item.laRunway >= 999 ? 'N/A' : `${item.laRunway}d`,
+                              item.cnRunway >= 999 ? 'N/A' : `${item.cnRunway}d`,
                               `"${item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('; ').replace(/"/g, '""')}"`
                             ]);
                             
