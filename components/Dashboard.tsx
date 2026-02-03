@@ -2643,17 +2643,17 @@ export default function Dashboard({ session }: DashboardProps) {
   // Column definitions for LA Planning
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
-    { name: 'In Stock', description: 'Total available inventory across LA Office and DTLA WH locations' },
+    { name: 'In Stock', description: 'Available inventory at LA Office + DTLA WH minus committed orders.\n\nFormula: (LA Office + DTLA WH) - Committed' },
     { name: 'BR', description: 'Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)' },
     { name: 'In Air', description: 'Units in transit via air freight (from transfers tagged "air")' },
     { name: 'In Sea', description: 'Units in transit via sea freight (from transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed to air-ship to bridge the gap until sea arrives.\n\nLogic:\n1. Calculate Runway Air date (when LA + Air runs out)\n2. Check earliest Sea ETA\n\nIf Sea ETA > Runway Air date (gap exists):\n  Need = Gap Days × 21-day Burn Rate\n\nIf Sea ETA ≤ Runway Air date:\n  Need = 0 (sea arrives before stockout)\n\nIf no sea transfer or no ETA:\n  Need = (Target Days × BR) - (LA + Air - committed)' },
-    { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
+    { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA - Committed + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA - Committed + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
     { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on Runway = (LA + Air + Sea) / BR:\n\n• >90 days + active PO → More in Prod\n• >90 days + no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days + no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days + no PO → Order More' },
-    { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
-    { name: 'Runway', description: 'Days until stockout based on all inventory.\n\nFormula: (LA Office + DTLA WH + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
+    { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH - Committed + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
+    { name: 'Runway', description: 'Days until stockout based on all inventory.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
   ];
 
   // Location Detail View
@@ -4530,8 +4530,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Check if SKU is in phase out list
                       const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === inv.sku.toLowerCase());
                       
+                      // Effective LA inventory = LA inventory - committed (units actually available for sale)
+                      const effectiveLaInventory = Math.max(0, laInventory - laCommitted);
+                      
                       // Calculate total inventory across all warehouses (LA + China + Incoming + In Production)
-                      const totalInventory = laInventory + chinaInventory + incoming + poQty;
+                      const totalInventory = effectiveLaInventory + chinaInventory + incoming + poQty;
                       
                       // If phase out with no inventory anywhere, mark for filtering
                       if (isPhaseOut && totalInventory <= 0) {
@@ -4540,13 +4543,15 @@ export default function Dashboard({ session }: DashboardProps) {
                       
                       // For phase out SKUs: show "Phase Out" for ship type only if no China inventory
                       // If there's China inventory, use normal ship type logic
-                      const shipType = (isPhaseOut && chinaInventory <= 0) ? 'Phase Out' : getShipType(laInventory, inboundAir, inboundSea, seaTransfers, chinaInventory, unitsPerDay);
+                      const shipType = (isPhaseOut && chinaInventory <= 0) ? 'Phase Out' : getShipType(effectiveLaInventory, inboundAir, inboundSea, seaTransfers, chinaInventory, unitsPerDay);
                       
                       // Calculate Runway Air (days of LA + Inbound Air only)
-                      const runwayAir = unitsPerDay > 0 ? Math.round((laInventory + inboundAir) / unitsPerDay) : 999;
+                      // Uses effective LA inventory (minus committed)
+                      const runwayAir = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir) / unitsPerDay) : 999;
                       
                       // Calculate Runway (days of LA + Inbound Air + Inbound Sea)
-                      const runway = unitsPerDay > 0 ? Math.round((laInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
+                      // Uses effective LA inventory (minus committed)
+                      const runway = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea) / unitsPerDay) : 999;
                       
                       // Calculate LA Need with sea gap logic
                       // If sea transfer exists with ETA after runway air date, calculate need based on gap
@@ -4574,11 +4579,11 @@ export default function Dashboard({ session }: DashboardProps) {
                           // If sea arrives before stockout, laNeeded stays 0
                         } else {
                           // Sea transfers exist but no ETA - use original logic
-                          laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory + inboundAir - laCommitted)));
+                          laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (effectiveLaInventory + inboundAir)));
                         }
                       } else {
                         // No sea transfers - use original logic
-                        laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (laInventory + inboundAir - laCommitted)));
+                        laNeeded = Math.max(0, Math.ceil((planningLaTargetDays * unitsPerDay) - (effectiveLaInventory + inboundAir)));
                       }
                       
                       // Determine prod status based on runway and PO (or Phase Out if applicable)
@@ -4599,7 +4604,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       return {
                         sku: inv.sku,
                         productTitle: inv.productTitle,
-                        la: laInventory,
+                        la: effectiveLaInventory, // LA inventory minus committed
                         inboundAir,
                         inboundSea,
                         transferNotes,
