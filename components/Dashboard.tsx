@@ -318,7 +318,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
   const [newTransferEta, setNewTransferEta] = useState('');
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
   const [transferDateFilter, setTransferDateFilter] = useState('all');
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
@@ -6652,8 +6652,26 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }
                               }}
                               onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  // If a suggestion is highlighted, use that
+                                  if (transferSkuSearchSuggestionIndex >= 0 && transferSkuSearchSuggestionIndex < suggestions.length) {
+                                    setTransferSkuSearchQuery(suggestions[transferSkuSearchSuggestionIndex].sku);
+                                    setTransferSkuSearchSelected(suggestions[transferSkuSearchSuggestionIndex].sku);
+                                  } else if (transferSkuSearchQuery.trim()) {
+                                    // Otherwise, use whatever is typed to filter
+                                    setTransferSkuSearchSelected(transferSkuSearchQuery.trim());
+                                  }
+                                  setShowTransferSkuSearchSuggestions(false);
+                                  setTransferSkuSearchSuggestionIndex(-1);
+                                  return;
+                                }
+                                if (e.key === 'Escape') {
+                                  setShowTransferSkuSearchSuggestions(false);
+                                  setTransferSkuSearchSuggestionIndex(-1);
+                                  return;
+                                }
                                 if (!showTransferSkuSearchSuggestions || suggestions.length === 0) {
-                                  if (e.key === 'Enter') setShowTransferSkuSearchSuggestions(false);
                                   return;
                                 }
                                 if (e.key === 'ArrowDown') {
@@ -6662,18 +6680,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                 } else if (e.key === 'ArrowUp') {
                                   e.preventDefault();
                                   setTransferSkuSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
-                                } else if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  if (transferSkuSearchSuggestionIndex >= 0 && transferSkuSearchSuggestionIndex < suggestions.length) {
-                                    setTransferSkuSearchQuery(suggestions[transferSkuSearchSuggestionIndex].sku);
-                                    setTransferSkuSearchSelected(suggestions[transferSkuSearchSuggestionIndex].sku);
-                                    setTransferFilterStatus('all');
-                                  }
-                                  setShowTransferSkuSearchSuggestions(false);
-                                  setTransferSkuSearchSuggestionIndex(-1);
-                                } else if (e.key === 'Escape') {
-                                  setShowTransferSkuSearchSuggestions(false);
-                                  setTransferSkuSearchSuggestionIndex(-1);
                                 }
                               }}
                               placeholder="SKU, product, or tracking #..."
@@ -6769,13 +6775,13 @@ export default function Dashboard({ session }: DashboardProps) {
                       <option value="2y">Last 2 Years</option>
                     </select>
                   </div>
-                  {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'active') && (
+                  {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'all') && (
                     <button
                       type="button"
                       onClick={() => {
                         setTransferSkuSearchQuery('');
                         setTransferSkuSearchSelected('');
-                        setTransferFilterStatus('active');
+                        setTransferFilterStatus('all');
                         setTransferDateFilter('all');
                       }}
                       className="text-sm text-gray-500 hover:text-gray-700"
@@ -7702,29 +7708,30 @@ export default function Dashboard({ session }: DashboardProps) {
                     if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
                     if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
                     
-                    // SKU or Tracking Number search filter
+                    // SKU, Product, or Tracking Number search filter
                     if (transferSkuSearchSelected) {
                       const searchTerm = transferSkuSearchSelected.toUpperCase();
+                      
+                      // Check SKU (partial match)
                       const hasMatchingSku = transfer.items.some(item => 
-                        item.sku.toUpperCase() === searchTerm
+                        item.sku.toUpperCase().includes(searchTerm)
                       );
-                      // Also check tracking number (full match or last 4 digits)
-                      const trackingMatch = transfer.trackingNumber && (
-                        transfer.trackingNumber.toUpperCase() === searchTerm ||
-                        transfer.trackingNumber.toUpperCase().endsWith(searchTerm)
-                      );
-                      if (!hasMatchingSku && !trackingMatch) return false;
-                    } else if (transferSkuSearchQuery && transferSkuSearchQuery.length >= 2) {
-                      // If user typed something but hasn't selected from suggestions,
-                      // also search by tracking number (partial match)
-                      const searchTerm = transferSkuSearchQuery.toUpperCase();
+                      
+                      // Check tracking number (partial match, including last digits)
                       const trackingMatch = transfer.trackingNumber && (
                         transfer.trackingNumber.toUpperCase().includes(searchTerm) ||
                         transfer.trackingNumber.toUpperCase().endsWith(searchTerm)
                       );
-                      // If there's a tracking match, include this transfer
-                      // Otherwise, let it through (user is still typing, will refine with SKU selection)
-                      if (trackingMatch) return true;
+                      
+                      // Check transfer ID
+                      const idMatch = transfer.id.toUpperCase().includes(searchTerm);
+                      
+                      // Check origin/destination
+                      const locationMatch = 
+                        transfer.origin.toUpperCase().includes(searchTerm) ||
+                        transfer.destination.toUpperCase().includes(searchTerm);
+                      
+                      if (!hasMatchingSku && !trackingMatch && !idMatch && !locationMatch) return false;
                     }
                     
                     // Date filter (based on createdAt)
