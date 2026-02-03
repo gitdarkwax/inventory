@@ -2651,7 +2651,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed to air-ship to bridge the gap until sea arrives.\n\nLogic:\n1. Calculate Runway Air date (when LA + Air runs out)\n2. Check earliest Sea ETA\n\nIf Sea ETA > Runway Air date (gap exists):\n  Need = Gap Days × 21-day Burn Rate\n\nIf Sea ETA ≤ Runway Air date:\n  Need = 0 (sea arrives before stockout)\n\nIf no sea transfer or no ETA:\n  Need = (Target Days × BR) - (LA + Air - committed)' },
     { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA - Committed + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA - Committed + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
-    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on LA Runway = (LA - Committed + Air + Sea) / BR:\n\n• >90 days + active PO → More in Prod\n• >90 days + no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days + no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days + no PO → Order More' },
+    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on LA Runway = (LA - Committed + Air + Sea) / BR:\n\n• >90 days + active PO → In Prod\n• >90 days + no PO → No Action\n• 60-90 days + active PO → Get Prod Status\n• 60-90 days + no PO → No Action\n• ≤60 days + active PO → Push Vendor\n• ≤60 days + no PO → Order More' },
     { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH - Committed + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
     { name: 'LA Runway', description: 'Days until stockout based on LA inventory + incoming shipments.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
     { name: 'CN Runway', description: 'Days until stockout including China warehouse inventory.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea + China WH) / BR\n\nThis shows total runway if all China inventory were shipped.' },
@@ -4486,7 +4486,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       case 'Push Vendor': return 'bg-red-100 text-red-800';
                       case 'Order More': return 'bg-orange-100 text-orange-800';
                       case 'Get Prod Status': return 'bg-yellow-100 text-yellow-800';
-                      case 'More in Prod': return 'bg-purple-100 text-purple-800';
+                      case 'In Prod': return 'bg-purple-100 text-purple-800';
                       case 'No Action': return 'bg-green-100 text-green-800';
                       case 'Phase Out': return 'bg-gray-200 text-gray-500';
                       default: return 'bg-gray-100 text-gray-800';
@@ -4508,7 +4508,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     'Push Vendor': 1,
                     'Order More': 2,
                     'Get Prod Status': 3,
-                    'More in Prod': 4,
+                    'In Prod': 4,
                     'No Action': 5,
                     'Phase Out': 99,
                   };
@@ -4598,7 +4598,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       } else {
                         const hasPO = poQty > 0;
                         if (laRunway > 90) {
-                          prodStatus = hasPO ? 'More in Prod' : 'No Action';
+                          prodStatus = hasPO ? 'In Prod' : 'No Action';
                         } else if (laRunway > 60) {
                           prodStatus = hasPO ? 'Get Prod Status' : 'No Action';
                         } else {
