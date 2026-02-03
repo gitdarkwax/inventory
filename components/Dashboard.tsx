@@ -4726,44 +4726,44 @@ export default function Dashboard({ session }: DashboardProps) {
                       {showHeader && (
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
+                            <th className="w-28 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('sku')}>
                               SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
-                              In Stock <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                            <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
+                              Stock <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
+                            <th className="w-12 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               BR <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundAir')}>
-                              In Air <SortIcon active={planningSortBy === 'inboundAir'} order={planningSortOrder} />
+                            <th className="w-14 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundAir')}>
+                              Air <SortIcon active={planningSortBy === 'inboundAir'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundSea')}>
-                              In Sea <SortIcon active={planningSortBy === 'inboundSea'} order={planningSortOrder} />
+                            <th className="w-14 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('inboundSea')}>
+                              Sea <SortIcon active={planningSortBy === 'inboundSea'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
-                              China <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
+                            <th className="w-14 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('china')}>
+                              CN <SortIcon active={planningSortBy === 'china'} order={planningSortOrder} />
                             </th>
-                            <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
-                              In Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
+                            <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('poQty')}>
+                              Prod <SortIcon active={planningSortBy === 'poQty'} order={planningSortOrder} />
                             </th>
-                            <th className="w-20 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
+                            <th className="w-14 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laNeed')}>
                               Need <SortIcon active={planningSortBy === 'laNeed'} order={planningSortOrder} />
                             </th>
-                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
-                              Ship Type <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
+                            <th className="w-24 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('shipType')}>
+                              Ship <SortIcon active={planningSortBy === 'shipType'} order={planningSortOrder} />
                             </th>
-                            <th className="w-32 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
+                            <th className="w-28 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('prodStatus')}>
                               Prod Status <SortIcon active={planningSortBy === 'prodStatus'} order={planningSortOrder} />
                             </th>
-                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
-                              Runway Air <SortIcon active={planningSortBy === 'runwayAir'} order={planningSortOrder} />
+                            <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayAir')}>
+                              R-Air <SortIcon active={planningSortBy === 'runwayAir'} order={planningSortOrder} />
                             </th>
-                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laRunway')}>
-                              LA Runway <SortIcon active={planningSortBy === 'laRunway'} order={planningSortOrder} />
+                            <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('laRunway')}>
+                              R-LA <SortIcon active={planningSortBy === 'laRunway'} order={planningSortOrder} />
                             </th>
-                            <th className="w-28 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('cnRunway')}>
-                              CN Runway <SortIcon active={planningSortBy === 'cnRunway'} order={planningSortOrder} />
+                            <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('cnRunway')}>
+                              R-CN <SortIcon active={planningSortBy === 'cnRunway'} order={planningSortOrder} />
                             </th>
                           </tr>
                         </thead>
@@ -4771,50 +4771,50 @@ export default function Dashboard({ session }: DashboardProps) {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {items.map((item, index) => (
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                            <td className="w-20 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                            <td className="w-28 px-2 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
+                            <td className={`w-16 px-2 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                            <td className="w-12 px-2 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                             <td 
-                              className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                              className={`w-14 px-2 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
                               title={formatTransferTooltip(item.airTransfers)}
                             >
                               {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                             </td>
                             <td 
-                              className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                              className={`w-14 px-2 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
                               title={formatTransferTooltip(item.seaTransfers)}
                             >
                               {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                             </td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                            <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                            <td className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                            <td className={`w-14 px-2 py-3 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                            <td className={`w-16 px-2 py-3 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                            <td className={`w-14 px-2 py-3 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                               {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                             </td>
-                            <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
+                            <td className="w-24 px-2 py-3 text-sm text-center">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getShipTypeColor(item.shipType)}`}>
                                 {item.shipType}
                               </span>
                             </td>
-                            <td className="w-28 px-3 sm:px-4 py-3 text-sm text-center">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProdStatusColor(item.prodStatus)}`}>
+                            <td className="w-28 px-2 py-3 text-sm text-center">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getProdStatusColor(item.prodStatus)}`}>
                                 {item.prodStatus}
                               </span>
                             </td>
                             <td 
-                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
+                              className={`w-16 px-2 py-3 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                               title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                             >
                               {formatRunway(item.runwayAir)}
                             </td>
                             <td 
-                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help ${item.laRunway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
+                              className={`w-16 px-2 py-3 text-sm text-center cursor-help ${item.laRunway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                               title={`Runs out: ${getRunoutDate(item.laRunway)}`}
                             >
                               {formatRunway(item.laRunway)}
                             </td>
                             <td 
-                              className={`w-28 px-3 sm:px-4 py-3 text-sm text-center cursor-help text-gray-900`}
+                              className={`w-16 px-2 py-3 text-sm text-center cursor-help text-gray-900`}
                               title={`Runs out: ${getRunoutDate(item.cnRunway)}`}
                             >
                               {formatRunway(item.cnRunway)}
@@ -5151,68 +5151,68 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <table className="min-w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-gray-50">
                                       <tr>
-                                        <th className="w-32 px-3 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Stock</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">BR</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Air</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Sea</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">China</th>
-                                        <th className="w-24 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">In Prod</th>
-                                        <th className="w-20 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Need</th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship Type</th>
-                                        <th className="w-32 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Runway Air</th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA Runway</th>
-                                        <th className="w-28 px-3 sm:px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">CN Runway</th>
+                                        <th className="w-28 px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Stock</th>
+                                        <th className="w-12 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">BR</th>
+                                        <th className="w-14 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Air</th>
+                                        <th className="w-14 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Sea</th>
+                                        <th className="w-14 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">CN</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod</th>
+                                        <th className="w-14 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Need</th>
+                                        <th className="w-24 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Ship</th>
+                                        <th className="w-28 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Prod Status</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-Air</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-LA</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-CN</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
                                       {sortedItems.map((item, index) => (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                          <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
-                                          <td className="w-20 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
+                                          <td className="w-28 px-2 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
+                                          <td className={`w-16 px-2 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
+                                          <td className="w-12 px-2 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                                           <td 
-                                            className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                            className={`w-14 px-2 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
                                             title={formatTransferTooltip(item.airTransfers)}
                                           >
                                             {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                                           </td>
                                           <td 
-                                            className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                            className={`w-14 px-2 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
                                             title={formatTransferTooltip(item.seaTransfers)}
                                           >
                                             {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                           </td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
-                                          <td className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                                          <td className={`w-14 px-2 py-2 text-sm text-center ${item.china <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.china.toLocaleString()}</td>
+                                          <td className={`w-16 px-2 py-2 text-sm text-center ${item.poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{item.poQty > 0 ? item.poQty.toLocaleString() : '—'}</td>
+                                          <td className={`w-14 px-2 py-2 text-sm text-center ${item.laNeed > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                                             {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                                           </td>
-                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getShipTypeColor(item.shipType)}`}>
+                                          <td className="w-24 px-2 py-2 text-sm text-center">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getShipTypeColor(item.shipType)}`}>
                                               {item.shipType}
                                             </span>
                                           </td>
-                                          <td className="w-28 px-3 sm:px-4 py-2 text-sm text-center">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getProdStatusColor(item.prodStatus)}`}>
+                                          <td className="w-28 px-2 py-2 text-sm text-center">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getProdStatusColor(item.prodStatus)}`}>
                                               {item.prodStatus}
                                             </span>
                                           </td>
                                           <td 
-                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
+                                            className={`w-16 px-2 py-2 text-sm text-center cursor-help ${item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                                             title={`Runs out: ${getRunoutDate(item.runwayAir)}`}
                                           >
                                             {formatRunway(item.runwayAir)}
                                           </td>
                                           <td 
-                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help ${item.laRunway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
+                                            className={`w-16 px-2 py-2 text-sm text-center cursor-help ${item.laRunway < 90 ? 'text-red-600 font-medium' : 'text-gray-900'}`}
                                             title={`Runs out: ${getRunoutDate(item.laRunway)}`}
                                           >
                                             {formatRunway(item.laRunway)}
                                           </td>
                                           <td 
-                                            className={`w-28 px-3 sm:px-4 py-2 text-sm text-center cursor-help text-gray-900`}
+                                            className={`w-16 px-2 py-2 text-sm text-center cursor-help text-gray-900`}
                                             title={`Runs out: ${getRunoutDate(item.cnRunway)}`}
                                           >
                                             {formatRunway(item.cnRunway)}
