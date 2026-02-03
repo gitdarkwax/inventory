@@ -6676,10 +6676,57 @@ export default function Dashboard({ session }: DashboardProps) {
                                   setTransferSkuSearchSuggestionIndex(-1);
                                 }
                               }}
-                              placeholder="SKU, product, or variant..."
+                              placeholder="SKU, product, or tracking #..."
                               className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
                             />
-                            {suggestions.length > 0 && (
+                            {/* Show tracking number matches from transfers */}
+                            {(() => {
+                              const trackingTerm = transferSkuSearchQuery.toUpperCase();
+                              const trackingMatches = showTransferSkuSearchSuggestions && transferSkuSearchQuery.length >= 2
+                                ? transfers
+                                    .filter(t => t.trackingNumber && (
+                                      t.trackingNumber.toUpperCase().includes(trackingTerm) ||
+                                      t.trackingNumber.toUpperCase().endsWith(trackingTerm)
+                                    ))
+                                    .slice(0, 5)
+                                : [];
+                              
+                              if (trackingMatches.length > 0) {
+                                return (
+                                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
+                                    <div className="px-3 py-1 text-xs text-gray-500 bg-gray-50 border-b">Tracking Numbers</div>
+                                    {trackingMatches.map((t) => (
+                                      <button
+                                        key={t.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setTransferSkuSearchQuery(t.trackingNumber || '');
+                                          setTransferSkuSearchSelected(t.trackingNumber || '');
+                                          setShowTransferSkuSearchSuggestions(false);
+                                          setTransferSkuSearchSuggestionIndex(-1);
+                                          setTransferFilterStatus('all');
+                                        }}
+                                        className="w-full px-3 py-2 text-left text-sm border-b border-gray-100 last:border-b-0 hover:bg-blue-50 hover:text-blue-700"
+                                      >
+                                        <span className="font-mono font-medium">{t.trackingNumber}</span>
+                                        <span className="text-gray-500 ml-2 text-xs truncate block">
+                                          {t.origin} → {t.destination} ({t.transferType})
+                                        </span>
+                                      </button>
+                                    ))}
+                                    {suggestions.length > 0 && <div className="px-3 py-1 text-xs text-gray-500 bg-gray-50 border-b border-t">SKUs</div>}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                            {suggestions.length > 0 && !(() => {
+                              const trackingTerm = transferSkuSearchQuery.toUpperCase();
+                              return transfers.some(t => t.trackingNumber && (
+                                t.trackingNumber.toUpperCase().includes(trackingTerm) ||
+                                t.trackingNumber.toUpperCase().endsWith(trackingTerm)
+                              ));
+                            })() && (
                               <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
                                 {suggestions.map((s, idx) => (
                                   <button
@@ -7655,12 +7702,29 @@ export default function Dashboard({ session }: DashboardProps) {
                     if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
                     if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
                     
-                    // SKU search filter
+                    // SKU or Tracking Number search filter
                     if (transferSkuSearchSelected) {
+                      const searchTerm = transferSkuSearchSelected.toUpperCase();
                       const hasMatchingSku = transfer.items.some(item => 
-                        item.sku.toUpperCase() === transferSkuSearchSelected.toUpperCase()
+                        item.sku.toUpperCase() === searchTerm
                       );
-                      if (!hasMatchingSku) return false;
+                      // Also check tracking number (full match or last 4 digits)
+                      const trackingMatch = transfer.trackingNumber && (
+                        transfer.trackingNumber.toUpperCase() === searchTerm ||
+                        transfer.trackingNumber.toUpperCase().endsWith(searchTerm)
+                      );
+                      if (!hasMatchingSku && !trackingMatch) return false;
+                    } else if (transferSkuSearchQuery && transferSkuSearchQuery.length >= 2) {
+                      // If user typed something but hasn't selected from suggestions,
+                      // also search by tracking number (partial match)
+                      const searchTerm = transferSkuSearchQuery.toUpperCase();
+                      const trackingMatch = transfer.trackingNumber && (
+                        transfer.trackingNumber.toUpperCase().includes(searchTerm) ||
+                        transfer.trackingNumber.toUpperCase().endsWith(searchTerm)
+                      );
+                      // If there's a tracking match, include this transfer
+                      // Otherwise, let it through (user is still typing, will refine with SKU selection)
+                      if (trackingMatch) return true;
                     }
                     
                     // Date filter (based on createdAt)
