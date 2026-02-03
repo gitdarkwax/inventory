@@ -3414,32 +3414,40 @@ export default function Dashboard({ session }: DashboardProps) {
                               const transferTooltip = formatTransferTooltip(allTransferDetails);
                               // Get pending PO quantity for this SKU
                               const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
+                              // Check if SKU is in phase out list
+                              const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
                               
                               return (
-                                <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                  <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
+                                <tr key={item.sku} className={isPhaseOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                  <td className={`w-32 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isPhaseOut ? 'text-gray-500' : 'text-gray-900'}`}
                                     title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
                                   {inventoryData.locations.map(location => {
                                     const qty = item.locations?.[location] ?? 0;
                                     return (
-                                      <td key={location} className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                      <td key={location} className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${isPhaseOut ? 'text-gray-500' : (qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                         {qty.toLocaleString()}
                                       </td>
                                     );
                                   })}
                                   <td 
-                                    className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                    className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${isPhaseOut ? 'text-gray-500' : (inTransit > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400')}`}
                                     title={transferTooltip}
                                   >
                                     {inTransit > 0 ? inTransit.toLocaleString() : '—'}
                                   </td>
-                                  <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
-                                    {poQty > 0 ? poQty.toLocaleString() : '—'}
+                                  <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
+                                    {isPhaseOut ? (
+                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500 whitespace-nowrap">Phase Out</span>
+                                    ) : (
+                                      <span className={poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                                        {poQty > 0 ? poQty.toLocaleString() : '—'}
+                                      </span>
+                                    )}
                                   </td>
                                   {(() => {
                                     const total = calculateOverviewTotal(item, inTransit);
                                     return (
-                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${total <= 0 ? 'text-red-600' : total <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                      <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center font-medium ${isPhaseOut ? 'text-gray-500' : (total <= 0 ? 'text-red-600' : total <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                         {total.toLocaleString()}
                                       </td>
                                     );
@@ -3610,32 +3618,40 @@ export default function Dashboard({ session }: DashboardProps) {
                                       const transferTooltip = formatTransferTooltip(allTransferDetails);
                                       // Get pending PO quantity for this SKU
                                       const poQty = purchaseOrderData?.purchaseOrders?.find(p => p.sku === item.sku)?.pendingQuantity || 0;
+                                      // Check if SKU is in phase out list
+                                      const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
                                       
                                       return (
-                                        <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                          <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
+                                        <tr key={item.sku} className={isPhaseOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                          <td className={`w-32 px-3 sm:px-4 py-2 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isPhaseOut ? 'text-gray-500' : 'text-gray-900'}`}
                                             title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
                                           {inventoryData.locations.map(location => {
                                             const qty = item.locations?.[location] ?? 0;
                                             return (
-                                              <td key={location} className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                              <td key={location} className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${isPhaseOut ? 'text-gray-500' : (qty <= 0 ? 'text-red-600 font-medium' : qty <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                                 {qty.toLocaleString()}
                                               </td>
                                             );
                                           })}
                                           <td 
-                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${inTransit > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                            className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${isPhaseOut ? 'text-gray-500' : (inTransit > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400')}`}
                                             title={transferTooltip}
                                           >
                                             {inTransit > 0 ? inTransit.toLocaleString() : '—'}
                                           </td>
-                                          <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>
-                                            {poQty > 0 ? poQty.toLocaleString() : '—'}
+                                          <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
+                                            {isPhaseOut ? (
+                                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500 whitespace-nowrap">Phase Out</span>
+                                            ) : (
+                                              <span className={poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                                                {poQty > 0 ? poQty.toLocaleString() : '—'}
+                                              </span>
+                                            )}
                                           </td>
                                           {(() => {
                                             const total = calculateOverviewTotal(item, inTransit);
                                             return (
-                                              <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${total <= 0 ? 'text-red-600' : total <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                              <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center font-medium ${isPhaseOut ? 'text-gray-500' : (total <= 0 ? 'text-red-600' : total <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                                 {total.toLocaleString()}
                                               </td>
                                             );
