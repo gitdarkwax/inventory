@@ -2643,7 +2643,7 @@ export default function Dashboard({ session }: DashboardProps) {
   // Column definitions for LA Planning
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
-    { name: 'In Stock', description: 'Available inventory at LA Office + DTLA WH minus committed orders.\n\nFormula: (LA Office + DTLA WH) - Committed' },
+    { name: 'LA Stock', description: 'Available inventory at LA Office + DTLA WH minus committed orders.\n\nFormula: (LA Office + DTLA WH) - Committed' },
     { name: 'BR', description: 'Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)' },
     { name: 'In Air', description: 'Units in transit via air freight (from transfers tagged "air")' },
     { name: 'In Sea', description: 'Units in transit via sea freight (from transfers tagged "sea")' },
@@ -4730,7 +4730,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               SKU <SortIcon active={planningSortBy === 'sku'} order={planningSortOrder} />
                             </th>
                             <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('la')}>
-                              Stock <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
+                              LA <SortIcon active={planningSortBy === 'la'} order={planningSortOrder} />
                             </th>
                             <th className="w-12 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('unitsPerDay')}>
                               BR <SortIcon active={planningSortBy === 'unitsPerDay'} order={planningSortOrder} />
@@ -5152,7 +5152,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <thead className="bg-gray-50">
                                       <tr>
                                         <th className="w-28 px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Stock</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">LA</th>
                                         <th className="w-12 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">BR</th>
                                         <th className="w-14 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Air</th>
                                         <th className="w-14 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Sea</th>
@@ -5233,7 +5233,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'In Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'LA Runway', 'CN Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'LA Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'LA Runway', 'CN Runway', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
