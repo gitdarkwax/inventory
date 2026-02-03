@@ -79,8 +79,13 @@ export interface IncomingInventoryBySku {
 export type IncomingInventoryCache = Record<string, Record<string, IncomingInventoryBySku>>;
 
 // Track low stock alerts to avoid duplicates
-// sku -> last alerted quantity (only send new alert if quantity changed after going above threshold)
-export type LowStockAlertCache = Record<string, number>;
+// sku -> alert info (type and quantity at time of alert)
+export type AlertType = 'low' | 'critical' | 'zero';
+export interface LowStockAlertInfo {
+  type: AlertType;
+  quantity: number;
+}
+export type LowStockAlertCache = Record<string, LowStockAlertInfo>;
 
 export interface CachedInventoryData {
   inventory: {

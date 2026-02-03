@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { fetchInventoryData, fetchForecastingData, checkLowStockAlerts } from '@/app/api/refresh/route';
+import { PhaseOutService } from '@/lib/phase-out-skus';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds
@@ -59,8 +60,17 @@ export async function GET(request: NextRequest) {
       forecasting: { forecasting: forecastingData },
     }, 'hourly auto refresh');
 
+    // Get phase out SKUs for low stock alert logic
+    let phaseOutSkus: string[] = [];
+    try {
+      const phaseOutData = await PhaseOutService.getPhaseOutSKUs();
+      phaseOutSkus = phaseOutData.skus.map(s => s.sku);
+    } catch (error) {
+      console.warn('⚠️ Could not load phase out SKUs for alert logic:', error);
+    }
+
     // Check for low stock in LA area (LA Office + DTLA WH) and send alerts
-    await checkLowStockAlerts(cache, inventoryData, skuToProductName);
+    await checkLowStockAlerts(cache, inventoryData, forecastingData, phaseOutSkus);
 
     const duration = Date.now() - startTime;
     console.log(`✅ Hourly cron refresh complete in ${duration}ms`);

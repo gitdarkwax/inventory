@@ -329,37 +329,105 @@ export class SlackService {
   }
 
   /**
-   * Send notification for low stock alert
+   * Send notification for low stock alert (tiered system)
    */
-  async notifyLowStock(data: {
-    items: Array<{ sku: string; variantName: string; quantity: number }>;
+  async notifyLowStockTiered(data: {
+    lowStockItems: Array<{ sku: string; variantName: string; quantity: number; runwayDays: number; isPhaseOut: boolean }>;
+    criticalItems: Array<{ sku: string; variantName: string; quantity: number; runwayDays: number; isPhaseOut: boolean }>;
+    zeroStockItems: Array<{ sku: string; variantName: string; isPhaseOut: boolean }>;
     location: string;
-    threshold: number;
   }): Promise<void> {
-    const itemsList = data.items
-      .map(item => `• *${item.sku}*: ${item.quantity} units${item.variantName ? ` (${item.variantName})` : ''}`)
-      .join('\n');
+    const blocks: Array<{ type: string; text?: { type: string; text: string } }> = [];
 
-    const blocks = [
-      {
+    // Zero Stock Alert (highest priority)
+    if (data.zeroStockItems.length > 0) {
+      const regularZero = data.zeroStockItems.filter(i => !i.isPhaseOut);
+      const phaseOutZero = data.zeroStockItems.filter(i => i.isPhaseOut);
+
+      if (regularZero.length > 0) {
+        const itemsList = regularZero
+          .map(item => `• *${item.sku}*${item.variantName ? ` (${item.variantName})` : ''}`)
+          .join('\n');
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*🚨 ZERO STOCK - ${data.location}*\nThe following SKUs have *0 units* in stock:\n${itemsList}`,
+          },
+        });
+      }
+
+      if (phaseOutZero.length > 0) {
+        const itemsList = phaseOutZero
+          .map(item => `• *${item.sku}*${item.variantName ? ` (${item.variantName})` : ''} _(phased out)_`)
+          .join('\n');
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*📦 ZERO STOCK (Phase Out) - ${data.location}*\nThe following phased out SKUs have *0 units*:\n${itemsList}`,
+          },
+        });
+      }
+    }
+
+    // Critical Stock Alert (<50 units)
+    if (data.criticalItems.length > 0) {
+      const itemsList = data.criticalItems
+        .map(item => `• *${item.sku}*: ${item.quantity} units, ${item.runwayDays}d runway${item.variantName ? ` (${item.variantName})` : ''}${item.isPhaseOut ? ' _(phasing out)_' : ''}`)
+        .join('\n');
+      blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*⚠️ Low Stock Alert - ${data.location}*\nThe following SKUs have fallen below *${data.threshold} units*:`,
+          text: `*🔴 CRITICAL LOW STOCK - ${data.location}*\nThe following SKUs have *<50 units* with <90 days runway:\n${itemsList}`,
         },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: itemsList,
-        },
-      },
-    ];
+      });
+    }
+
+    // Low Stock Alert (<200 units)
+    if (data.lowStockItems.length > 0) {
+      const regularLow = data.lowStockItems.filter(i => !i.isPhaseOut);
+      const phaseOutLow = data.lowStockItems.filter(i => i.isPhaseOut);
+
+      if (regularLow.length > 0) {
+        const itemsList = regularLow
+          .map(item => `• *${item.sku}*: ${item.quantity} units, ${item.runwayDays}d runway${item.variantName ? ` (${item.variantName})` : ''}`)
+          .join('\n');
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*⚠️ Low Stock Alert - ${data.location}*\nThe following SKUs have *<200 units* with <90 days runway:\n${itemsList}`,
+          },
+        });
+      }
+
+      if (phaseOutLow.length > 0) {
+        const itemsList = phaseOutLow
+          .map(item => `• *${item.sku}*: ${item.quantity} units, ${item.runwayDays}d runway${item.variantName ? ` (${item.variantName})` : ''} _(phasing out)_`)
+          .join('\n');
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*⚠️ Low Stock (Phase Out) - ${data.location}*\nThe following phased out SKUs have *<200 units*:\n${itemsList}`,
+          },
+        });
+      }
+    }
+
+    if (blocks.length === 0) return;
+
+    // Build summary text
+    const summaryParts: string[] = [];
+    if (data.zeroStockItems.length > 0) summaryParts.push(`${data.zeroStockItems.length} zero stock`);
+    if (data.criticalItems.length > 0) summaryParts.push(`${data.criticalItems.length} critical`);
+    if (data.lowStockItems.length > 0) summaryParts.push(`${data.lowStockItems.length} low stock`);
 
     await this.client.chat.postMessage({
       channel: this.channelId,
-      text: `Low Stock Alert: ${data.items.length} SKU(s) below ${data.threshold} units at ${data.location}`,
+      text: `Stock Alert at ${data.location}: ${summaryParts.join(', ')}`,
       blocks,
     });
   }

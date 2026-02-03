@@ -6,11 +6,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { ShopifyClient } from '@/lib/shopify';
-import { ShopifyQLService } from '@/lib/shopifyql';
+import { ShopifyQLService, ForecastingData as ForecastingItem } from '@/lib/shopifyql';
 // Note: Shopify transfer data is no longer fetched here
 // Incoming quantities are now tracked locally from transfers created in our app
 import { InventoryCacheService, LowStockAlertCache } from '@/lib/inventory-cache';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
+import { PhaseOutService } from '@/lib/phase-out-skus';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for all queries
@@ -74,8 +75,17 @@ export async function GET(request: NextRequest) {
       forecasting: { forecasting: forecastingData },
     }, refreshedBy);
 
+    // Get phase out SKUs for low stock alert logic
+    let phaseOutSkus: string[] = [];
+    try {
+      const phaseOutData = await PhaseOutService.getPhaseOutSKUs();
+      phaseOutSkus = phaseOutData.skus.map(s => s.sku);
+    } catch (error) {
+      console.warn('⚠️ Could not load phase out SKUs for alert logic:', error);
+    }
+
     // Check for low stock in LA area (LA Office + DTLA WH) and send alerts
-    await checkLowStockAlerts(cache, inventoryData, skuToProductName);
+    await checkLowStockAlerts(cache, inventoryData, forecastingData, phaseOutSkus);
 
     const duration = Date.now() - startTime;
     console.log(`✅ Refresh complete in ${duration}ms`);
@@ -343,15 +353,25 @@ export async function fetchForecastingData() {
 
 /**
  * Check for low stock in LA area (LA Office + DTLA WH combined) and send Slack alerts
- * Only sends alerts for SKUs that haven't been alerted yet or were restocked
+ * Uses tiered alert system based on stock level and runway days
+ * 
+ * Alert Logic:
+ * - LA < 200 & Runway Air > 90 days → No alert (plenty of runway)
+ * - LA < 200 & Runway Air < 90 days → Low stock alert
+ * - LA < 200 & Runway Air < 90 days & Phase Out → Low stock alert (noted as phase out)
+ * - LA < 50 & Runway Air < 90 days → Critical alert (once until restocked)
+ * - LA <= 0 → Zero stock alert
+ * - LA <= 0 & Phase Out → Zero stock alert (noted as phase out)
  */
 export async function checkLowStockAlerts(
   cache: InventoryCacheService,
   inventoryData: Awaited<ReturnType<typeof fetchInventoryData>>,
-  skuToProductName: Map<string, string>
+  forecastingData: ForecastingItem[],
+  phaseOutSkus: string[]
 ): Promise<void> {
   const LOW_STOCK_THRESHOLD = 200;
-  const LOCATIONS = ['LA Office', 'DTLA WH'];
+  const CRITICAL_THRESHOLD = 50;
+  const RUNWAY_THRESHOLD = 90; // days
   const LOCATION_LABEL = 'LA';
 
   try {
@@ -364,7 +384,19 @@ export async function checkLowStockAlerts(
       return;
     }
 
-    // Build a map of SKU -> combined quantity and variant info
+    // Get incoming inventory for air shipments
+    const incomingInventory = await cache.getIncomingInventory();
+    
+    // Build burn rate map from forecasting data (use 21-day average)
+    const burnRateMap = new Map<string, number>();
+    for (const item of forecastingData) {
+      burnRateMap.set(item.sku, item.avgDaily21d);
+    }
+
+    // Build phase out set for quick lookup (case insensitive)
+    const phaseOutSet = new Set(phaseOutSkus.map(s => s.toLowerCase()));
+
+    // Build a map of SKU -> combined LA quantity and variant info
     const skuInventory = new Map<string, { quantity: number; variantTitle: string }>();
     
     // Add LA Office quantities
@@ -388,52 +420,98 @@ export async function checkLowStockAlerts(
       }
     }
 
+    // Calculate incoming air for each SKU (across all destinations going to LA)
+    const getIncomingAir = (sku: string): number => {
+      let total = 0;
+      // Check LA Office and DTLA WH destinations
+      for (const dest of ['LA Office', 'DTLA WH']) {
+        const destData = incomingInventory[dest];
+        if (destData?.[sku]) {
+          total += destData[sku].inboundAir;
+        }
+      }
+      return total;
+    };
+
     // Get existing alerts
     const existingAlerts = await cache.getLowStockAlerts();
     
-    // Find SKUs that are low stock
-    const lowStockSkus: Array<{ sku: string; variantName: string; quantity: number }> = [];
+    // Categorize SKUs for alerts
     const newAlerts: LowStockAlertCache = {};
-    const skusToAlert: Array<{ sku: string; variantName: string; quantity: number }> = [];
+    const lowStockToAlert: Array<{ sku: string; variantName: string; quantity: number; runwayDays: number; isPhaseOut: boolean }> = [];
+    const criticalToAlert: Array<{ sku: string; variantName: string; quantity: number; runwayDays: number; isPhaseOut: boolean }> = [];
+    const zeroStockToAlert: Array<{ sku: string; variantName: string; isPhaseOut: boolean }> = [];
 
     for (const [sku, data] of skuInventory) {
-      const quantity = data.quantity;
+      const laQuantity = data.quantity;
+      const incomingAir = getIncomingAir(sku);
+      const burnRate = burnRateMap.get(sku) || 0;
+      const isPhaseOut = phaseOutSet.has(sku.toLowerCase());
       
-      if (quantity < LOW_STOCK_THRESHOLD) {
-        // SKU is below threshold
-        const previousAlertQty = existingAlerts[sku];
-        
-        if (previousAlertQty === undefined) {
-          // Never alerted before - send alert
-          skusToAlert.push({
+      // Calculate Runway Air: (LA inventory + Air incoming) / burn rate
+      const runwayAir = burnRate > 0 ? Math.round((laQuantity + incomingAir) / burnRate) : 999;
+      
+      const previousAlert = existingAlerts[sku];
+
+      // Determine alert type based on tiered logic
+      if (laQuantity <= 0) {
+        // ZERO STOCK - always alert
+        if (!previousAlert || previousAlert.type !== 'zero') {
+          zeroStockToAlert.push({
             sku,
             variantName: data.variantTitle,
-            quantity,
+            isPhaseOut,
           });
-          newAlerts[sku] = quantity;
-        } else {
-          // Already alerted - keep the existing alert record
-          newAlerts[sku] = previousAlertQty;
+        }
+        newAlerts[sku] = { type: 'zero', quantity: laQuantity };
+        
+      } else if (laQuantity < CRITICAL_THRESHOLD && runwayAir < RUNWAY_THRESHOLD) {
+        // CRITICAL (<50 units with <90 days runway)
+        if (!previousAlert || previousAlert.type !== 'critical') {
+          criticalToAlert.push({
+            sku,
+            variantName: data.variantTitle,
+            quantity: laQuantity,
+            runwayDays: runwayAir,
+            isPhaseOut,
+          });
+        }
+        newAlerts[sku] = { type: 'critical', quantity: laQuantity };
+        
+      } else if (laQuantity < LOW_STOCK_THRESHOLD && runwayAir < RUNWAY_THRESHOLD) {
+        // LOW STOCK (<200 units with <90 days runway)
+        if (!previousAlert || previousAlert.type !== 'low') {
+          lowStockToAlert.push({
+            sku,
+            variantName: data.variantTitle,
+            quantity: laQuantity,
+            runwayDays: runwayAir,
+            isPhaseOut,
+          });
+        }
+        newAlerts[sku] = { type: 'low', quantity: laQuantity };
+        
+      } else if (laQuantity < LOW_STOCK_THRESHOLD && runwayAir >= RUNWAY_THRESHOLD) {
+        // Low quantity but plenty of runway - no alert needed
+        // Don't add to newAlerts (clears any previous alert)
+        if (previousAlert) {
+          console.log(`✅ ${sku}: ${laQuantity} units but ${runwayAir}d runway - no alert needed`);
         }
         
-        lowStockSkus.push({
-          sku,
-          variantName: data.variantTitle,
-          quantity,
-        });
-      } else if (existingAlerts[sku] !== undefined) {
-        // SKU was previously low but is now above threshold - clear the alert
-        // (Don't add to newAlerts, effectively removing it)
-        console.log(`📈 ${sku} restocked to ${quantity} units (was alerted at ${existingAlerts[sku]})`);
+      } else if (previousAlert) {
+        // SKU was previously alerted but is now above threshold - clear alert
+        console.log(`📈 ${sku} restocked to ${laQuantity} units (was ${previousAlert.type} alert)`);
       }
     }
 
     // Replace the entire alerts cache - this removes restocked SKUs
     await cache.setLowStockAlerts(newAlerts);
 
-    // Send Slack notification for newly low stock items
-    if (skusToAlert.length > 0) {
-      console.log(`⚠️ Sending low stock alert for ${skusToAlert.length} SKUs at ${LOCATION_LABEL}`);
+    // Send Slack notification for new alerts
+    const totalNewAlerts = lowStockToAlert.length + criticalToAlert.length + zeroStockToAlert.length;
+    
+    if (totalNewAlerts > 0) {
+      console.log(`⚠️ Sending stock alerts: ${zeroStockToAlert.length} zero, ${criticalToAlert.length} critical, ${lowStockToAlert.length} low`);
       
       sendSlackNotification(async () => {
         const alertsChannelId = process.env.SLACK_CHANNEL_ALERTS;
@@ -442,14 +520,16 @@ export async function checkLowStockAlerts(
         }
         
         const slack = new SlackService(alertsChannelId);
-        await slack.notifyLowStock({
-          items: skusToAlert,
+        await slack.notifyLowStockTiered({
+          lowStockItems: lowStockToAlert,
+          criticalItems: criticalToAlert,
+          zeroStockItems: zeroStockToAlert,
           location: LOCATION_LABEL,
-          threshold: LOW_STOCK_THRESHOLD,
         });
       }, 'SLACK_CHANNEL_ALERTS');
     } else {
-      console.log(`✅ No new low stock alerts needed (${lowStockSkus.length} SKUs below threshold, all previously alerted)`);
+      const trackedCount = Object.keys(newAlerts).length;
+      console.log(`✅ No new stock alerts needed (${trackedCount} SKUs being tracked)`);
     }
 
   } catch (error) {
