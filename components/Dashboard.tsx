@@ -3050,8 +3050,14 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
-          {/* Phase Out Link */}
-          <div className="flex justify-end mb-1">
+          {/* Hidden SKUs & Phase Out Links */}
+          <div className="flex justify-end mb-1 gap-3">
+            <button
+              onClick={() => setShowHiddenSkusModal(true)}
+              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+            >
+              Hidden SKUs{hiddenSkus.length > 0 ? ` (${hiddenSkus.length})` : ''}
+            </button>
             <button
               onClick={() => setShowPhaseOutModal(true)}
               className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
@@ -5625,17 +5631,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                 Grouped
                               </button>
                             </div>
-                          </div>
-                          {/* Hidden SKUs Button */}
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-gray-400 mb-1">Hidden</span>
-                            <button
-                              onClick={() => setShowHiddenSkusModal(true)}
-                              className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1"
-                            >
-                              <span>🙈</span>
-                              <span>{hiddenSkus.length > 0 ? `${hiddenSkus.length} SKUs` : 'Manage'}</span>
-                            </button>
                           </div>
                           {/* Search */}
                           <div className="flex flex-col">
