@@ -418,6 +418,13 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isAddingPhaseOut, setIsAddingPhaseOut] = useState(false);
   const [isRemovingPhaseOut, setIsRemovingPhaseOut] = useState<string | null>(null);
 
+  // Hidden SKUs state (for Inventory Counts tab)
+  const [showHiddenSkusModal, setShowHiddenSkusModal] = useState(false);
+  const [hiddenSkus, setHiddenSkus] = useState<string[]>([]);
+  const [newHiddenSku, setNewHiddenSku] = useState('');
+  const [isAddingHiddenSku, setIsAddingHiddenSku] = useState(false);
+  const [isRemovingHiddenSku, setIsRemovingHiddenSku] = useState<string | null>(null);
+
   // Inventory Tracker state
   type TrackerLocation = 'LA Office' | 'DTLA WH' | 'China WH';
   const [trackerLocation, setTrackerLocation] = useState<TrackerLocation>('LA Office');
@@ -524,6 +531,60 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Error removing phase out SKU:', error);
     } finally {
       setIsRemovingPhaseOut(null);
+    }
+  };
+
+  // Load hidden SKUs for Inventory Counts tab
+  const loadHiddenSkus = async () => {
+    try {
+      const response = await fetch('/api/hidden-skus');
+      if (response.ok) {
+        const data = await response.json();
+        setHiddenSkus(data.skus?.map((s: { sku: string }) => s.sku) || []);
+      }
+    } catch (error) {
+      console.error('Error loading hidden SKUs:', error);
+    }
+  };
+
+  // Add SKU to hidden list
+  const addHiddenSku = async () => {
+    if (!newHiddenSku.trim() || isAddingHiddenSku) return;
+    setIsAddingHiddenSku(true);
+    try {
+      const response = await fetch('/api/hidden-skus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sku: newHiddenSku.trim() }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHiddenSkus(data.skus?.map((s: { sku: string }) => s.sku) || []);
+        setNewHiddenSku('');
+      }
+    } catch (error) {
+      console.error('Error adding hidden SKU:', error);
+    } finally {
+      setIsAddingHiddenSku(false);
+    }
+  };
+
+  // Remove SKU from hidden list
+  const removeHiddenSku = async (sku: string) => {
+    if (isRemovingHiddenSku) return;
+    setIsRemovingHiddenSku(sku);
+    try {
+      const response = await fetch(`/api/hidden-skus?sku=${encodeURIComponent(sku)}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setHiddenSkus(data.skus?.map((s: { sku: string }) => s.sku) || []);
+      }
+    } catch (error) {
+      console.error('Error removing hidden SKU:', error);
+    } finally {
+      setIsRemovingHiddenSku(null);
     }
   };
 
@@ -1630,6 +1691,7 @@ export default function Dashboard({ session }: DashboardProps) {
     loadInventoryFromCache();
     loadProductionOrders(); // Also load PO data for Planning tab
     loadPhaseOutSkus(); // Load phase out list
+    loadHiddenSkus(); // Load hidden SKUs list for Inventory Counts tab
   }, []);
 
   // Close location dropdown when clicking outside
@@ -1761,6 +1823,8 @@ export default function Dashboard({ session }: DashboardProps) {
           setShowOverviewColumnDefinitions(false);
         } else if (showPhaseOutModal) {
           setShowPhaseOutModal(false);
+        } else if (showHiddenSkusModal) {
+          setShowHiddenSkusModal(false);
         } else if (showTrackerLogs) {
           setShowTrackerLogs(false);
         }
@@ -1774,7 +1838,7 @@ export default function Dashboard({ session }: DashboardProps) {
     showDeliveryConfirm, showCancelConfirm, showCancelTransferConfirm,
     showTrackerConfirm, showTrackerClearConfirm, showTransferDeliveryForm,
     showDeliveryForm, showEditTransferForm, showEditForm, showNewTransferForm,
-    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showTrackerLogs
+    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showHiddenSkusModal, showTrackerLogs
   ]);
 
   // Load tracker drafts and last submission info from Google Drive on mount
@@ -5331,8 +5395,12 @@ export default function Dashboard({ session }: DashboardProps) {
                   return getModelPriority(b) - getModelPriority(a);
                 });
                 
-                // Filter by search and product
+                // Filter by search, product, and hidden SKUs
                 const filteredData = locationData.filter(item => {
+                  // Hide SKUs in the hidden list
+                  const isHidden = hiddenSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+                  if (isHidden) return false;
+                  
                   const matchesSearch = !trackerSearchTerm || 
                     item.sku.toLowerCase().includes(trackerSearchTerm.toLowerCase()) ||
                     item.productTitle.toLowerCase().includes(trackerSearchTerm.toLowerCase()) ||
@@ -5557,6 +5625,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                 Grouped
                               </button>
                             </div>
+                          </div>
+                          {/* Hidden SKUs Button */}
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-400 mb-1">Hidden</span>
+                            <button
+                              onClick={() => setShowHiddenSkusModal(true)}
+                              className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1"
+                            >
+                              <span>🙈</span>
+                              <span>{hiddenSkus.length > 0 ? `${hiddenSkus.length} SKUs` : 'Manage'}</span>
+                            </button>
                           </div>
                           {/* Search */}
                           <div className="flex flex-col">
@@ -9024,6 +9103,106 @@ export default function Dashboard({ session }: DashboardProps) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Hidden SKUs Modal (for Inventory Counts) */}
+        {showHiddenSkusModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Hidden SKUs</h3>
+                <p className="text-sm text-gray-500 mt-1">These SKUs are hidden from the Inventory Counts tab</p>
+              </div>
+              <div className="px-6 py-4 flex-1 overflow-y-auto">
+                {/* Add new SKU with autocomplete */}
+                <div className="mb-4">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={newHiddenSku}
+                        onChange={(e) => setNewHiddenSku(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && addHiddenSku()}
+                        placeholder="Enter SKU to hide..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      {/* SKU Suggestions Dropdown */}
+                      {newHiddenSku.length >= 2 && inventoryData?.inventory && (() => {
+                        const suggestions = inventoryData.inventory
+                          .filter(inv => 
+                            inv.sku.toUpperCase().includes(newHiddenSku) &&
+                            !hiddenSkus.some(s => s.toLowerCase() === inv.sku.toLowerCase())
+                          )
+                          .slice(0, 8);
+                        
+                        if (suggestions.length === 0) return null;
+                        
+                        return (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                            {suggestions.map((inv) => (
+                              <button
+                                key={inv.sku}
+                                onClick={() => {
+                                  setNewHiddenSku(inv.sku);
+                                }}
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
+                              >
+                                <span className="font-medium">{inv.sku}</span>
+                                <span className="text-gray-500 ml-2 text-xs">{inv.productTitle}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <button
+                      onClick={addHiddenSku}
+                      disabled={isAddingHiddenSku || !newHiddenSku.trim()}
+                      className={`px-4 py-2 text-sm font-medium rounded-md ${
+                        isAddingHiddenSku || !newHiddenSku.trim()
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {isAddingHiddenSku ? 'Adding...' : 'Hide'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* List of hidden SKUs */}
+                {hiddenSkus.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No SKUs are hidden</p>
+                ) : (
+                  <div className="space-y-2">
+                    {[...hiddenSkus].sort((a, b) => a.localeCompare(b)).map((sku) => (
+                      <div key={sku} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md">
+                        <span className="text-sm font-medium text-gray-900">{sku}</span>
+                        <button
+                          onClick={() => removeHiddenSku(sku)}
+                          disabled={isRemovingHiddenSku === sku}
+                          className={`text-xs ${
+                            isRemovingHiddenSku === sku
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-blue-600 hover:text-blue-800 hover:underline'
+                          }`}
+                        >
+                          {isRemovingHiddenSku === sku ? 'Showing...' : 'Show'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => setShowHiddenSkusModal(false)}
+                  className="w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
