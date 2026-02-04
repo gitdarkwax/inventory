@@ -2379,9 +2379,20 @@ export default function Dashboard({ session }: DashboardProps) {
       // Guard against items with missing SKU
       if (!item.sku) return false;
       
-      // Phase out filter: hide phased out SKUs with zero total inventory
+      // Phase out filter: hide phased out SKUs with zero displayed inventory
+      // Use same calculation as displayed Total (LA + DTLA + China + In Transit, excludes ShipBob)
       const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
-      if (isPhaseOut && item.totalAvailable <= 0) return false;
+      if (isPhaseOut) {
+        let inTransit = 0;
+        for (const [, skuData] of Object.entries(incomingFromTransfersData)) {
+          const skuIncoming = skuData[item.sku];
+          if (skuIncoming) {
+            inTransit += skuIncoming.inboundAir + skuIncoming.inboundSea;
+          }
+        }
+        const displayedTotal = calculateOverviewTotal(item, inTransit);
+        if (displayedTotal <= 0) return false;
+      }
       
       const matchesSearch = !searchTerm || 
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
