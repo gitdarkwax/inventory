@@ -3061,14 +3061,8 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
-          {/* Hidden SKUs & Phase Out Links */}
-          <div className="flex justify-end mb-1 gap-3">
-            <button
-              onClick={() => setShowHiddenSkusModal(true)}
-              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-            >
-              Hidden SKUs{hiddenSkus.length > 0 ? ` (${hiddenSkus.length})` : ''}
-            </button>
+          {/* Phase Out Link */}
+          <div className="flex justify-end mb-1">
             <button
               onClick={() => setShowPhaseOutModal(true)}
               className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
@@ -5772,6 +5766,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         
                         {/* Right: Action Buttons */}
                         <div className="flex items-center gap-3">
+                          {/* Hidden SKUs Link */}
+                          <button
+                            onClick={() => setShowHiddenSkusModal(true)}
+                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                          >
+                            Hidden SKUs{hiddenSkus.length > 0 ? ` (${hiddenSkus.length})` : ''}
+                          </button>
                           {/* View Logs Button - hidden on mobile (portrait & landscape) */}
                           <button
                             onClick={() => {
