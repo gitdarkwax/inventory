@@ -425,6 +425,16 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isAddingHiddenSku, setIsAddingHiddenSku] = useState(false);
   const [isRemovingHiddenSku, setIsRemovingHiddenSku] = useState<string | null>(null);
 
+  // SKU Comments state
+  const [showSkuCommentForm, setShowSkuCommentForm] = useState(false);
+  const [skuComments, setSkuComments] = useState<Record<string, { comment: string; updatedAt: string; updatedBy: string }>>({});
+  const [commentSkuSearch, setCommentSkuSearch] = useState('');
+  const [commentSkuSelected, setCommentSkuSelected] = useState('');
+  const [commentText, setCommentText] = useState('');
+  const [isSavingComment, setIsSavingComment] = useState(false);
+  const [showCommentSkuSuggestions, setShowCommentSkuSuggestions] = useState(false);
+  const commentSkuSearchRef = useRef<HTMLDivElement>(null);
+
   // Inventory Tracker state
   type TrackerLocation = 'LA Office' | 'DTLA WH' | 'China WH';
   const [trackerLocation, setTrackerLocation] = useState<TrackerLocation>('LA Office');
@@ -585,6 +595,67 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Error removing hidden SKU:', error);
     } finally {
       setIsRemovingHiddenSku(null);
+    }
+  };
+
+  // Load SKU comments
+  const loadSkuComments = async () => {
+    try {
+      const response = await fetch('/api/sku-comments');
+      if (response.ok) {
+        const data = await response.json();
+        const commentsMap: Record<string, { comment: string; updatedAt: string; updatedBy: string }> = {};
+        if (data.comments) {
+          for (const [sku, info] of Object.entries(data.comments)) {
+            const commentInfo = info as { comment: string; updatedAt: string; updatedBy: string };
+            commentsMap[sku] = {
+              comment: commentInfo.comment,
+              updatedAt: commentInfo.updatedAt,
+              updatedBy: commentInfo.updatedBy,
+            };
+          }
+        }
+        setSkuComments(commentsMap);
+      }
+    } catch (error) {
+      console.error('Error loading SKU comments:', error);
+    }
+  };
+
+  // Save SKU comment
+  const saveSkuComment = async () => {
+    if (!commentSkuSelected || isSavingComment) return;
+    setIsSavingComment(true);
+    try {
+      const response = await fetch('/api/sku-comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sku: commentSkuSelected, comment: commentText }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const commentsMap: Record<string, { comment: string; updatedAt: string; updatedBy: string }> = {};
+        if (data.comments) {
+          for (const [sku, info] of Object.entries(data.comments)) {
+            const commentInfo = info as { comment: string; updatedAt: string; updatedBy: string };
+            commentsMap[sku] = {
+              comment: commentInfo.comment,
+              updatedAt: commentInfo.updatedAt,
+              updatedBy: commentInfo.updatedBy,
+            };
+          }
+        }
+        setSkuComments(commentsMap);
+        // Reset form
+        setCommentSkuSearch('');
+        setCommentSkuSelected('');
+        setCommentText('');
+        setShowSkuCommentForm(false);
+      }
+    } catch (error) {
+      console.error('Error saving SKU comment:', error);
+    } finally {
+      setIsSavingComment(false);
     }
   };
 
@@ -1692,6 +1763,7 @@ export default function Dashboard({ session }: DashboardProps) {
     loadProductionOrders(); // Also load PO data for Planning tab
     loadPhaseOutSkus(); // Load phase out list
     loadHiddenSkus(); // Load hidden SKUs list for Inventory Counts tab
+    loadSkuComments(); // Load SKU comments
   }, []);
 
   // Close location dropdown when clicking outside
@@ -1825,6 +1897,8 @@ export default function Dashboard({ session }: DashboardProps) {
           setShowPhaseOutModal(false);
         } else if (showHiddenSkusModal) {
           setShowHiddenSkusModal(false);
+        } else if (showSkuCommentForm) {
+          setShowSkuCommentForm(false);
         } else if (showTrackerLogs) {
           setShowTrackerLogs(false);
         }
@@ -1838,7 +1912,7 @@ export default function Dashboard({ session }: DashboardProps) {
     showDeliveryConfirm, showCancelConfirm, showCancelTransferConfirm,
     showTrackerConfirm, showTrackerClearConfirm, showTransferDeliveryForm,
     showDeliveryForm, showEditTransferForm, showEditForm, showNewTransferForm,
-    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showHiddenSkusModal, showTrackerLogs
+    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showHiddenSkusModal, showSkuCommentForm, showTrackerLogs
   ]);
 
   // Load tracker drafts and last submission info from Google Drive on mount
@@ -3061,8 +3135,16 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
-          {/* Phase Out Link */}
-          <div className="flex justify-end mb-1">
+          {/* SKU Comments & Phase Out Links */}
+          <div className="flex justify-end mb-1 gap-3">
+            {(activeTab === 'inventory' || activeTab === 'planning') && (
+              <button
+                onClick={() => setShowSkuCommentForm(true)}
+                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+              >
+                💬 Add SKU Comment
+              </button>
+            )}
             <button
               onClick={() => setShowPhaseOutModal(true)}
               className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
@@ -3492,10 +3574,18 @@ export default function Dashboard({ session }: DashboardProps) {
                               // Check if SKU is in phase out list
                               const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
                               
+                              const skuComment = skuComments[item.sku.toUpperCase()];
+                              const commentTooltip = skuComment 
+                                ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                                : undefined;
+                              
                               return (
                                 <tr key={item.sku} className={isPhaseOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
                                   <td className={`w-32 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isPhaseOut ? 'text-gray-500' : 'text-gray-900'}`}
-                                    title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                    title={commentTooltip}>
+                                    {item.sku}
+                                    {skuComment && <span className="ml-1">💬</span>}
+                                  </td>
                                   {inventoryData.locations.map(location => {
                                     const qty = item.locations?.[location] ?? 0;
                                     return (
@@ -3696,10 +3786,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                       // Check if SKU is in phase out list
                                       const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
                                       
+                                      const skuComment = skuComments[item.sku.toUpperCase()];
+                                      const commentTooltip = skuComment 
+                                        ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                                        : undefined;
+                                      
                                       return (
                                         <tr key={item.sku} className={isPhaseOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
                                           <td className={`w-32 px-3 sm:px-4 py-2 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isPhaseOut ? 'text-gray-500' : 'text-gray-900'}`}
-                                            title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                            title={commentTooltip}>
+                                            {item.sku}
+                                            {skuComment && <span className="ml-1">💬</span>}
+                                          </td>
                                           {inventoryData.locations.map(location => {
                                             const qty = item.locations?.[location] ?? 0;
                                             return (
@@ -4857,9 +4955,17 @@ export default function Dashboard({ session }: DashboardProps) {
                         </thead>
                       )}
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {items.map((item, index) => (
+                        {items.map((item, index) => {
+                          const skuComment = skuComments[item.sku.toUpperCase()];
+                          const commentTooltip = skuComment 
+                            ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                            : undefined;
+                          return (
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="w-28 px-2 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
+                            <td className="w-28 px-2 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={commentTooltip}>
+                              {item.sku}
+                              {skuComment && <span className="ml-1">💬</span>}
+                            </td>
                             <td className={`w-16 px-2 py-3 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                             <td className="w-12 px-2 py-3 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                             <td 
@@ -4908,7 +5014,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               {formatRunway(item.cnRunway)}
                             </td>
                           </tr>
-                        ))}
+                        );})}
                       </tbody>
                     </table>
                   );
@@ -5255,9 +5361,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                      {sortedItems.map((item, index) => (
+                                      {sortedItems.map((item, index) => {
+                                        const skuComment = skuComments[item.sku.toUpperCase()];
+                                        const commentTooltip = skuComment 
+                                          ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                                          : undefined;
+                                        return (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                          <td className="w-28 px-2 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productTitle}>{item.sku}</td>
+                                          <td className="w-28 px-2 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={commentTooltip}>
+                                            {item.sku}
+                                            {skuComment && <span className="ml-1">💬</span>}
+                                          </td>
                                           <td className={`w-16 px-2 py-2 text-sm text-center ${item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{item.la.toLocaleString()}</td>
                                           <td className="w-12 px-2 py-2 text-sm text-center text-gray-900">{item.unitsPerDay.toFixed(1)}</td>
                                           <td 
@@ -5306,7 +5420,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                             {formatRunway(item.cnRunway)}
                                           </td>
                                         </tr>
-                                      ))}
+                                      );})}
                                     </tbody>
                                   </table>
                                 </div>
@@ -9110,6 +9224,129 @@ export default function Dashboard({ session }: DashboardProps) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* SKU Comment Form Modal */}
+        {showSkuCommentForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Add SKU Comment</h3>
+                <p className="text-sm text-gray-500 mt-1">Add a note to a SKU that will show on hover</p>
+              </div>
+              <div className="px-6 py-4">
+                {/* SKU Search */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                  <div className="relative" ref={commentSkuSearchRef}>
+                    <input
+                      type="text"
+                      value={commentSkuSearch}
+                      onChange={(e) => {
+                        setCommentSkuSearch(e.target.value.toUpperCase());
+                        setShowCommentSkuSuggestions(true);
+                        // If exact match, select it
+                        const exactMatch = inventoryData?.inventory.find(
+                          inv => inv.sku.toUpperCase() === e.target.value.toUpperCase()
+                        );
+                        if (exactMatch) {
+                          setCommentSkuSelected(exactMatch.sku);
+                          // Load existing comment if any
+                          const existingComment = skuComments[exactMatch.sku.toUpperCase()];
+                          setCommentText(existingComment?.comment || '');
+                        } else {
+                          setCommentSkuSelected('');
+                          setCommentText('');
+                        }
+                      }}
+                      onFocus={() => setShowCommentSkuSuggestions(true)}
+                      placeholder="Search for SKU..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    {/* SKU Suggestions */}
+                    {showCommentSkuSuggestions && commentSkuSearch.length >= 2 && inventoryData?.inventory && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                        {inventoryData.inventory
+                          .filter(inv => 
+                            inv.sku.toUpperCase().includes(commentSkuSearch) ||
+                            inv.productTitle.toLowerCase().includes(commentSkuSearch.toLowerCase())
+                          )
+                          .slice(0, 8)
+                          .map((inv) => (
+                            <button
+                              key={inv.sku}
+                              onClick={() => {
+                                setCommentSkuSearch(inv.sku);
+                                setCommentSkuSelected(inv.sku);
+                                setShowCommentSkuSuggestions(false);
+                                // Load existing comment if any
+                                const existingComment = skuComments[inv.sku.toUpperCase()];
+                                setCommentText(existingComment?.comment || '');
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
+                            >
+                              <span className="font-medium">{inv.sku}</span>
+                              {skuComments[inv.sku.toUpperCase()] && <span className="ml-1">💬</span>}
+                              <span className="text-gray-500 ml-2 text-xs">{inv.productTitle}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                  {commentSkuSelected && (
+                    <p className="text-xs text-green-600 mt-1">Selected: {commentSkuSelected}</p>
+                  )}
+                </div>
+
+                {/* Comment Input */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Comment</label>
+                  <textarea
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Enter your comment..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Leave empty to remove the comment</p>
+                </div>
+
+                {/* Existing Comment Info */}
+                {commentSkuSelected && skuComments[commentSkuSelected.toUpperCase()] && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                    <p className="text-xs text-gray-500">
+                      Current comment by {skuComments[commentSkuSelected.toUpperCase()].updatedBy} on{' '}
+                      {new Date(skuComments[commentSkuSelected.toUpperCase()].updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowSkuCommentForm(false);
+                    setCommentSkuSearch('');
+                    setCommentSkuSelected('');
+                    setCommentText('');
+                  }}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveSkuComment}
+                  disabled={!commentSkuSelected || isSavingComment}
+                  className={`flex-1 px-4 py-2 text-sm font-medium rounded-md ${
+                    !commentSkuSelected || isSavingComment
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {isSavingComment ? 'Saving...' : 'Save Comment'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
