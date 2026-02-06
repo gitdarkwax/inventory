@@ -12,7 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { InventoryCacheService } from '@/lib/inventory-cache';
+import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
+import { TransfersService } from '@/lib/transfers';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -50,7 +51,11 @@ interface RestockCancelledRequest {
   items: { sku: string; quantity: number }[]; // undelivered items to restock
 }
 
-type RequestBody = MarkInTransitRequest | LogDeliveryRequest | RestockCancelledRequest;
+interface RebuildIncomingRequest {
+  action: 'rebuild_incoming';
+}
+
+type RequestBody = MarkInTransitRequest | LogDeliveryRequest | RestockCancelledRequest | RebuildIncomingRequest;
 
 // GraphQL mutation for adjusting inventory quantities (using delta values)
 const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
@@ -438,6 +443,87 @@ export async function POST(request: NextRequest) {
         itemsRestocked: items.length,
         warnings: errors.length > 0 ? errors : undefined,
       });
+
+    } else if (body.action === 'rebuild_incoming') {
+      // Rebuild incoming cache from all in_transit and partial transfers
+      console.log(`📦 Rebuilding incoming inventory cache from all transfers`);
+      
+      try {
+        const transfersCache = await TransfersService.loadTransfers();
+        const activeTransfers = transfersCache.transfers.filter(
+          t => t.status === 'in_transit' || t.status === 'partial'
+        );
+        
+        // Build new incoming inventory from scratch
+        const newIncoming: IncomingInventoryCache = {};
+        
+        for (const transfer of activeTransfers) {
+          // Skip Immediate transfers (they don't contribute to incoming)
+          if (transfer.transferType === 'Immediate') continue;
+          
+          const destination = transfer.destination;
+          const isAir = transfer.transferType === 'Air Express' || transfer.transferType === 'Air Slow';
+          const isSea = transfer.transferType === 'Sea';
+          
+          if (!isAir && !isSea) continue;
+          
+          if (!newIncoming[destination]) {
+            newIncoming[destination] = {};
+          }
+          
+          for (const item of transfer.items) {
+            // Calculate remaining quantity (total minus already received)
+            const remainingQty = item.quantity - (item.receivedQuantity || 0);
+            if (remainingQty <= 0) continue;
+            
+            if (!newIncoming[destination][item.sku]) {
+              newIncoming[destination][item.sku] = {
+                inboundAir: 0,
+                inboundSea: 0,
+                airTransfers: [],
+                seaTransfers: [],
+              };
+            }
+            
+            const transferDetail = {
+              transferId: transfer.id,
+              quantity: remainingQty,
+              createdAt: transfer.createdAt,
+              note: transfer.notes || null,
+              expectedArrivalAt: transfer.eta || null,
+            };
+            
+            if (isAir) {
+              newIncoming[destination][item.sku].inboundAir += remainingQty;
+              newIncoming[destination][item.sku].airTransfers.push(transferDetail);
+            } else if (isSea) {
+              newIncoming[destination][item.sku].inboundSea += remainingQty;
+              newIncoming[destination][item.sku].seaTransfers.push(transferDetail);
+            }
+          }
+        }
+        
+        // Save the rebuilt cache
+        await cacheService.setIncomingInventory(newIncoming);
+        
+        const totalSkus = Object.values(newIncoming).reduce(
+          (sum, dest) => sum + Object.keys(dest).length, 0
+        );
+        console.log(`✅ Incoming cache rebuilt: ${activeTransfers.length} active transfers, ${totalSkus} SKUs`);
+        
+        return NextResponse.json({
+          success: true,
+          action: 'rebuild_incoming',
+          transfersProcessed: activeTransfers.length,
+          skusTracked: totalSkus,
+        });
+      } catch (error) {
+        console.error('❌ Failed to rebuild incoming cache:', error);
+        return NextResponse.json({ 
+          error: 'Failed to rebuild incoming cache', 
+          details: error instanceof Error ? error.message : 'Unknown error',
+        }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

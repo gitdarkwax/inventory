@@ -1326,6 +1326,21 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowEditTransferForm(false);
         setSelectedTransfer(data.transfer);
+        
+        // If transfer is in_transit or partial, rebuild incoming cache so other tabs reflect changes
+        if (['in_transit', 'partial'].includes(selectedTransfer.status)) {
+          try {
+            await fetch('/api/transfers/inventory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'rebuild_incoming' }),
+            });
+            await loadIncomingFromCache();
+          } catch (err) {
+            console.warn('Failed to rebuild incoming cache:', err);
+          }
+        }
+        
         showProdNotification('success', 'Transfer Updated', 'Transfer updated successfully');
       } else {
         showProdNotification('error', 'Update Failed', data.error || 'Failed to update transfer');
@@ -1398,6 +1413,20 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowCancelTransferConfirm(false);
         setSelectedTransfer(null);
+        
+        // Rebuild incoming cache since transfer was removed
+        if (['in_transit', 'partial'].includes(selectedTransfer.status)) {
+          try {
+            await fetch('/api/transfers/inventory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'rebuild_incoming' }),
+            });
+            await loadIncomingFromCache();
+          } catch (err) {
+            console.warn('Failed to rebuild incoming cache:', err);
+          }
+        }
         
         const restockMessage = restockedItems.length > 0 
           ? ` Undelivered items restocked to ${selectedTransfer.origin}.`
