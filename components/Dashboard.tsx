@@ -2544,50 +2544,75 @@ export default function Dashboard({ session }: DashboardProps) {
       return sortOrder === 'asc' ? comparison : -comparison;
     }) || [];
 
-  // Filter and sort location detail (uses either single location filter for inline view or selectedLocation for modal)
-  // Only show detail view when exactly one location is selected
-  const activeLocationFilter = (inventoryLocationFilters.length === 1 ? inventoryLocationFilters[0] : null) || selectedLocation;
+  // Filter and sort location detail
+  // Show detail view when any locations are selected (single or multiple) or when modal is open
+  const showLocationDetailView = inventoryLocationFilters.length > 0 || selectedLocation !== null;
+  // For modal, use selectedLocation; for inline, use first selected location (for single) or aggregate (for multiple)
+  const activeLocationFilter = selectedLocation || (inventoryLocationFilters.length === 1 ? inventoryLocationFilters[0] : null);
   
-  const filteredLocationDetail = activeLocationFilter && inventoryData?.locationDetails?.[activeLocationFilter]
-    ? inventoryData.locationDetails[activeLocationFilter]
+  // Build aggregated location detail when locations are selected
+  const filteredLocationDetail = (() => {
+    // Modal view - single location
+    if (selectedLocation && inventoryData?.locationDetails?.[selectedLocation]) {
+      return inventoryData.locationDetails[selectedLocation]
         .map(item => {
-          // Override Shopify's incoming/inboundAir/inboundSea with our local transfer data
-          const localIncoming = incomingFromTransfersData[activeLocationFilter]?.[item.sku];
+          const localIncoming = incomingFromTransfersData[selectedLocation]?.[item.sku];
           if (localIncoming) {
-            const totalLocalIncoming = localIncoming.inboundAir + localIncoming.inboundSea;
             return {
               ...item,
-              incoming: totalLocalIncoming, // Total incoming from local transfers
+              incoming: localIncoming.inboundAir + localIncoming.inboundSea,
               inboundAir: localIncoming.inboundAir,
               inboundSea: localIncoming.inboundSea,
               airTransfers: localIncoming.airTransfers,
               seaTransfers: localIncoming.seaTransfers,
             };
           }
-          // No local transfers for this SKU - use zeros (not Shopify data)
-          return {
-            ...item,
-            incoming: 0,
-            inboundAir: 0,
-            inboundSea: 0,
-            airTransfers: [],
-            seaTransfers: [],
-          };
+          return { ...item, incoming: 0, inboundAir: 0, inboundSea: 0, airTransfers: [], seaTransfers: [] };
         })
         .filter(item => {
-          // Phase out filter: hide phased out SKUs with zero available in this location
           const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
           if (isPhaseOut && item.available <= 0) return false;
-          
-          // Use main searchTerm for inline view, locationSearchTerm for modal
-          const activeSearchTerm = inventoryLocationFilters.length === 1 ? searchTerm : locationSearchTerm;
-          const matchesSearch = !activeSearchTerm || 
-            item.sku.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
-            item.productTitle.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
-            item.variantTitle.toLowerCase().includes(activeSearchTerm.toLowerCase());
+          const matchesSearch = !locationSearchTerm || 
+            item.sku.toLowerCase().includes(locationSearchTerm.toLowerCase()) ||
+            item.productTitle.toLowerCase().includes(locationSearchTerm.toLowerCase()) ||
+            item.variantTitle.toLowerCase().includes(locationSearchTerm.toLowerCase());
+          return matchesSearch;
+        })
+        .sort((a, b) => {
+          let comparison = 0;
+          if (locationSortBy === 'sku') comparison = a.sku.localeCompare(b.sku);
+          else comparison = a[locationSortBy] - b[locationSortBy];
+          return locationSortOrder === 'asc' ? comparison : -comparison;
+        });
+    }
+    
+    // Inline view - single location selected
+    if (inventoryLocationFilters.length === 1 && inventoryData?.locationDetails?.[inventoryLocationFilters[0]]) {
+      const loc = inventoryLocationFilters[0];
+      return inventoryData.locationDetails[loc]
+        .map(item => {
+          const localIncoming = incomingFromTransfersData[loc]?.[item.sku];
+          if (localIncoming) {
+            return {
+              ...item,
+              incoming: localIncoming.inboundAir + localIncoming.inboundSea,
+              inboundAir: localIncoming.inboundAir,
+              inboundSea: localIncoming.inboundSea,
+              airTransfers: localIncoming.airTransfers,
+              seaTransfers: localIncoming.seaTransfers,
+            };
+          }
+          return { ...item, incoming: 0, inboundAir: 0, inboundSea: 0, airTransfers: [], seaTransfers: [] };
+        })
+        .filter(item => {
+          const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+          if (isPhaseOut && item.available <= 0) return false;
+          const matchesSearch = !searchTerm || 
+            item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.productTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.variantTitle.toLowerCase().includes(searchTerm.toLowerCase());
           if (filterOutOfStock && item.available > 0) return false;
           if (filterLowStock && (item.available <= 0 || item.available > 10)) return false;
-          // Filter by product group (multi-select)
           if (inventoryFilterProducts.length > 0) {
             const itemProductGroup = extractProductModel(item.productTitle, item.sku);
             if (!inventoryFilterProducts.includes(itemProductGroup)) return false;
@@ -2599,8 +2624,89 @@ export default function Dashboard({ session }: DashboardProps) {
           if (locationSortBy === 'sku') comparison = a.sku.localeCompare(b.sku);
           else comparison = a[locationSortBy] - b[locationSortBy];
           return locationSortOrder === 'asc' ? comparison : -comparison;
+        });
+    }
+    
+    // Inline view - multiple locations selected: aggregate data
+    if (inventoryLocationFilters.length > 1 && inventoryData) {
+      // Get all unique SKUs from selected locations
+      const skuMap = new Map<string, {
+        sku: string;
+        productTitle: string;
+        variantTitle: string;
+        inventoryItemId: string;
+        onHand: number;
+        available: number;
+        committed: number;
+        inboundAir: number;
+        inboundSea: number;
+        incoming: number;
+        airTransfers: TransferDetail[];
+        seaTransfers: TransferDetail[];
+      }>();
+      
+      for (const loc of inventoryLocationFilters) {
+        const locDetails = inventoryData.locationDetails?.[loc] || [];
+        for (const item of locDetails) {
+          const existing = skuMap.get(item.sku);
+          const localIncoming = incomingFromTransfersData[loc]?.[item.sku];
+          const inboundAir = localIncoming?.inboundAir || 0;
+          const inboundSea = localIncoming?.inboundSea || 0;
+          
+          if (existing) {
+            existing.onHand += item.onHand;
+            existing.available += item.available;
+            existing.committed += item.committed;
+            existing.inboundAir += inboundAir;
+            existing.inboundSea += inboundSea;
+            existing.incoming += inboundAir + inboundSea;
+            if (localIncoming?.airTransfers) existing.airTransfers.push(...localIncoming.airTransfers);
+            if (localIncoming?.seaTransfers) existing.seaTransfers.push(...localIncoming.seaTransfers);
+          } else {
+            skuMap.set(item.sku, {
+              sku: item.sku,
+              productTitle: item.productTitle,
+              variantTitle: item.variantTitle,
+              inventoryItemId: item.inventoryItemId,
+              onHand: item.onHand,
+              available: item.available,
+              committed: item.committed,
+              inboundAir,
+              inboundSea,
+              incoming: inboundAir + inboundSea,
+              airTransfers: localIncoming?.airTransfers ? [...localIncoming.airTransfers] : [],
+              seaTransfers: localIncoming?.seaTransfers ? [...localIncoming.seaTransfers] : [],
+            });
+          }
+        }
+      }
+      
+      return Array.from(skuMap.values())
+        .filter(item => {
+          const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+          if (isPhaseOut && item.available <= 0) return false;
+          const matchesSearch = !searchTerm || 
+            item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.productTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.variantTitle.toLowerCase().includes(searchTerm.toLowerCase());
+          if (filterOutOfStock && item.available > 0) return false;
+          if (filterLowStock && (item.available <= 0 || item.available > 10)) return false;
+          if (inventoryFilterProducts.length > 0) {
+            const itemProductGroup = extractProductModel(item.productTitle, item.sku);
+            if (!inventoryFilterProducts.includes(itemProductGroup)) return false;
+          }
+          return matchesSearch;
         })
-    : [];
+        .sort((a, b) => {
+          let comparison = 0;
+          if (locationSortBy === 'sku') comparison = a.sku.localeCompare(b.sku);
+          else comparison = a[locationSortBy] - b[locationSortBy];
+          return locationSortOrder === 'asc' ? comparison : -comparison;
+        });
+    }
+    
+    return [];
+  })();
 
   // Filter and sort forecasting
   // Build a set of valid SKUs from inventory (products tagged "inventoried")
@@ -3273,9 +3379,9 @@ export default function Dashboard({ session }: DashboardProps) {
 
             {!inventoryLoading && inventoryData && (
               <div className="space-y-6">
-                {/* Location Tiles */}
+                {/* Location Tiles - Fixed order */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  {inventoryData.locations.map((location, idx) => {
+                  {(['LA Office', 'DTLA WH', 'China WH', 'ShipBob'] as const).filter(loc => inventoryData.locations.includes(loc)).map((location, idx) => {
                     const locationTotal = inventoryData.inventory.reduce((sum, item) => sum + (item.locations[location] || 0), 0);
                     const colors = ['blue', 'green', 'purple', 'orange'];
                     const color = colors[idx % colors.length];
@@ -3539,7 +3645,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('sku')}>
                               SKU <SortIcon active={sortBy === 'sku'} order={sortOrder} />
                             </th>
-                            {activeLocationFilter ? (
+                            {showLocationDetailView ? (
                               <>
                                 <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('onHand')}>
                                   On Hand <SortIcon active={locationSortBy === 'onHand'} order={locationSortOrder} />
@@ -3579,8 +3685,8 @@ export default function Dashboard({ session }: DashboardProps) {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {activeLocationFilter ? (
-                            // Location Detail View
+                          {showLocationDetailView ? (
+                            // Location Detail View (single or aggregated)
                             filteredLocationDetail.map((item, index) => {
                               const skuComment = skuComments[item.sku.toUpperCase()];
                               const commentTooltip = skuComment 
@@ -3685,7 +3791,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         </tbody>
                       </table>
                     </div>
-                    {((activeLocationFilter && filteredLocationDetail.length === 0) || (!activeLocationFilter && filteredInventory.length === 0)) && 
+                    {((showLocationDetailView && filteredLocationDetail.length === 0) || (!showLocationDetailView && filteredInventory.length === 0)) && 
                       <div className="p-8 text-center text-gray-500">No inventory items match your filters.</div>}
                   </div>
                 )}
@@ -3693,8 +3799,8 @@ export default function Dashboard({ session }: DashboardProps) {
                 {/* Grouped View */}
                 {inventoryViewMode === 'grouped' && (
                   <div className="space-y-4">
-                    {activeLocationFilter ? (
-                      // Location Detail Grouped View
+                    {showLocationDetailView ? (
+                      // Location Detail Grouped View (single or aggregated)
                       (() => {
                         const groupedLocationItems = filteredLocationDetail.reduce((groups, item) => {
                           const model = extractProductModel(item.productTitle, item.sku);
@@ -3920,8 +4026,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       let headers: string[];
                       let rows: (string | number)[][];
                       
-                      if (activeLocationFilter) {
-                        // Location detail view - single location
+                      if (showLocationDetailView) {
+                        // Location detail view - single or aggregated locations
                         headers = ['SKU', 'Product', 'On Hand', 'Available', 'Committed', 'In Air', 'In Sea'];
                         rows = filteredLocationDetail.map(item => [
                           item.sku,
@@ -3969,10 +4075,10 @@ export default function Dashboard({ session }: DashboardProps) {
                       link.setAttribute('href', url);
                       const now = new Date();
                       const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
-                      const locationSuffix = activeLocationFilter 
-                        ? `-${activeLocationFilter.replace(/\s+/g, '-')}` 
-                        : inventoryLocationFilters.length > 0 
-                          ? `-${inventoryLocationFilters.join('-').replace(/\s+/g, '-')}` 
+                      const locationSuffix = inventoryLocationFilters.length > 0 
+                        ? `-${inventoryLocationFilters.join('-').replace(/\s+/g, '-')}` 
+                        : activeLocationFilter 
+                          ? `-${activeLocationFilter.replace(/\s+/g, '-')}` 
                           : '';
                       link.setAttribute('download', `inventory-export-${timestamp}${locationSuffix}.csv`);
                       link.style.visibility = 'hidden';
