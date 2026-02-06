@@ -211,7 +211,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const inventoryProductDropdownRef = useRef<HTMLDivElement>(null);
   const [inventoryViewMode, setInventoryViewMode] = useState<'list' | 'grouped'>('grouped');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [inventoryLocationFilter, setInventoryLocationFilter] = useState<string | null>(null);
+  const [inventoryLocationFilters, setInventoryLocationFilters] = useState<string[]>([]);
   const [locationSearchTerm, setLocationSearchTerm] = useState('');
   const [showLocationSearchSuggestions, setShowLocationSearchSuggestions] = useState(false);
   const [locationSearchSuggestionIndex, setLocationSearchSuggestionIndex] = useState<number>(-1);
@@ -245,7 +245,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [planningSearchSuggestionIndex, setPlanningSearchSuggestionIndex] = useState<number>(-1);
   const planningSearchRef = useRef<HTMLDivElement>(null);
   const [planningBurnPeriod, setPlanningBurnPeriod] = useState<'7d' | '21d' | '90d'>('21d');
-  const [planningFilterShipType, setPlanningFilterShipType] = useState<string>('all');
+  const [planningFilterShipTypes, setPlanningFilterShipTypes] = useState<string[]>([]);
   const [showColumnDefinitions, setShowColumnDefinitions] = useState(false);
   const [showOverviewColumnDefinitions, setShowOverviewColumnDefinitions] = useState(false);
   const [planningFilterProdStatus, setPlanningFilterProdStatus] = useState<string>('all');
@@ -2508,10 +2508,11 @@ export default function Dashboard({ session }: DashboardProps) {
         const itemProductGroup = extractProductModel(item.productTitle, item.sku);
         if (!inventoryFilterProducts.includes(itemProductGroup)) return false;
       }
-      // Filter by location if a location filter is set
-      if (inventoryLocationFilter) {
-        const locationQty = item.locations[inventoryLocationFilter] || 0;
-        if (locationQty <= 0) return false;
+      // Filter by location if location filters are set
+      if (inventoryLocationFilters.length > 0) {
+        // Item must have qty > 0 in at least one selected location
+        const hasQtyInSelectedLocation = inventoryLocationFilters.some(loc => (item.locations[loc] || 0) > 0);
+        if (!hasQtyInSelectedLocation) return false;
       }
       return matchesSearch;
     })
@@ -2543,8 +2544,9 @@ export default function Dashboard({ session }: DashboardProps) {
       return sortOrder === 'asc' ? comparison : -comparison;
     }) || [];
 
-  // Filter and sort location detail (uses either inventoryLocationFilter for inline view or selectedLocation for modal)
-  const activeLocationFilter = inventoryLocationFilter || selectedLocation;
+  // Filter and sort location detail (uses either single location filter for inline view or selectedLocation for modal)
+  // Only show detail view when exactly one location is selected
+  const activeLocationFilter = (inventoryLocationFilters.length === 1 ? inventoryLocationFilters[0] : null) || selectedLocation;
   
   const filteredLocationDetail = activeLocationFilter && inventoryData?.locationDetails?.[activeLocationFilter]
     ? inventoryData.locationDetails[activeLocationFilter]
@@ -2578,7 +2580,7 @@ export default function Dashboard({ session }: DashboardProps) {
           if (isPhaseOut && item.available <= 0) return false;
           
           // Use main searchTerm for inline view, locationSearchTerm for modal
-          const activeSearchTerm = inventoryLocationFilter ? searchTerm : locationSearchTerm;
+          const activeSearchTerm = inventoryLocationFilters.length === 1 ? searchTerm : locationSearchTerm;
           const matchesSearch = !activeSearchTerm || 
             item.sku.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
             item.productTitle.toLowerCase().includes(activeSearchTerm.toLowerCase()) ||
@@ -3277,7 +3279,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     const locationTotal = inventoryData.inventory.reduce((sum, item) => sum + (item.locations[location] || 0), 0);
                     const colors = ['blue', 'green', 'purple', 'orange'];
                     const color = colors[idx % colors.length];
-                    const isSelected = inventoryLocationFilter === location;
+                    const isSelected = inventoryLocationFilters.includes(location);
                     const borderClass = isSelected 
                       ? color === 'blue' ? 'border-blue-500' 
                       : color === 'green' ? 'border-green-500' 
@@ -3295,7 +3297,11 @@ export default function Dashboard({ session }: DashboardProps) {
                     return (
                       <button
                         key={location}
-                        onClick={() => setInventoryLocationFilter(isSelected ? null : location)}
+                        onClick={() => setInventoryLocationFilters(prev => 
+                          isSelected 
+                            ? prev.filter(l => l !== location)
+                            : [...prev, location]
+                        )}
                         className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer ${hoverClass} ${borderClass}`}
                       >
                         <p className="text-xs sm:text-sm font-medium text-gray-500">{location}</p>
@@ -3533,7 +3539,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-32 px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleSort('sku')}>
                               SKU <SortIcon active={sortBy === 'sku'} order={sortOrder} />
                             </th>
-                            {inventoryLocationFilter ? (
+                            {activeLocationFilter ? (
                               <>
                                 <th className="w-24 px-3 sm:px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handleLocationSort('onHand')}>
                                   On Hand <SortIcon active={locationSortBy === 'onHand'} order={locationSortOrder} />
@@ -3573,7 +3579,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {inventoryLocationFilter ? (
+                          {activeLocationFilter ? (
                             // Location Detail View
                             filteredLocationDetail.map((item, index) => {
                               const skuComment = skuComments[item.sku.toUpperCase()];
@@ -3679,7 +3685,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         </tbody>
                       </table>
                     </div>
-                    {((inventoryLocationFilter && filteredLocationDetail.length === 0) || (!inventoryLocationFilter && filteredInventory.length === 0)) && 
+                    {((activeLocationFilter && filteredLocationDetail.length === 0) || (!activeLocationFilter && filteredInventory.length === 0)) && 
                       <div className="p-8 text-center text-gray-500">No inventory items match your filters.</div>}
                   </div>
                 )}
@@ -3687,7 +3693,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 {/* Grouped View */}
                 {inventoryViewMode === 'grouped' && (
                   <div className="space-y-4">
-                    {inventoryLocationFilter ? (
+                    {activeLocationFilter ? (
                       // Location Detail Grouped View
                       (() => {
                         const groupedLocationItems = filteredLocationDetail.reduce((groups, item) => {
@@ -3914,7 +3920,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       let headers: string[];
                       let rows: (string | number)[][];
                       
-                      if (inventoryLocationFilter) {
+                      if (activeLocationFilter) {
                         // Location detail view - single location
                         headers = ['SKU', 'Product', 'On Hand', 'Available', 'Committed', 'In Air', 'In Sea'];
                         rows = filteredLocationDetail.map(item => [
@@ -3963,7 +3969,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       link.setAttribute('href', url);
                       const now = new Date();
                       const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
-                      const locationSuffix = inventoryLocationFilter ? `-${inventoryLocationFilter.replace(/\s+/g, '-')}` : '';
+                      const locationSuffix = activeLocationFilter 
+                        ? `-${activeLocationFilter.replace(/\s+/g, '-')}` 
+                        : inventoryLocationFilters.length > 0 
+                          ? `-${inventoryLocationFilters.join('-').replace(/\s+/g, '-')}` 
+                          : '';
                       link.setAttribute('download', `inventory-export-${timestamp}${locationSuffix}.csv`);
                       link.style.visibility = 'hidden';
                       document.body.appendChild(link);
@@ -4916,8 +4926,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Filter by product group (multi-select)
                       const itemProductGroup = extractProductModel(item.productTitle, item.sku);
                       const matchesProduct = planningFilterProducts.length === 0 || planningFilterProducts.includes(itemProductGroup);
-                      // Filter by ship type (from metric buttons)
-                      const matchesShipType = planningFilterShipType === 'all' || item.shipType === planningFilterShipType;
+                      // Filter by ship type (from metric buttons) - empty array means all ship types
+                      const matchesShipType = planningFilterShipTypes.length === 0 || planningFilterShipTypes.includes(item.shipType);
                       // Filter by prod status
                       const matchesProdStatus = planningFilterProdStatus === 'all' || item.prodStatus === planningFilterProdStatus;
                       return matchesSearch && matchesProduct && matchesShipType && matchesProdStatus;
@@ -5105,10 +5115,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
-                            setPlanningFilterProducts([]);
-                            setPlanningFilterShipType(planningFilterShipType === 'Sea' ? 'all' : 'Sea');
+                            setPlanningFilterShipTypes(prev => 
+                              prev.includes('Sea') 
+                                ? prev.filter(t => t !== 'Sea')
+                                : [...prev, 'Sea']
+                            );
                           }}
-                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-green-300 ${planningFilterShipType === 'Sea' ? 'border-green-500' : 'border-transparent'}`}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-green-300 ${planningFilterShipTypes.includes('Sea') ? 'border-green-500' : 'border-transparent'}`}
                         >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Sea</p>
                           <p className="text-lg sm:text-xl font-bold text-green-600">{planningMetrics.sea}</p>
@@ -5116,10 +5129,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
-                            setPlanningFilterProducts([]);
-                            setPlanningFilterShipType(planningFilterShipType === 'Slow Air' ? 'all' : 'Slow Air');
+                            setPlanningFilterShipTypes(prev => 
+                              prev.includes('Slow Air') 
+                                ? prev.filter(t => t !== 'Slow Air')
+                                : [...prev, 'Slow Air']
+                            );
                           }}
-                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-blue-300 ${planningFilterShipType === 'Slow Air' ? 'border-blue-500' : 'border-transparent'}`}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-blue-300 ${planningFilterShipTypes.includes('Slow Air') ? 'border-blue-500' : 'border-transparent'}`}
                         >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Slow Air</p>
                           <p className="text-lg sm:text-xl font-bold text-blue-600">{planningMetrics.slowAir}</p>
@@ -5127,17 +5143,20 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button 
                           onClick={() => {
                             setPlanningFilterProdStatus('all');
-                            setPlanningFilterProducts([]);
-                            setPlanningFilterShipType(planningFilterShipType === 'Express' ? 'all' : 'Express');
+                            setPlanningFilterShipTypes(prev => 
+                              prev.includes('Express') 
+                                ? prev.filter(t => t !== 'Express')
+                                : [...prev, 'Express']
+                            );
                           }}
-                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-orange-300 ${planningFilterShipType === 'Express' ? 'border-orange-500' : 'border-transparent'}`}
+                          className={`text-center bg-white shadow rounded-lg p-3 sm:p-4 border-2 transition-all cursor-pointer hover:border-orange-300 ${planningFilterShipTypes.includes('Express') ? 'border-orange-500' : 'border-transparent'}`}
                         >
                           <p className="text-xs sm:text-sm font-medium text-gray-500">Express</p>
                           <p className="text-lg sm:text-xl font-bold text-orange-600">{planningMetrics.express}</p>
                         </button>
                         <button 
                           onClick={() => {
-                            setPlanningFilterShipType('all');
+                            setPlanningFilterShipTypes([]);
                             setPlanningFilterProducts([]);
                             setPlanningFilterProdStatus(planningFilterProdStatus === 'Order More' ? 'all' : 'Order More');
                           }}
