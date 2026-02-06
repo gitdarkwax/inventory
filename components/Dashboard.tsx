@@ -3000,9 +3000,17 @@ export default function Dashboard({ session }: DashboardProps) {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {locationData.map((item, index) => (
+                    {locationData.map((item, index) => {
+                      const skuComment = skuComments[item.sku.toUpperCase()];
+                      const commentTooltip = skuComment 
+                        ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                        : undefined;
+                      return (
                       <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                        <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={commentTooltip}>
+                          {item.sku}
+                          {skuComment && <span className="ml-1">💬</span>}
+                        </td>
                         <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.onHand.toLocaleString()}</td>
                         <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>{item.available.toLocaleString()}</td>
                         <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
@@ -3019,7 +3027,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                         </td>
                       </tr>
-                    ))}
+                    );})}
                   </tbody>
                 </table>
               </div>
@@ -3063,15 +3071,23 @@ export default function Dashboard({ session }: DashboardProps) {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {items.map((item, index) => (
+                          {items.map((item, index) => {
+                            const skuComment = skuComments[item.sku.toUpperCase()];
+                            const commentTooltip = skuComment 
+                              ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                              : undefined;
+                            return (
                             <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                              <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={commentTooltip}>
+                                {item.sku}
+                                {skuComment && <span className="ml-1">💬</span>}
+                              </td>
                               <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.onHand.toLocaleString()}</td>
                               <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>{item.available.toLocaleString()}</td>
                               <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center text-gray-900">{item.committed.toLocaleString()}</td>
                               <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.incoming > 0 ? 'text-purple-600 font-medium' : 'text-gray-900'}`}>{item.incoming.toLocaleString()}</td>
                             </tr>
-                          ))}
+                          );})}
                         </tbody>
                       </table>
                     </div>
@@ -3530,10 +3546,18 @@ export default function Dashboard({ session }: DashboardProps) {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {inventoryLocationFilter ? (
                             // Location Detail View
-                            filteredLocationDetail.map((item, index) => (
+                            filteredLocationDetail.map((item, index) => {
+                              const skuComment = skuComments[item.sku.toUpperCase()];
+                              const commentTooltip = skuComment 
+                                ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                                : undefined;
+                              return (
                               <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                 <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
-                                  title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                  title={commentTooltip}>
+                                  {item.sku}
+                                  {skuComment && <span className="ml-1">💬</span>}
+                                </td>
                                 <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.onHand <= 0 ? 'text-red-600 font-medium' : item.onHand <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
                                   {item.onHand.toLocaleString()}
                                 </td>
@@ -3556,7 +3580,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                   {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                 </td>
                               </tr>
-                            ))
+                            );})
                           ) : (
                             // All Locations View
                             filteredInventory.map((item, index) => {
@@ -3679,10 +3703,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                     </tr>
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
-                                    {items.map((item, index) => (
+                                    {items.map((item, index) => {
+                                      const skuComment = skuComments[item.sku.toUpperCase()];
+                                      const commentTooltip = skuComment 
+                                        ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                                        : undefined;
+                                      return (
                                       <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                         <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
-                                          title={`${item.productTitle}${item.variantTitle !== 'Default Title' ? ` / ${item.variantTitle}` : ''}`}>{item.sku}</td>
+                                          title={commentTooltip}>
+                                          {item.sku}
+                                          {skuComment && <span className="ml-1">💬</span>}
+                                        </td>
                                         <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.onHand <= 0 ? 'text-red-600 font-medium' : item.onHand <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
                                           {item.onHand.toLocaleString()}
                                         </td>
@@ -3705,7 +3737,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
                                         </td>
                                       </tr>
-                                    ))}
+                                    );})}
                                   </tbody>
                                 </table>
                               </div>
@@ -4231,9 +4263,17 @@ export default function Dashboard({ session }: DashboardProps) {
                             };
                             const selectedData = getSelectedPeriodData();
                             
+                            const skuComment = skuComments[item.sku.toUpperCase()];
+                            const commentTooltip = skuComment 
+                              ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                              : undefined;
+                            
                             return (
                               <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productName}>{item.sku}</td>
+                                <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={commentTooltip}>
+                                  {item.sku}
+                                  {skuComment && <span className="ml-1">💬</span>}
+                                </td>
                                 <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{inventory.toLocaleString()}</td>
                                 {forecastLayout === 'byPeriod' ? (
                                   forecastViewMode === 'velocity' ? (
@@ -4340,9 +4380,17 @@ export default function Dashboard({ session }: DashboardProps) {
                                   };
                                   const selectedData = getSelectedPeriodData();
                                   
+                                  const skuComment = skuComments[item.sku.toUpperCase()];
+                                  const commentTooltip = skuComment 
+                                    ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                                    : undefined;
+                                  
                                   return (
                                     <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                      <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.productName}>{item.sku}</td>
+                                      <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={commentTooltip}>
+                                        {item.sku}
+                                        {skuComment && <span className="ml-1">💬</span>}
+                                      </td>
                                       <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${inventory <= 0 ? 'text-red-600 font-medium' : 'text-gray-900'}`}>{inventory.toLocaleString()}</td>
                                       {forecastLayout === 'byPeriod' ? (
                                         forecastViewMode === 'velocity' ? (
@@ -5610,10 +5658,16 @@ export default function Dashboard({ session }: DashboardProps) {
                   const hasCounted = countedValue !== null && countedValue !== undefined;
                   const difference = hasCounted ? countedValue - item.onHand : null;
                   
+                  const skuComment = skuComments[item.sku.toUpperCase()];
+                  const commentTooltip = skuComment 
+                    ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                    : undefined;
+                  
                   return (
                     <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="pl-2 pr-1 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 font-mono">
+                      <td className="pl-2 pr-1 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-gray-900 font-mono" title={commentTooltip}>
                         {item.sku}
+                        {skuComment && <span className="ml-1">💬</span>}
                       </td>
                       <td className="hidden sm:table-cell px-4 py-3 text-sm text-gray-600 truncate" title={item.variantTitle}>
                         {item.variantTitle}
@@ -6195,9 +6249,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                             {largeDiscrepancies.map(item => {
                                               const counted = currentCounts[item.sku] ?? 0;
                                               const diff = counted - item.onHand;
+                                              const skuComment = skuComments[item.sku.toUpperCase()];
+                                              const commentTooltip = skuComment 
+                                                ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                                                : undefined;
                                               return (
                                                 <tr key={item.sku} className="border-t border-amber-200">
-                                                  <td className="px-2 py-1 font-mono text-amber-900">{item.sku}</td>
+                                                  <td className="px-2 py-1 font-mono text-amber-900" title={commentTooltip}>
+                                                    {item.sku}
+                                                    {skuComment && <span className="ml-1">💬</span>}
+                                                  </td>
                                                   <td className="px-2 py-1 text-center text-amber-900">{item.onHand}</td>
                                                   <td className="px-2 py-1 text-center text-amber-900">{counted}</td>
                                                   <td className={`px-2 py-1 text-center font-medium ${diff > 0 ? 'text-blue-600' : 'text-red-600'}`}>
@@ -7212,9 +7273,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <tbody className="divide-y divide-gray-200">
                                             {order.items.map((item, index) => {
                                               const pending = item.quantity - (item.receivedQuantity || 0);
+                                              const skuComment = skuComments[item.sku.toUpperCase()];
+                                              const commentTooltip = skuComment 
+                                                ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                                                : undefined;
                                               return (
                                                 <tr key={index}>
-                                                  <td className="px-4 py-2 text-sm text-gray-900 font-mono">{item.sku}</td>
+                                                  <td className="px-4 py-2 text-sm text-gray-900 font-mono" title={commentTooltip}>
+                                                    {item.sku}
+                                                    {skuComment && <span className="ml-1">💬</span>}
+                                                  </td>
                                                   <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
                                                   <td className="px-4 py-2 text-sm text-green-600 text-right">{(item.receivedQuantity || 0).toLocaleString()}</td>
                                                   <td className={`px-4 py-2 text-sm text-right ${pending > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
@@ -8177,9 +8245,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   return sortedItems.map((item, idx) => {
                                                     const delivered = item.receivedQuantity || 0;
                                                     const pending = item.quantity - delivered;
+                                                    const skuComment = skuComments[item.sku.toUpperCase()];
+                                                    const commentTooltip = skuComment 
+                                                      ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
+                                                      : undefined;
                                                     return (
                                                       <tr key={idx}>
-                                                        <td className="px-4 py-2 text-sm text-gray-900 font-mono">{item.sku}</td>
+                                                        <td className="px-4 py-2 text-sm text-gray-900 font-mono" title={commentTooltip}>
+                                                          {item.sku}
+                                                          {skuComment && <span className="ml-1">💬</span>}
+                                                        </td>
                                                         {hasPallets && (
                                                           <td className="px-4 py-2 text-sm text-gray-900">{item.pallet || '—'}</td>
                                                         )}
