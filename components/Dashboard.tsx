@@ -5139,16 +5139,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                 </button>
                               </div>
                             </div>
-                            {/* Comment Button */}
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-gray-400 mb-1">Notes</span>
-                              <button
-                                onClick={() => setShowSkuCommentForm(true)}
-                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1"
-                              >
-                                💬 Comment
-                              </button>
-                            </div>
                             {/* Runway Display Toggle */}
                             <div className="flex flex-col">
                               <span className="text-[10px] text-gray-400 mb-1">Runway in</span>
@@ -5191,6 +5181,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <option value={120}>120 days</option>
                                 <option value={180}>180 days</option>
                               </select>
+                            </div>
+                            {/* Comment Button */}
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">Notes</span>
+                              <button
+                                onClick={() => setShowSkuCommentForm(true)}
+                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1"
+                              >
+                                💬 Comment
+                              </button>
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
