@@ -3135,16 +3135,8 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
-          {/* SKU Comments & Phase Out Links */}
-          <div className="flex justify-end mb-1 gap-3">
-            {(activeTab === 'inventory' || activeTab === 'planning') && (
-              <button
-                onClick={() => setShowSkuCommentForm(true)}
-                className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-              >
-                💬 Add SKU Comment
-              </button>
-            )}
+          {/* Phase Out Link */}
+          <div className="flex justify-end mb-1">
             <button
               onClick={() => setShowPhaseOutModal(true)}
               className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
@@ -3345,6 +3337,16 @@ export default function Dashboard({ session }: DashboardProps) {
                             Grouped
                           </button>
                         </div>
+                      </div>
+                      {/* Comment Button */}
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Notes</span>
+                        <button
+                          onClick={() => setShowSkuCommentForm(true)}
+                          className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1"
+                        >
+                          💬 Comment
+                        </button>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -3576,7 +3578,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               
                               const skuComment = skuComments[item.sku.toUpperCase()];
                               const commentTooltip = skuComment 
-                                ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                                ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
                                 : undefined;
                               
                               return (
@@ -3788,7 +3790,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       
                                       const skuComment = skuComments[item.sku.toUpperCase()];
                                       const commentTooltip = skuComment 
-                                        ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                                        ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
                                         : undefined;
                                       
                                       return (
@@ -4958,7 +4960,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         {items.map((item, index) => {
                           const skuComment = skuComments[item.sku.toUpperCase()];
                           const commentTooltip = skuComment 
-                            ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                            ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
                             : undefined;
                           return (
                           <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -5136,6 +5138,16 @@ export default function Dashboard({ session }: DashboardProps) {
                                   Grouped
                                 </button>
                               </div>
+                            </div>
+                            {/* Comment Button */}
+                            <div className="flex flex-col">
+                              <span className="text-[10px] text-gray-400 mb-1">Notes</span>
+                              <button
+                                onClick={() => setShowSkuCommentForm(true)}
+                                className="h-[34px] px-3 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center gap-1"
+                              >
+                                💬 Comment
+                              </button>
                             </div>
                             {/* Runway Display Toggle */}
                             <div className="flex flex-col">
@@ -5364,7 +5376,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       {sortedItems.map((item, index) => {
                                         const skuComment = skuComments[item.sku.toUpperCase()];
                                         const commentTooltip = skuComment 
-                                          ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleDateString()}`
+                                          ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
                                           : undefined;
                                         return (
                                         <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -9317,7 +9329,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="mb-4 p-3 bg-gray-50 rounded-md">
                     <p className="text-xs text-gray-500">
                       Current comment by {skuComments[commentSkuSelected.toUpperCase()].updatedBy} on{' '}
-                      {new Date(skuComments[commentSkuSelected.toUpperCase()].updatedAt).toLocaleDateString()}
+                      {new Date(skuComments[commentSkuSelected.toUpperCase()].updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
                     </p>
                   </div>
                 )}
