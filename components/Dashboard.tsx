@@ -2795,6 +2795,35 @@ export default function Dashboard({ session }: DashboardProps) {
     return `${month} ${day}, ${year}`;
   };
 
+  // Format activity log text to show SKU items on separate lines
+  const formatActivityLogText = (text: string): React.ReactNode => {
+    // Split by common SKU list patterns (comma-separated SKU → qty pairs)
+    // Pattern: "SKU → qty, SKU → qty" or "SKU → qty"
+    const skuPattern = /([A-Z0-9-]+)\s*→\s*(\d+)/g;
+    const matches = [...text.matchAll(skuPattern)];
+    
+    if (matches.length > 1) {
+      // Multiple SKUs - format as list
+      // Find where the SKU list starts
+      const firstMatch = matches[0];
+      const prefix = text.substring(0, firstMatch.index).replace(/:\s*$/, '');
+      
+      return (
+        <span>
+          {prefix && <>{prefix}:</>}
+          <span className="block pl-2 mt-1">
+            {matches.map((match, idx) => (
+              <span key={idx} className="block">- {match[1]} → {match[2]}</span>
+            ))}
+          </span>
+        </span>
+      );
+    }
+    
+    // Single or no SKU items - return as-is
+    return text;
+  };
+
   // Get color class for days of stock
   const getDaysColor = (days: number): string => {
     if (days <= 0) return 'text-red-600 font-medium';
@@ -7541,13 +7570,13 @@ export default function Dashboard({ session }: DashboardProps) {
                                             {[...order.activityLog].reverse().map((entry, idx) => (
                                               <div key={idx} className="text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
                                                 <div className="flex justify-between items-start gap-2">
-                                                  <span className="font-medium text-gray-700">{entry.action}</span>
+                                                  <span className="font-medium text-gray-700">{formatActivityLogText(entry.action)}</span>
                                                   <span className="text-gray-400 whitespace-nowrap">
                                                     {new Date(entry.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {new Date(entry.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                                                   </span>
                                                 </div>
                                                 {entry.details && (
-                                                  <div className="text-gray-500 mt-0.5">{entry.details}</div>
+                                                  <div className="text-gray-500 mt-0.5">{formatActivityLogText(entry.details)}</div>
                                                 )}
                                                 <div className="text-gray-400 mt-0.5">by {entry.changedBy}</div>
                                               </div>
@@ -8520,13 +8549,13 @@ export default function Dashboard({ session }: DashboardProps) {
                                                 {[...transfer.activityLog].reverse().map((entry, idx) => (
                                                   <div key={idx} className="text-xs text-gray-500 bg-white p-2 rounded border border-gray-100">
                                                     <div className="flex justify-between items-start gap-2">
-                                                      <span className="font-medium text-gray-700">{entry.action}</span>
+                                                      <span className="font-medium text-gray-700">{formatActivityLogText(entry.action)}</span>
                                                       <span className="text-gray-400 whitespace-nowrap">
                                                         {new Date(entry.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {new Date(entry.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
                                                       </span>
                                                     </div>
                                                     {entry.details && (
-                                                      <div className="text-gray-500 mt-0.5">{entry.details}</div>
+                                                      <div className="text-gray-500 mt-0.5">{formatActivityLogText(entry.details)}</div>
                                                     )}
                                                     <div className="text-gray-400 mt-0.5">by {entry.changedBy}</div>
                                                   </div>
