@@ -225,6 +225,8 @@ export async function fetchInventoryData() {
     transferNotes: Array<{ id: string; note: string | null }>;
     airTransfers: TransferDetailInfo[];
     seaTransfers: TransferDetailInfo[];
+    // For SKUs that map to multiple Shopify variants (e.g., MBT3Y-DG)
+    variantInventoryItems?: Array<{ inventoryItemId: string; variantTitle: string; onHand: number }>;
   }>>();
   
   // Initialize location detail maps
@@ -269,7 +271,21 @@ export async function fetchInventoryData() {
         existing.onHand += level.onHand;
         existing.committed += level.committed;
         existing.incoming += level.incoming;
-        // inboundAir, inboundSea, transferNotes, airTransfers, seaTransfers stay at 0/[]
+        // Track multiple variants for the same SKU (e.g., MBT3Y-DG has 2 variants)
+        if (!existing.variantInventoryItems) {
+          // Initialize with the first variant that was already stored
+          existing.variantInventoryItems = [{
+            inventoryItemId: existing.inventoryItemId,
+            variantTitle: existing.variantTitle,
+            onHand: existing.onHand - level.onHand, // Subtract what we just added to get original
+          }];
+        }
+        // Add this variant
+        existing.variantInventoryItems.push({
+          inventoryItemId: variantInfo.inventoryItemId,
+          variantTitle: variantInfo.variantTitle,
+          onHand: level.onHand,
+        });
       } else {
         locDetailMap.set(variantInfo.sku, {
           sku: variantInfo.sku,
@@ -285,6 +301,7 @@ export async function fetchInventoryData() {
           transferNotes: [], // Tracked locally from app transfers
           airTransfers: [], // Tracked locally from app transfers
           seaTransfers: [], // Tracked locally from app transfers
+          variantInventoryItems: undefined, // Will be set if there are multiple variants
         });
       }
     }
@@ -312,6 +329,7 @@ export async function fetchInventoryData() {
     transferNotes: Array<{ id: string; note: string | null }>;
     airTransfers: TransferDetailInfo[];
     seaTransfers: TransferDetailInfo[];
+    variantInventoryItems?: Array<{ inventoryItemId: string; variantTitle: string; onHand: number }>;
   }>> = {};
   
   for (const [locName, skuMapInner] of locationDetailMap) {

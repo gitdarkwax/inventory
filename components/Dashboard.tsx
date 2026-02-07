@@ -42,6 +42,8 @@ interface LocationDetail {
   transferNotes: Array<{ id: string; note: string | null }>;
   airTransfers?: TransferDetail[];
   seaTransfers?: TransferDetail[];
+  // For SKUs that map to multiple Shopify variants (e.g., MBT3Y-DG)
+  variantInventoryItems?: Array<{ inventoryItemId: string; variantTitle: string; onHand: number }>;
 }
 
 interface InventorySummary {
@@ -6471,12 +6473,57 @@ export default function Dashboard({ session }: DashboardProps) {
                                     }
                                     
                                     // Build updates array - only counted SKUs
-                                    const updates = allItemsWithCounts.map(item => ({
-                                      sku: item.sku,
-                                      inventoryItemId: item.inventoryItemId,
-                                      quantity: currentCounts[item.sku] ?? 0,
-                                      locationId: locationId || 'test-mode',
-                                    }));
+                                    // Special handling for MBT3Y-DG: split between two variants
+                                    const MBT3Y_DG_SPLIT = {
+                                      sku: 'MBT3Y-DG',
+                                      // Model 3 / 2017-2023 / Left Hand = 35%, Model Y / 2010-2024 / Left Hand = 65%
+                                      allocations: [
+                                        { variantMatch: 'Model 3', percentage: 0.35 },
+                                        { variantMatch: 'Model Y', percentage: 0.65 },
+                                      ],
+                                    };
+                                    
+                                    const updates: Array<{ sku: string; inventoryItemId: string; quantity: number; locationId: string }> = [];
+                                    
+                                    for (const item of allItemsWithCounts) {
+                                      const quantity = currentCounts[item.sku] ?? 0;
+                                      const locId = locationId || 'test-mode';
+                                      
+                                      // Check if this is the special split SKU
+                                      if (item.sku === MBT3Y_DG_SPLIT.sku && item.variantInventoryItems && item.variantInventoryItems.length > 1) {
+                                        // Split the counted quantity between variants
+                                        let remainingQty = quantity;
+                                        
+                                        for (let i = 0; i < MBT3Y_DG_SPLIT.allocations.length; i++) {
+                                          const allocation = MBT3Y_DG_SPLIT.allocations[i];
+                                          const variant = item.variantInventoryItems.find(v => v.variantTitle.includes(allocation.variantMatch));
+                                          
+                                          if (variant) {
+                                            // Last allocation gets remainder to ensure total matches
+                                            const allocatedQty = i === MBT3Y_DG_SPLIT.allocations.length - 1
+                                              ? remainingQty
+                                              : Math.round(quantity * allocation.percentage);
+                                            
+                                            updates.push({
+                                              sku: `${item.sku} (${allocation.variantMatch})`,
+                                              inventoryItemId: variant.inventoryItemId,
+                                              quantity: allocatedQty,
+                                              locationId: locId,
+                                            });
+                                            
+                                            remainingQty -= allocatedQty;
+                                          }
+                                        }
+                                      } else {
+                                        // Normal SKU - single update
+                                        updates.push({
+                                          sku: item.sku,
+                                          inventoryItemId: item.inventoryItemId,
+                                          quantity,
+                                          locationId: locId,
+                                        });
+                                      }
+                                    }
                                     
                                     let result;
                                     

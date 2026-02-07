@@ -43,6 +43,8 @@ export interface LocationDetail {
   transferNotes: Array<{ id: string; note: string | null }>;
   airTransfers: TransferDetailInfo[];
   seaTransfers: TransferDetailInfo[];
+  // For SKUs that map to multiple Shopify variants (e.g., MBT3Y-DG)
+  variantInventoryItems?: Array<{ inventoryItemId: string; variantTitle: string; onHand: number }>;
 }
 
 export interface ForecastingItem {
