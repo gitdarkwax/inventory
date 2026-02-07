@@ -139,13 +139,18 @@ async function rebalanceMultiVariantSkus(): Promise<void> {
       variantTitle: string;
       inventoryItemId: string;
       sku: string;
+      productTitle: string;
     }>> = new Map();
+
+    const targetSkus = MULTI_VARIANT_SKUS.map(m => m.sku);
+    console.log(`🔍 Looking for SKUs: ${targetSkus.join(', ')}`);
+    console.log(`📦 Total products fetched: ${products.length}`);
 
     for (const product of products) {
       for (const variant of product.variants) {
         // Check if this variant's SKU is one of our multi-variant SKUs
-        const config = MULTI_VARIANT_SKUS.find(m => m.sku === variant.sku);
-        if (config && variant.inventory_item_id) {
+        if (targetSkus.includes(variant.sku) && variant.inventory_item_id) {
+          console.log(`  ✓ Found variant: SKU=${variant.sku}, title="${variant.title}", inventoryItemId=${variant.inventory_item_id}, product="${product.title}"`);
           if (!multiVariantData.has(variant.sku)) {
             multiVariantData.set(variant.sku, []);
           }
@@ -153,9 +158,16 @@ async function rebalanceMultiVariantSkus(): Promise<void> {
             variantTitle: variant.title,
             inventoryItemId: String(variant.inventory_item_id),
             sku: variant.sku,
+            productTitle: product.title,
           });
         }
       }
+    }
+    
+    console.log(`📋 Multi-variant SKUs found: ${Array.from(multiVariantData.keys()).join(', ') || 'none'}`);
+    for (const [sku, variants] of multiVariantData) {
+      console.log(`  ${sku}: ${variants.length} variant(s)`);
+      variants.forEach(v => console.log(`    - "${v.variantTitle}" (${v.inventoryItemId})`));
     }
 
     // For each multi-variant SKU, check and rebalance if needed
@@ -198,20 +210,26 @@ async function rebalanceMultiVariantSkus(): Promise<void> {
         allocation: { variantMatch: string; percentage: number };
       }> = [];
 
+      console.log(`🔍 ${sku}: Matching variants to allocations...`);
       for (const variant of variants) {
+        console.log(`  Checking variant "${variant.variantTitle}" against allocations...`);
         const allocation = config.allocations.find(a => variant.variantTitle.includes(a.variantMatch));
         if (allocation) {
+          const qty = currentLevels.get(variant.inventoryItemId) || 0;
+          console.log(`    ✓ Matched to ${allocation.variantMatch} (${allocation.percentage * 100}%), current qty: ${qty}`);
           variantQuantities.push({
             variantTitle: variant.variantTitle,
             inventoryItemId: variant.inventoryItemId,
-            currentQty: currentLevels.get(variant.inventoryItemId) || 0,
+            currentQty: qty,
             allocation,
           });
+        } else {
+          console.log(`    ✗ No match found for variant title "${variant.variantTitle}"`);
         }
       }
 
       if (variantQuantities.length !== 2) {
-        console.log(`⚠️ ${sku}: Could not match both variants, skipping`);
+        console.log(`⚠️ ${sku}: Could not match both variants (matched ${variantQuantities.length}), skipping`);
         continue;
       }
 
