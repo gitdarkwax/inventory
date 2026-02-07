@@ -1317,7 +1317,7 @@ export default function Dashboard({ session }: DashboardProps) {
           items: validItems,
           carrier: editTransferCarrier || undefined,
           trackingNumber: editTransferTracking.trim() || undefined,
-          eta: editTransferEta || undefined,
+          eta: editTransferEta || null, // Use null to allow clearing, undefined would be excluded by JSON.stringify
           notes: editTransferNotes.trim(),
         }),
       });
@@ -8642,7 +8642,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                                     })));
                                                     setEditTransferCarrier(transfer.carrier || '');
                                                     setEditTransferTracking(transfer.trackingNumber || '');
-                                                    setEditTransferEta(transfer.eta || '');
+                                                    // Normalize ETA to YYYY-MM-DD format for date input
+                                                    setEditTransferEta(transfer.eta ? transfer.eta.split('T')[0] : '');
                                                     setEditTransferNotes(transfer.notes || '');
                                                     setShowEditTransferForm(true);
                                                   }}

@@ -394,9 +394,16 @@ export class TransfersService {
       changes.push(`Tracking: ${updates.trackingNumber || 'cleared'}`);
       transfer.trackingNumber = updates.trackingNumber;
     }
-    if (updates.eta !== undefined && updates.eta !== transfer.eta) {
-      changes.push(`ETA: ${updates.eta ? new Date(updates.eta).toLocaleDateString() : 'cleared'}`);
-      transfer.eta = updates.eta;
+    // Track ETA changes separately for special handling
+    let etaChanged = false;
+    let newEtaValue: string | null | undefined = undefined;
+    // Normalize both values for comparison (treat null, undefined, and '' as equivalent "no eta")
+    const currentEta = transfer.eta || null;
+    const incomingEta = updates.eta === undefined ? undefined : (updates.eta || null);
+    if (incomingEta !== undefined && incomingEta !== currentEta) {
+      etaChanged = true;
+      newEtaValue = incomingEta;
+      transfer.eta = incomingEta || undefined;
     }
     
     // Track notes changes separately for special handling
@@ -464,6 +471,20 @@ export class TransfersService {
         changedBy,
         changedByEmail,
         details: newNotesContent.trim() || 'Notes cleared',
+      });
+    }
+    
+    // Handle ETA changes as a separate "Est. Delivery Updated" entry
+    if (etaChanged && changedBy && changedByEmail) {
+      const etaDisplay = newEtaValue 
+        ? new Date(newEtaValue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'Cleared';
+      transfer.activityLog.push({
+        timestamp: now,
+        action: 'Est. Delivery Updated',
+        changedBy,
+        changedByEmail,
+        details: etaDisplay,
       });
     }
     
