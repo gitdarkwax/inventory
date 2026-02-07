@@ -103,18 +103,20 @@ const INVENTORY_LEVELS_QUERY = `
 /**
  * Rebalance multi-variant SKUs at LA Office to maintain 35%/65% split
  * This runs before fetching inventory data to ensure the split is correct
+ * @returns true if any adjustments were made, false otherwise
  */
-async function rebalanceMultiVariantSkus(): Promise<void> {
+async function rebalanceMultiVariantSkus(): Promise<boolean> {
   const shop = process.env.SHOPIFY_SHOP_DOMAIN;
   const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
 
   if (!shop || !accessToken) {
     console.log('⚠️ Shopify credentials not configured, skipping rebalance');
-    return;
+    return false;
   }
 
   const graphqlUrl = `https://${shop}/admin/api/2024-10/graphql.json`;
   const shopify = new ShopifyClient();
+  let madeAdjustments = false;
 
   try {
     console.log('🔄 Checking multi-variant SKU balance at LA Office...');
@@ -125,7 +127,7 @@ async function rebalanceMultiVariantSkus(): Promise<void> {
     
     if (!laOfficeLocation) {
       console.log('⚠️ LA Office location not found, skipping rebalance');
-      return;
+      return false;
     }
 
     const laOfficeLocationId = laOfficeLocation.id;
@@ -311,15 +313,18 @@ async function rebalanceMultiVariantSkus(): Promise<void> {
         }
 
         console.log(`✅ ${sku}: Rebalanced successfully`);
+        madeAdjustments = true;
       } else {
         console.log(`✅ ${sku}: Already balanced (total: ${totalQty})`);
       }
     }
 
     console.log('✅ Multi-variant SKU rebalance check complete');
+    return madeAdjustments;
   } catch (error) {
     console.error('❌ Error during rebalance:', error);
     // Don't throw - we want refresh to continue even if rebalance fails
+    return false;
   }
 }
 
@@ -346,7 +351,13 @@ export async function GET(request: NextRequest) {
     console.log(`🔄 Starting inventory refresh (by: ${refreshedBy})...`);
 
     // Step 1: Rebalance multi-variant SKUs at LA Office before fetching data
-    await rebalanceMultiVariantSkus();
+    const rebalanced = await rebalanceMultiVariantSkus();
+    
+    // If we made adjustments, wait for Shopify to process them
+    if (rebalanced) {
+      console.log('⏳ Waiting 2 seconds for Shopify to process rebalance adjustments...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 
     // Step 2: Fetch inventory data (now includes rebalanced quantities)
     const inventoryData = await fetchInventoryData();
