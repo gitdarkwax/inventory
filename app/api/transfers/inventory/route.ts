@@ -57,6 +57,83 @@ interface RebuildIncomingRequest {
 
 type RequestBody = MarkInTransitRequest | LogDeliveryRequest | RestockCancelledRequest | RebuildIncomingRequest;
 
+// Special handling for MBT3Y-DG: This SKU maps to 2 Shopify variants
+// When transferring to LA locations, split between variants: 35% Model 3, 65% Model Y
+const MBT3Y_DG_SPLIT = {
+  sku: 'MBT3Y-DG',
+  allocations: [
+    { variantMatch: 'Model 3', percentage: 0.35 },
+    { variantMatch: 'Model Y', percentage: 0.65 },
+  ],
+};
+
+const LA_LOCATIONS = ['LA Office', 'DTLA WH'];
+
+interface VariantInventoryItem {
+  inventoryItemId: string;
+  variantTitle: string;
+  onHand: number;
+}
+
+/**
+ * Creates split adjustments for MBT3Y-DG when transferring to LA locations
+ * Returns array of adjustments (2 for MBT3Y-DG, 1 for other SKUs)
+ */
+function createAdjustmentsForItem(
+  sku: string,
+  quantity: number,
+  locationId: string,
+  defaultInventoryItemId: string,
+  variantInventoryItems: VariantInventoryItem[] | undefined,
+  destination: string,
+  delta: 1 | -1 = 1 // 1 for adding, -1 for subtracting
+): Array<{ inventoryItemId: string; locationId: string; delta: number }> {
+  const adjustments: Array<{ inventoryItemId: string; locationId: string; delta: number }> = [];
+  
+  // Check if this is MBT3Y-DG going to an LA location with variant data available
+  if (
+    sku === MBT3Y_DG_SPLIT.sku &&
+    LA_LOCATIONS.includes(destination) &&
+    variantInventoryItems &&
+    variantInventoryItems.length > 1
+  ) {
+    // Split the quantity between variants
+    let remainingQty = quantity;
+    
+    for (let i = 0; i < MBT3Y_DG_SPLIT.allocations.length; i++) {
+      const allocation = MBT3Y_DG_SPLIT.allocations[i];
+      const variant = variantInventoryItems.find(v => v.variantTitle.includes(allocation.variantMatch));
+      
+      if (variant) {
+        // Last allocation gets remainder to ensure total matches
+        const allocatedQty = i === MBT3Y_DG_SPLIT.allocations.length - 1
+          ? remainingQty
+          : Math.round(quantity * allocation.percentage);
+        
+        adjustments.push({
+          inventoryItemId: `gid://shopify/InventoryItem/${variant.inventoryItemId}`,
+          locationId: `gid://shopify/Location/${locationId}`,
+          delta: allocatedQty * delta,
+        });
+        
+        remainingQty -= allocatedQty;
+        console.log(`  📊 ${sku} split: ${allocation.variantMatch} → ${allocatedQty} units (${allocation.percentage * 100}%)`);
+      }
+    }
+    
+    return adjustments;
+  }
+  
+  // Normal SKU - single adjustment
+  adjustments.push({
+    inventoryItemId: `gid://shopify/InventoryItem/${defaultInventoryItemId}`,
+    locationId: `gid://shopify/Location/${locationId}`,
+    delta: quantity * delta,
+  });
+  
+  return adjustments;
+}
+
 // GraphQL mutation for adjusting inventory quantities (using delta values)
 const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
   mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
@@ -221,12 +298,18 @@ export async function POST(request: NextRequest) {
         });
 
         // For Immediate transfers: add to destination's On Hand (skip ShipBob/Distributor)
+        // Special handling for MBT3Y-DG: split between variants when going to LA locations
         if (isImmediate && !skipDestinationUpdate) {
-          destAdjustments.push({
-            inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-            locationId: `gid://shopify/Location/${destLocationId}`,
-            delta: item.quantity,
-          });
+          const splitAdjustments = createAdjustmentsForItem(
+            item.sku,
+            item.quantity,
+            destLocationId,
+            detail.inventoryItemId,
+            detail.variantInventoryItems,
+            destination,
+            1 // positive delta for adding
+          );
+          destAdjustments.push(...splitAdjustments);
         }
         // For Air/Sea transfers: incoming is tracked locally in our app, not in Shopify
       }
@@ -329,11 +412,17 @@ export async function POST(request: NextRequest) {
             }
 
             // Add to destination's On Hand
-            availableAdjustments.push({
-              inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-              locationId: `gid://shopify/Location/${destLocationId}`,
-              delta: item.quantity,
-            });
+            // Special handling for MBT3Y-DG: split between variants when going to LA locations
+            const splitAdjustments = createAdjustmentsForItem(
+              item.sku,
+              item.quantity,
+              destLocationId,
+              detail.inventoryItemId,
+              detail.variantInventoryItems,
+              destination,
+              1 // positive delta for adding
+            );
+            availableAdjustments.push(...splitAdjustments);
           }
 
           if (errors.length > 0 && availableAdjustments.length === 0) {
