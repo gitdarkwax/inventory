@@ -57,15 +57,26 @@ interface RebuildIncomingRequest {
 
 type RequestBody = MarkInTransitRequest | LogDeliveryRequest | RestockCancelledRequest | RebuildIncomingRequest;
 
-// Special handling for MBT3Y-DG: This SKU maps to 2 Shopify variants
-// When transferring to LA locations, split between variants: 35% Model 3, 65% Model Y
-const MBT3Y_DG_SPLIT = {
-  sku: 'MBT3Y-DG',
-  allocations: [
-    { variantMatch: 'Model 3', percentage: 0.35 },
-    { variantMatch: 'Model Y', percentage: 0.65 },
-  ],
-};
+// Special handling for SKUs that map to multiple Shopify variants
+// When transferring to LA locations, split between variants based on configured percentages
+const MULTI_VARIANT_SKUS = [
+  {
+    sku: 'MBT3Y-DG',
+    // Model 3 / 2017-2023 / Left Hand = 35%, Model Y / 2010-2024 / Left Hand = 65%
+    allocations: [
+      { variantMatch: 'Model 3', percentage: 0.35 },
+      { variantMatch: 'Model Y', percentage: 0.65 },
+    ],
+  },
+  {
+    sku: 'MBT3YRH-DG',
+    // Model 3 / 2017-2023 / Right Hand = 35%, Model Y / 2010-2024 / Right Hand = 65%
+    allocations: [
+      { variantMatch: 'Model 3', percentage: 0.35 },
+      { variantMatch: 'Model Y', percentage: 0.65 },
+    ],
+  },
+];
 
 const LA_LOCATIONS = ['LA Office', 'DTLA WH'];
 
@@ -76,8 +87,8 @@ interface VariantInventoryItem {
 }
 
 /**
- * Creates split adjustments for MBT3Y-DG when transferring to LA locations
- * Returns array of adjustments (2 for MBT3Y-DG, 1 for other SKUs)
+ * Creates split adjustments for multi-variant SKUs when transferring to LA locations
+ * Returns array of adjustments (2 for multi-variant SKUs, 1 for other SKUs)
  */
 function createAdjustmentsForItem(
   sku: string,
@@ -90,9 +101,11 @@ function createAdjustmentsForItem(
 ): Array<{ inventoryItemId: string; locationId: string; delta: number }> {
   const adjustments: Array<{ inventoryItemId: string; locationId: string; delta: number }> = [];
   
-  // Check if this is MBT3Y-DG going to an LA location with variant data available
+  // Check if this SKU needs to be split between multiple variants
+  const splitConfig = MULTI_VARIANT_SKUS.find(s => s.sku === sku);
+  
   if (
-    sku === MBT3Y_DG_SPLIT.sku &&
+    splitConfig &&
     LA_LOCATIONS.includes(destination) &&
     variantInventoryItems &&
     variantInventoryItems.length > 1
@@ -100,13 +113,13 @@ function createAdjustmentsForItem(
     // Split the quantity between variants
     let remainingQty = quantity;
     
-    for (let i = 0; i < MBT3Y_DG_SPLIT.allocations.length; i++) {
-      const allocation = MBT3Y_DG_SPLIT.allocations[i];
+    for (let i = 0; i < splitConfig.allocations.length; i++) {
+      const allocation = splitConfig.allocations[i];
       const variant = variantInventoryItems.find(v => v.variantTitle.includes(allocation.variantMatch));
       
       if (variant) {
         // Last allocation gets remainder to ensure total matches
-        const allocatedQty = i === MBT3Y_DG_SPLIT.allocations.length - 1
+        const allocatedQty = i === splitConfig.allocations.length - 1
           ? remainingQty
           : Math.round(quantity * allocation.percentage);
         

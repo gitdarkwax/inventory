@@ -6473,15 +6473,25 @@ export default function Dashboard({ session }: DashboardProps) {
                                     }
                                     
                                     // Build updates array - only counted SKUs
-                                    // Special handling for MBT3Y-DG: split between two variants
-                                    const MBT3Y_DG_SPLIT = {
-                                      sku: 'MBT3Y-DG',
-                                      // Model 3 / 2017-2023 / Left Hand = 35%, Model Y / 2010-2024 / Left Hand = 65%
-                                      allocations: [
-                                        { variantMatch: 'Model 3', percentage: 0.35 },
-                                        { variantMatch: 'Model Y', percentage: 0.65 },
-                                      ],
-                                    };
+                                    // Special handling for SKUs that map to multiple Shopify variants
+                                    const MULTI_VARIANT_SKUS = [
+                                      {
+                                        sku: 'MBT3Y-DG',
+                                        // Model 3 / 2017-2023 / Left Hand = 35%, Model Y / 2010-2024 / Left Hand = 65%
+                                        allocations: [
+                                          { variantMatch: 'Model 3', percentage: 0.35 },
+                                          { variantMatch: 'Model Y', percentage: 0.65 },
+                                        ],
+                                      },
+                                      {
+                                        sku: 'MBT3YRH-DG',
+                                        // Model 3 / 2017-2023 / Right Hand = 35%, Model Y / 2010-2024 / Right Hand = 65%
+                                        allocations: [
+                                          { variantMatch: 'Model 3', percentage: 0.35 },
+                                          { variantMatch: 'Model Y', percentage: 0.65 },
+                                        ],
+                                      },
+                                    ];
                                     
                                     const updates: Array<{ sku: string; inventoryItemId: string; quantity: number; locationId: string }> = [];
                                     
@@ -6489,18 +6499,20 @@ export default function Dashboard({ session }: DashboardProps) {
                                       const quantity = currentCounts[item.sku] ?? 0;
                                       const locId = locationId || 'test-mode';
                                       
-                                      // Check if this is the special split SKU
-                                      if (item.sku === MBT3Y_DG_SPLIT.sku && item.variantInventoryItems && item.variantInventoryItems.length > 1) {
+                                      // Check if this SKU needs to be split between multiple variants
+                                      const splitConfig = MULTI_VARIANT_SKUS.find(s => s.sku === item.sku);
+                                      
+                                      if (splitConfig && item.variantInventoryItems && item.variantInventoryItems.length > 1) {
                                         // Split the counted quantity between variants
                                         let remainingQty = quantity;
                                         
-                                        for (let i = 0; i < MBT3Y_DG_SPLIT.allocations.length; i++) {
-                                          const allocation = MBT3Y_DG_SPLIT.allocations[i];
+                                        for (let i = 0; i < splitConfig.allocations.length; i++) {
+                                          const allocation = splitConfig.allocations[i];
                                           const variant = item.variantInventoryItems.find(v => v.variantTitle.includes(allocation.variantMatch));
                                           
                                           if (variant) {
                                             // Last allocation gets remainder to ensure total matches
-                                            const allocatedQty = i === MBT3Y_DG_SPLIT.allocations.length - 1
+                                            const allocatedQty = i === splitConfig.allocations.length - 1
                                               ? remainingQty
                                               : Math.round(quantity * allocation.percentage);
                                             
