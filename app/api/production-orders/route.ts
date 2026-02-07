@@ -213,8 +213,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Send Slack notification if order was cancelled
-    if (status === 'cancelled' && previousStatus !== 'cancelled') {
+    // Send Slack notification if order was cancelled (skip for in_production - essentially a draft)
+    if (status === 'cancelled' && previousStatus !== 'cancelled' && previousStatus !== 'in_production') {
       sendSlackNotification(async () => {
         const slack = new SlackService();
         await slack.notifyPOCancelled({

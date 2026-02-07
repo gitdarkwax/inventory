@@ -308,22 +308,24 @@ export async function PATCH(request: NextRequest) {
         }
       }
 
-      // Send Slack notification
-      sendSlackNotification(async () => {
-        const slack = new SlackService();
-        await slack.notifyTransferCancelled({
-          transferId: updatedTransfer.id,
-          cancelledBy: userName,
-          origin: updatedTransfer.origin,
-          destination: updatedTransfer.destination,
-          shipmentType: updatedTransfer.transferType || 'Unknown',
-          items: updatedTransfer.items.map(item => ({
-            sku: item.sku,
-            quantity: item.quantity,
-          })),
-          restockedItems: restockedItems,
+      // Send Slack notification (skip for draft transfers - no need to notify)
+      if (previousStatus !== 'draft') {
+        sendSlackNotification(async () => {
+          const slack = new SlackService();
+          await slack.notifyTransferCancelled({
+            transferId: updatedTransfer.id,
+            cancelledBy: userName,
+            origin: updatedTransfer.origin,
+            destination: updatedTransfer.destination,
+            shipmentType: updatedTransfer.transferType || 'Unknown',
+            items: updatedTransfer.items.map(item => ({
+              sku: item.sku,
+              quantity: item.quantity,
+            })),
+            restockedItems: restockedItems,
+          });
         });
-      });
+      }
     }
 
     return NextResponse.json({ transfer: updatedTransfer });
