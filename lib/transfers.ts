@@ -279,7 +279,13 @@ export class TransfersService {
     cache.nextTransferNumber = nextNum + 1;
     
     const now = new Date().toISOString();
-    const itemsSummary = items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+    const itemsSummary = items.map(i => `${i.sku} → ${i.quantity}`).join(', ');
+    
+    // Build activity log details with notes if present
+    let creationDetails = `[${transferType}] ${origin} → ${destination}: ${itemsSummary}`;
+    if (notes && notes.trim()) {
+      creationDetails += `\nNotes: ${notes.trim()}`;
+    }
     
     const newTransfer: Transfer = {
       id: transferId,
@@ -301,7 +307,7 @@ export class TransfersService {
         action: 'Transfer Created',
         changedBy: createdBy,
         changedByEmail: createdByEmail,
-        details: `[${transferType}] ${origin} → ${destination}: ${itemsSummary}`,
+        details: creationDetails,
       }],
     };
 
@@ -392,10 +398,16 @@ export class TransfersService {
       changes.push(`ETA: ${updates.eta ? new Date(updates.eta).toLocaleDateString() : 'cleared'}`);
       transfer.eta = updates.eta;
     }
+    
+    // Track notes changes separately for special handling
+    let notesChanged = false;
+    let newNotesContent = '';
     if (updates.notes !== undefined && updates.notes !== transfer.notes) {
-      changes.push('Notes updated');
+      notesChanged = true;
+      newNotesContent = updates.notes;
       transfer.notes = updates.notes;
     }
+    
     if (updates.status && updates.status !== transfer.status) {
       const statusLabels: Record<string, string> = {
         'draft': 'Draft',
@@ -414,7 +426,7 @@ export class TransfersService {
       }
     }
     
-    // Add activity log entry if there were changes
+    // Add activity log entry if there were changes (not counting notes which are handled separately)
     if (changes.length > 0 && changedBy && changedByEmail) {
       // Check if this is a delivery update (has SKU: qty format without Status: prefix)
       const deliveryItemsChange = changes.find(c => /^[A-Z0-9-]+:\s*[\d,]+/.test(c) && !c.startsWith('Status:'));
@@ -441,6 +453,17 @@ export class TransfersService {
         changedBy,
         changedByEmail,
         details: details || undefined,
+      });
+    }
+    
+    // Handle notes changes as a separate "Notes Updated" entry
+    if (notesChanged && changedBy && changedByEmail) {
+      transfer.activityLog.push({
+        timestamp: now,
+        action: 'Notes Updated',
+        changedBy,
+        changedByEmail,
+        details: newNotesContent.trim() || 'Notes cleared',
       });
     }
     

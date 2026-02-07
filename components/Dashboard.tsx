@@ -2795,18 +2795,24 @@ export default function Dashboard({ session }: DashboardProps) {
     return `${month} ${day}, ${year}`;
   };
 
-  // Format activity log text to show SKU items on separate lines
+  // Format activity log text to show SKU items on separate lines and handle notes
   const formatActivityLogText = (text: string): React.ReactNode => {
-    // Split by common SKU list patterns (comma-separated SKU → qty pairs)
-    // Pattern: "SKU → qty, SKU → qty" or "SKU → qty"
+    // First check if text contains newlines (e.g., notes on separate line)
+    const lines = text.split('\n');
+    
+    // Process first line for SKU patterns
+    const firstLine = lines[0];
     const skuPattern = /([A-Z0-9-]+)\s*→\s*(\d+)/g;
-    const matches = [...text.matchAll(skuPattern)];
+    const matches = [...firstLine.matchAll(skuPattern)];
+    
+    // Get any additional lines (like notes)
+    const additionalLines = lines.slice(1).filter(line => line.trim());
     
     if (matches.length > 1) {
       // Multiple SKUs - format as list
       // Find where the SKU list starts
       const firstMatch = matches[0];
-      const prefix = text.substring(0, firstMatch.index).replace(/:\s*$/, '');
+      const prefix = firstLine.substring(0, firstMatch.index).replace(/:\s*$/, '');
       
       return (
         <span>
@@ -2816,11 +2822,26 @@ export default function Dashboard({ session }: DashboardProps) {
               <span key={idx} className="block">- {match[1]} → {match[2]}</span>
             ))}
           </span>
+          {additionalLines.map((line, idx) => (
+            <span key={`line-${idx}`} className="block mt-1">{line}</span>
+          ))}
         </span>
       );
     }
     
-    // Single or no SKU items - return as-is
+    // Single or no SKU items - handle newlines if present
+    if (additionalLines.length > 0) {
+      return (
+        <span>
+          <span>{firstLine}</span>
+          {additionalLines.map((line, idx) => (
+            <span key={`line-${idx}`} className="block mt-1">{line}</span>
+          ))}
+        </span>
+      );
+    }
+    
+    // Single line, return as-is
     return text;
   };
 
