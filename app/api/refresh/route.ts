@@ -149,6 +149,12 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
     console.log(`📦 Total products fetched: ${products.length}`);
 
     for (const product of products) {
+      // Only process products with the "inventoried" tag (same filter used in fetchInventoryData)
+      const productTags = product.tags?.toLowerCase().split(',').map(t => t.trim()) || [];
+      if (!productTags.includes('inventoried')) {
+        continue;
+      }
+      
       for (const variant of product.variants) {
         // Check if this variant's SKU is one of our multi-variant SKUs
         if (targetSkus.includes(variant.sku) && variant.inventory_item_id) {
