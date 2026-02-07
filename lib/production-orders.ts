@@ -275,7 +275,13 @@ export class ProductionOrdersService {
     }));
     
     const now = new Date().toISOString();
-    const itemsSummary = orderItems.map(i => `${i.sku} x${i.quantity}`).join(', ');
+    const itemsSummary = orderItems.map(i => `${i.sku} → ${i.quantity}`).join(', ');
+    
+    // Build creation details with notes if present
+    let creationDetails = itemsSummary;
+    if (notes && notes.trim()) {
+      creationDetails += `\nNotes: ${notes.trim()}`;
+    }
     
     const newOrder: ProductionOrder = {
       id: orderId,
@@ -294,7 +300,7 @@ export class ProductionOrdersService {
         action: 'PO Created',
         changedBy: createdBy,
         changedByEmail: createdByEmail,
-        details: itemsSummary,
+        details: creationDetails,
       }],
     };
 
@@ -348,10 +354,15 @@ export class ProductionOrdersService {
       });
     }
     
+    // Track notes changes separately for dedicated log entry
+    let notesChanged = false;
+    let newNotesContent = '';
     if (updates.notes !== undefined && updates.notes !== order.notes) {
-      changes.push('Notes updated');
+      notesChanged = true;
+      newNotesContent = updates.notes;
       order.notes = updates.notes;
     }
+    
     if (updates.poNumber !== undefined && updates.poNumber !== order.poNumber) {
       changes.push(`PO#: ${updates.poNumber || 'cleared'}`);
       order.poNumber = updates.poNumber;
@@ -360,10 +371,18 @@ export class ProductionOrdersService {
       changes.push(`Vendor: ${updates.vendor || 'cleared'}`);
       order.vendor = updates.vendor;
     }
-    if (updates.eta !== undefined && updates.eta !== order.eta) {
-      changes.push(`ETA: ${updates.eta ? new Date(updates.eta).toLocaleDateString() : 'cleared'}`);
-      order.eta = updates.eta;
+    
+    // Track ETA changes separately for dedicated log entry
+    let etaChanged = false;
+    let newEtaValue: string | null | undefined = undefined;
+    const currentEta = order.eta || null;
+    const incomingEta = updates.eta === undefined ? undefined : (updates.eta || null);
+    if (incomingEta !== undefined && incomingEta !== currentEta) {
+      etaChanged = true;
+      newEtaValue = incomingEta;
+      order.eta = incomingEta || undefined;
     }
+    
     if (updates.status && updates.status !== order.status) {
       const statusLabels: Record<string, string> = {
         'in_production': 'In Production',
@@ -381,7 +400,7 @@ export class ProductionOrdersService {
       }
     }
     
-    // Add activity log entry if there were changes
+    // Add activity log entry if there were changes (not counting notes/ETA which are handled separately)
     if (changes.length > 0 && changedBy && changedByEmail) {
       order.activityLog.push({
         timestamp: now,
@@ -389,6 +408,35 @@ export class ProductionOrdersService {
         changedBy,
         changedByEmail,
         details: changes.join('; '),
+      });
+    }
+    
+    // Handle notes changes as a separate "Notes Updated" entry
+    if (notesChanged && changedBy && changedByEmail) {
+      order.activityLog.push({
+        timestamp: now,
+        action: 'Notes Updated',
+        changedBy,
+        changedByEmail,
+        details: newNotesContent.trim() || 'Notes cleared',
+      });
+    }
+    
+    // Handle ETA changes as a separate "ETA Updated" entry
+    if (etaChanged && changedBy && changedByEmail) {
+      // Parse date as local to avoid timezone shift (YYYY-MM-DD -> local midnight)
+      let etaDisplay = 'Cleared';
+      if (newEtaValue) {
+        const [year, month, day] = newEtaValue.split('-').map(Number);
+        const localDate = new Date(year, month - 1, day);
+        etaDisplay = localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+      order.activityLog.push({
+        timestamp: now,
+        action: 'ETA Updated',
+        changedBy,
+        changedByEmail,
+        details: etaDisplay,
       });
     }
     
@@ -456,7 +504,7 @@ export class ProductionOrdersService {
         if (item.receivedQuantity > item.quantity) {
           item.receivedQuantity = item.quantity;
         }
-        deliveryDetails.push(`${item.sku} x${delivery.quantity}`);
+        deliveryDetails.push(`${item.sku} → ${delivery.quantity}`);
       }
     }
 

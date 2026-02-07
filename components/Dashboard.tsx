@@ -1691,7 +1691,7 @@ export default function Dashboard({ session }: DashboardProps) {
           orderId,
           items: validItems,
           vendor: editOrderVendor || undefined,
-          eta: editOrderEta || undefined,
+          eta: editOrderEta || null, // Use null to allow clearing, undefined would be excluded by JSON.stringify
           notes: editOrderNotes,
         }),
       });
@@ -1700,8 +1700,9 @@ export default function Dashboard({ session }: DashboardProps) {
         const data = await response.json();
         setShowEditForm(false);
         setSelectedOrder(data.order);
-        await loadProductionOrders();
         showProdNotification('success', 'Order Updated', 'Production order updated successfully');
+        // Refresh data after showing notification to avoid delay
+        await loadProductionOrders();
       } else {
         const data = await response.json();
         showProdNotification('error', 'Update Failed', data.error || 'Failed to update order');
@@ -7646,7 +7647,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                                 e.stopPropagation();
                                                 setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
                                                 setEditOrderVendor(order.vendor || '');
-                                                setEditOrderEta(order.eta || '');
+                                                // Normalize ETA to YYYY-MM-DD format for date input
+                                                setEditOrderEta(order.eta ? order.eta.split('T')[0] : '');
                                                 setEditOrderNotes(order.notes || '');
                                                 setShowEditForm(true);
                                               }}
