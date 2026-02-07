@@ -476,9 +476,13 @@ export class TransfersService {
     
     // Handle ETA changes as a separate "Est. Delivery Updated" entry
     if (etaChanged && changedBy && changedByEmail) {
-      const etaDisplay = newEtaValue 
-        ? new Date(newEtaValue).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : 'Cleared';
+      // Parse date as local to avoid timezone shift (YYYY-MM-DD -> local midnight)
+      let etaDisplay = 'Cleared';
+      if (newEtaValue) {
+        const [year, month, day] = newEtaValue.split('-').map(Number);
+        const localDate = new Date(year, month - 1, day);
+        etaDisplay = localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
       transfer.activityLog.push({
         timestamp: now,
         action: 'Est. Delivery Updated',

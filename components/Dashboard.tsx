@@ -1328,8 +1328,10 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransfers(prev => prev.map(t => t.id === selectedTransfer.id ? data.transfer : t));
         setShowEditTransferForm(false);
         setSelectedTransfer(data.transfer);
+        showProdNotification('success', 'Transfer Updated', 'Transfer updated successfully');
         
         // If transfer is in_transit or partial, rebuild incoming cache so other tabs reflect changes
+        // Do this after showing notification to avoid delay
         if (['in_transit', 'partial'].includes(selectedTransfer.status)) {
           try {
             await fetch('/api/transfers/inventory', {
@@ -1342,8 +1344,6 @@ export default function Dashboard({ session }: DashboardProps) {
             console.warn('Failed to rebuild incoming cache:', err);
           }
         }
-        
-        showProdNotification('success', 'Transfer Updated', 'Transfer updated successfully');
       } else {
         showProdNotification('error', 'Update Failed', data.error || 'Failed to update transfer');
       }
@@ -2236,6 +2236,17 @@ export default function Dashboard({ session }: DashboardProps) {
     URL.revokeObjectURL(link.href);
   };
 
+  // Parse date string as local time (fixes timezone offset issue for date-only strings like "2025-02-15")
+  const parseLocalDate = (dateStr: string): Date => {
+    // If it's a date-only string (YYYY-MM-DD), parse as local time to avoid timezone shift
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+    // Otherwise use standard Date parsing
+    return new Date(dateStr);
+  };
+
   // Format date for badges: "Jan 25, 2026, 10:48AM"
   const formatBadgeDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -2774,7 +2785,7 @@ export default function Dashboard({ session }: DashboardProps) {
     return transfers.map(t => {
       const lines = [];
       const createdDate = t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-US', dateOpts) : '';
-      const etaStr = t.expectedArrivalAt ? ` | ETA: ${new Date(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}` : '';
+      const etaStr = t.expectedArrivalAt ? ` | ETA: ${parseLocalDate(t.expectedArrivalAt).toLocaleDateString('en-US', dateOpts)}` : '';
       lines.push(`${t.name}${etaStr}`);
       lines.push(`Created: ${createdDate}`);
       const tagsStr = Array.isArray(t.tags) ? t.tags.join(', ') : '';
@@ -7475,7 +7486,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               </td>
                               <td className="w-[12%] px-4 py-3 text-sm text-gray-600 pl-6">{order.vendor || '—'}</td>
                               <td className="w-[11%] px-4 py-3 text-sm text-gray-600">
-                                {order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
+                                {order.eta ? parseLocalDate(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '—'}
                               </td>
                               <td className="w-[15%] px-4 py-3">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -8405,7 +8416,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     ) : '—'}
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-500">
-                                    {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                    {transfer.eta ? parseLocalDate(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                   </td>
                                   <td className="px-4 py-3">
                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -8446,7 +8457,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <div>
                                             <span className="text-gray-500">Est. Arrival:</span>
                                             <span className="ml-2 text-gray-900">
-                                              {transfer.eta ? new Date(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                              {transfer.eta ? parseLocalDate(transfer.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                                             </span>
                                           </div>
                                           <div>
