@@ -24,7 +24,286 @@ const locationDisplayNames: Record<string, string> = {
   'China Warehouse': 'China WH',
 };
 
+// Reverse mapping for Shopify location names
+const shopifyLocationNames: Record<string, string> = {
+  'LA Office': 'New LA Office',
+};
+
 const locationOrder = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
+
+// Multi-variant SKUs that need rebalancing at LA Office
+// These SKUs map to 2 Shopify variants and need 35%/65% split maintained
+const MULTI_VARIANT_SKUS = [
+  {
+    sku: 'MBT3Y-DG',
+    allocations: [
+      { variantMatch: 'Model 3', percentage: 0.35 },
+      { variantMatch: 'Model Y', percentage: 0.65 },
+    ],
+  },
+  {
+    sku: 'MBT3YRH-DG',
+    allocations: [
+      { variantMatch: 'Model 3', percentage: 0.35 },
+      { variantMatch: 'Model Y', percentage: 0.65 },
+    ],
+  },
+];
+
+// GraphQL mutation for adjusting inventory quantities
+const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
+  mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
+    inventoryAdjustQuantities(input: $input) {
+      userErrors {
+        field
+        message
+      }
+      inventoryAdjustmentGroup {
+        id
+        reason
+        changes {
+          name
+          delta
+          quantityAfterChange
+        }
+      }
+    }
+  }
+`;
+
+// GraphQL query to get inventory levels for specific items at a location
+const INVENTORY_LEVELS_QUERY = `
+  query inventoryLevels($inventoryItemIds: [ID!]!, $locationIds: [ID!]!) {
+    inventoryItems(first: 10, query: "") {
+      edges {
+        node {
+          id
+          sku
+          inventoryLevels(first: 10) {
+            edges {
+              node {
+                id
+                location {
+                  id
+                  name
+                }
+                quantities(names: ["available", "on_hand"]) {
+                  name
+                  quantity
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Rebalance multi-variant SKUs at LA Office to maintain 35%/65% split
+ * This runs before fetching inventory data to ensure the split is correct
+ */
+async function rebalanceMultiVariantSkus(): Promise<void> {
+  const shop = process.env.SHOPIFY_SHOP_DOMAIN;
+  const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
+
+  if (!shop || !accessToken) {
+    console.log('⚠️ Shopify credentials not configured, skipping rebalance');
+    return;
+  }
+
+  const graphqlUrl = `https://${shop}/admin/api/2024-10/graphql.json`;
+  const shopify = new ShopifyClient();
+
+  try {
+    console.log('🔄 Checking multi-variant SKU balance at LA Office...');
+
+    // Fetch locations to get LA Office location ID
+    const locations = await shopify.fetchLocations();
+    const laOfficeLocation = locations.find(l => locationDisplayNames[l.name] === 'LA Office');
+    
+    if (!laOfficeLocation) {
+      console.log('⚠️ LA Office location not found, skipping rebalance');
+      return;
+    }
+
+    const laOfficeLocationId = laOfficeLocation.id;
+    console.log(`📍 LA Office location ID: ${laOfficeLocationId}`);
+
+    // Fetch all products to find the multi-variant SKU variants
+    const products = await shopify.fetchProducts();
+    
+    // Build a map of SKU -> variants for multi-variant SKUs
+    const multiVariantData: Map<string, Array<{
+      variantTitle: string;
+      inventoryItemId: string;
+      sku: string;
+    }>> = new Map();
+
+    for (const product of products) {
+      for (const variant of product.variants) {
+        // Check if this variant's SKU is one of our multi-variant SKUs
+        const config = MULTI_VARIANT_SKUS.find(m => m.sku === variant.sku);
+        if (config && variant.inventory_item_id) {
+          if (!multiVariantData.has(variant.sku)) {
+            multiVariantData.set(variant.sku, []);
+          }
+          multiVariantData.get(variant.sku)!.push({
+            variantTitle: variant.title,
+            inventoryItemId: String(variant.inventory_item_id),
+            sku: variant.sku,
+          });
+        }
+      }
+    }
+
+    // For each multi-variant SKU, check and rebalance if needed
+    for (const [sku, variants] of multiVariantData) {
+      if (variants.length < 2) {
+        console.log(`⚠️ ${sku}: Only ${variants.length} variant(s) found, skipping`);
+        continue;
+      }
+
+      const config = MULTI_VARIANT_SKUS.find(m => m.sku === sku)!;
+      
+      // Fetch current inventory levels for these variants at LA Office
+      const inventoryItemIds = variants.map(v => v.inventoryItemId);
+      const levelsResponse = await fetch(`https://${shop}/admin/api/2024-10/inventory_levels.json?inventory_item_ids=${inventoryItemIds.join(',')}&location_ids=${laOfficeLocationId}`, {
+        headers: {
+          'X-Shopify-Access-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!levelsResponse.ok) {
+        console.error(`❌ Failed to fetch inventory levels for ${sku}`);
+        continue;
+      }
+
+      const levelsData = await levelsResponse.json();
+      const levels = levelsData.inventory_levels || [];
+
+      // Map inventory item ID to current available quantity
+      const currentLevels = new Map<string, number>();
+      for (const level of levels) {
+        currentLevels.set(String(level.inventory_item_id), level.available || 0);
+      }
+
+      // Calculate current quantities for each variant
+      const variantQuantities: Array<{
+        variantTitle: string;
+        inventoryItemId: string;
+        currentQty: number;
+        allocation: { variantMatch: string; percentage: number };
+      }> = [];
+
+      for (const variant of variants) {
+        const allocation = config.allocations.find(a => variant.variantTitle.includes(a.variantMatch));
+        if (allocation) {
+          variantQuantities.push({
+            variantTitle: variant.variantTitle,
+            inventoryItemId: variant.inventoryItemId,
+            currentQty: currentLevels.get(variant.inventoryItemId) || 0,
+            allocation,
+          });
+        }
+      }
+
+      if (variantQuantities.length !== 2) {
+        console.log(`⚠️ ${sku}: Could not match both variants, skipping`);
+        continue;
+      }
+
+      // Calculate total and target quantities
+      const totalQty = variantQuantities.reduce((sum, v) => sum + v.currentQty, 0);
+      
+      if (totalQty === 0) {
+        console.log(`ℹ️ ${sku}: Total quantity is 0, nothing to rebalance`);
+        continue;
+      }
+
+      // Calculate target quantities
+      const adjustments: Array<{ inventoryItemId: string; locationId: string; delta: number }> = [];
+      let remainingQty = totalQty;
+
+      for (let i = 0; i < variantQuantities.length; i++) {
+        const v = variantQuantities[i];
+        // Last allocation gets remainder
+        const targetQty = i === variantQuantities.length - 1
+          ? remainingQty
+          : Math.round(totalQty * v.allocation.percentage);
+        
+        const delta = targetQty - v.currentQty;
+        remainingQty -= targetQty;
+
+        console.log(`  📊 ${sku} ${v.allocation.variantMatch}: current=${v.currentQty}, target=${targetQty}, delta=${delta}`);
+
+        if (delta !== 0) {
+          adjustments.push({
+            inventoryItemId: `gid://shopify/InventoryItem/${v.inventoryItemId}`,
+            locationId: `gid://shopify/Location/${laOfficeLocationId}`,
+            delta,
+          });
+        }
+      }
+
+      // Apply adjustments if any
+      if (adjustments.length > 0) {
+        console.log(`🔧 ${sku}: Applying ${adjustments.length} adjustments...`);
+
+        const input = {
+          name: 'available',
+          reason: 'correction',
+          changes: adjustments.map(adj => ({
+            inventoryItemId: adj.inventoryItemId,
+            locationId: adj.locationId,
+            delta: adj.delta,
+          })),
+        };
+
+        const response = await fetch(graphqlUrl, {
+          method: 'POST',
+          headers: {
+            'X-Shopify-Access-Token': accessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: INVENTORY_ADJUST_QUANTITIES_MUTATION,
+            variables: { input },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`❌ ${sku}: Shopify API error: ${response.status} - ${errorText}`);
+          continue;
+        }
+
+        const result = await response.json();
+        if (result.errors) {
+          console.error(`❌ ${sku}: GraphQL errors:`, result.errors);
+          continue;
+        }
+
+        const userErrors = result.data?.inventoryAdjustQuantities?.userErrors;
+        if (userErrors && userErrors.length > 0) {
+          console.error(`❌ ${sku}: User errors:`, userErrors);
+          continue;
+        }
+
+        console.log(`✅ ${sku}: Rebalanced successfully`);
+      } else {
+        console.log(`✅ ${sku}: Already balanced (total: ${totalQty})`);
+      }
+    }
+
+    console.log('✅ Multi-variant SKU rebalance check complete');
+  } catch (error) {
+    console.error('❌ Error during rebalance:', error);
+    // Don't throw - we want refresh to continue even if rebalance fails
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,7 +327,10 @@ export async function GET(request: NextRequest) {
     const startTime = Date.now();
     console.log(`🔄 Starting inventory refresh (by: ${refreshedBy})...`);
 
-    // Fetch inventory data
+    // Step 1: Rebalance multi-variant SKUs at LA Office before fetching data
+    await rebalanceMultiVariantSkus();
+
+    // Step 2: Fetch inventory data (now includes rebalanced quantities)
     const inventoryData = await fetchInventoryData();
     console.log(`✅ Inventory data fetched: ${inventoryData.totalSKUs} SKUs`);
 
