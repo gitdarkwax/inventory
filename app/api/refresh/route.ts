@@ -145,8 +145,6 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
     }>> = new Map();
 
     const targetSkus = MULTI_VARIANT_SKUS.map(m => m.sku);
-    console.log(`🔍 Looking for SKUs: ${targetSkus.join(', ')}`);
-    console.log(`📦 Total products fetched: ${products.length}`);
 
     for (const product of products) {
       // Only process products with the "inventoried" tag (same filter used in fetchInventoryData)
@@ -158,7 +156,6 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
       for (const variant of product.variants) {
         // Check if this variant's SKU is one of our multi-variant SKUs
         if (targetSkus.includes(variant.sku) && variant.inventory_item_id) {
-          console.log(`  ✓ Found variant: SKU=${variant.sku}, title="${variant.title}", inventoryItemId=${variant.inventory_item_id}, product="${product.title}"`);
           if (!multiVariantData.has(variant.sku)) {
             multiVariantData.set(variant.sku, []);
           }
@@ -170,12 +167,6 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
           });
         }
       }
-    }
-    
-    console.log(`📋 Multi-variant SKUs found: ${Array.from(multiVariantData.keys()).join(', ') || 'none'}`);
-    for (const [sku, variants] of multiVariantData) {
-      console.log(`  ${sku}: ${variants.length} variant(s)`);
-      variants.forEach(v => console.log(`    - "${v.variantTitle}" (${v.inventoryItemId})`));
     }
 
     // For each multi-variant SKU, check and rebalance if needed
@@ -218,26 +209,20 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
         allocation: { variantMatch: string; percentage: number };
       }> = [];
 
-      console.log(`🔍 ${sku}: Matching variants to allocations...`);
       for (const variant of variants) {
-        console.log(`  Checking variant "${variant.variantTitle}" against allocations...`);
         const allocation = config.allocations.find(a => variant.variantTitle.includes(a.variantMatch));
         if (allocation) {
-          const qty = currentLevels.get(variant.inventoryItemId) || 0;
-          console.log(`    ✓ Matched to ${allocation.variantMatch} (${allocation.percentage * 100}%), current qty: ${qty}`);
           variantQuantities.push({
             variantTitle: variant.variantTitle,
             inventoryItemId: variant.inventoryItemId,
-            currentQty: qty,
+            currentQty: currentLevels.get(variant.inventoryItemId) || 0,
             allocation,
           });
-        } else {
-          console.log(`    ✗ No match found for variant title "${variant.variantTitle}"`);
         }
       }
 
       if (variantQuantities.length !== 2) {
-        console.log(`⚠️ ${sku}: Could not match both variants (matched ${variantQuantities.length}), skipping`);
+        console.log(`⚠️ ${sku}: Could not match both variants, skipping`);
         continue;
       }
 
@@ -245,8 +230,7 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
       const totalQty = variantQuantities.reduce((sum, v) => sum + v.currentQty, 0);
       
       if (totalQty === 0) {
-        console.log(`ℹ️ ${sku}: Total quantity is 0, nothing to rebalance`);
-        continue;
+        continue; // Nothing to rebalance
       }
 
       // Calculate target quantities
@@ -263,8 +247,6 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
         const delta = targetQty - v.currentQty;
         remainingQty -= targetQty;
 
-        console.log(`  📊 ${sku} ${v.allocation.variantMatch}: current=${v.currentQty}, target=${targetQty}, delta=${delta}`);
-
         if (delta !== 0) {
           adjustments.push({
             inventoryItemId: `gid://shopify/InventoryItem/${v.inventoryItemId}`,
@@ -276,7 +258,6 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
 
       // Apply adjustments if any
       if (adjustments.length > 0) {
-        console.log(`🔧 ${sku}: Applying ${adjustments.length} adjustments...`);
 
         const input = {
           name: 'available',
@@ -318,14 +299,12 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
           continue;
         }
 
-        console.log(`✅ ${sku}: Rebalanced successfully`);
+        console.log(`✅ Rebalanced ${sku} at LA Office`);
         madeAdjustments = true;
-      } else {
-        console.log(`✅ ${sku}: Already balanced (total: ${totalQty})`);
       }
     }
 
-    console.log('✅ Multi-variant SKU rebalance check complete');
+    console.log('✅ Multi-variant SKU rebalance complete');
     return madeAdjustments;
   } catch (error) {
     console.error('❌ Error during rebalance:', error);
