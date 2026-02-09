@@ -3001,7 +3001,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed to air-ship to meet target inventory.\n\nLogic:\n1. First check: Is total inventory below target?\n   Target = Target Days × Selected Burn Rate\n   Total = LA Stock + In Air + In Sea\n\n   If Target > Total:\n     Need = Target - Total (simple shortfall)\n\n2. If total meets target, apply sea gap logic:\n   Calculate Runway Air date (when LA + Air runs out)\n   Check earliest Sea ETA\n\n   If Sea ETA > Runway Air date (gap exists):\n     Need = (Gap Days + 4) × Selected Burn Rate\n\n   If Sea ETA ≤ Runway Air date:\n     Need = 0 (sea arrives before stockout)' },
     { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA - Committed + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA - Committed + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
-    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on LA Runway = (LA - Committed + Air + Sea) / BR:\n\n• >90 days + active PO → Prod Status\n• >90 days + no PO → No Action\n• ≤90 days + active PO → Push Vendor\n• ≤90 days + no PO → Order More' },
+    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on CN Runway = (LA - Committed + Air + Sea + China WH) / BR:\n\n• >90 days + active PO → Prod Status\n• >90 days + no PO → No Action\n• ≤90 days + active PO → Push Vendor\n• ≤90 days + no PO → Order More' },
     { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH - Committed + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
     { name: 'LA Runway', description: 'Days until stockout based on LA inventory + incoming shipments.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
     { name: 'CN Runway', description: 'Days until stockout including China warehouse inventory.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea + China WH) / BR\n\nThis shows total runway if all China inventory were shipped.' },
@@ -5029,13 +5029,13 @@ export default function Dashboard({ session }: DashboardProps) {
                         }
                       }
                       
-                      // Determine prod status based on LA runway and PO (or Phase Out if applicable)
+                      // Determine prod status based on CN runway (includes China WH) and PO (or Phase Out if applicable)
                       let prodStatus: string;
                       if (isPhaseOut) {
                         prodStatus = 'Phase Out';
                       } else {
                         const hasPO = poQty > 0;
-                        if (laRunway > 90) {
+                        if (cnRunway > 90) {
                           prodStatus = hasPO ? 'Prod Status' : 'No Action';
                         } else {
                           prodStatus = hasPO ? 'Push Vendor' : 'Order More';
