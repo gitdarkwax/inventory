@@ -2990,7 +2990,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'Total', description: 'Total inventory = LA Office + DTLA WH + China WH + In Transit.\n\nExcludes ShipBob (3PL managed separately).' },
   ];
 
-  // Column definitions for LA Planning
+  // Column definitions for Planning tab
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
     { name: 'LA Stock', description: 'Available inventory at LA Office + DTLA WH minus committed orders.\n\nFormula: (LA Office + DTLA WH) - Committed' },
@@ -3380,7 +3380,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     activeTab === 'planning' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white'
                   }`}
                 >
-                  📋 LA Planning
+                  📋 Planning
                 </button>
                 <button
                   onClick={() => setActiveTab('production')}
