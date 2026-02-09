@@ -3856,10 +3856,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <td className="w-24 px-3 sm:px-4 py-3 text-sm text-center">
                                     {isPhaseOut ? (
                                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500 whitespace-nowrap">Phase Out</span>
-                                    ) : isDiscontinued ? (
-                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500 whitespace-nowrap">Discontinued</span>
                                     ) : (
-                                      <span className={poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                                      <span className={isGrayedOut ? 'text-gray-500' : (poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400')}>
                                         {poQty > 0 ? poQty.toLocaleString() : '—'}
                                       </span>
                                     )}
@@ -4080,10 +4078,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <td className="w-24 px-3 sm:px-4 py-2 text-sm text-center">
                                             {isPhaseOut ? (
                                               <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500 whitespace-nowrap">Phase Out</span>
-                                            ) : isDiscontinued ? (
-                                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500 whitespace-nowrap">Discontinued</span>
                                             ) : (
-                                              <span className={poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400'}>
+                                              <span className={isGrayedOut ? 'text-gray-500' : (poQty > 0 ? 'text-blue-600 font-medium' : 'text-gray-400')}>
                                                 {poQty > 0 ? poQty.toLocaleString() : '—'}
                                               </span>
                                             )}
@@ -5272,22 +5268,14 @@ export default function Dashboard({ session }: DashboardProps) {
                               {item.laNeed > 0 ? item.laNeed.toLocaleString() : '—'}
                             </td>
                             <td className="w-24 px-2 py-3 text-sm text-center">
-                              {isDiscontinued ? (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap bg-gray-200 text-gray-500">Discontinued</span>
-                              ) : (
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getShipTypeColor(item.shipType)}`}>
-                                  {item.shipType}
-                                </span>
-                              )}
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${isGrayedOut ? 'bg-gray-200 text-gray-500' : getShipTypeColor(item.shipType)}`}>
+                                {item.shipType}
+                              </span>
                             </td>
                             <td className="w-28 px-2 py-3 text-sm text-center">
-                              {isDiscontinued ? (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap bg-gray-200 text-gray-500">Discontinued</span>
-                              ) : (
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getProdStatusColor(item.prodStatus)}`}>
-                                  {item.prodStatus}
-                                </span>
-                              )}
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${isGrayedOut ? 'bg-gray-200 text-gray-500' : getProdStatusColor(item.prodStatus)}`}>
+                                {item.prodStatus}
+                              </span>
                             </td>
                             <td 
                               className={`w-16 px-2 py-3 text-sm text-center cursor-help ${isGrayedOut ? 'text-gray-500' : (item.runwayAir < 60 ? 'text-red-600 font-medium' : 'text-gray-900')}`}
