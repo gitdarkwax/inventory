@@ -2477,8 +2477,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'KeyTag';
     }
 
-    // Tesla Charger (MBT prefix, CTC-BKC)
-    if (/^MBT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
+    // Tesla Charger (MBT prefix, ADT prefix, CTC-BKC)
+    if (/^MBT/i.test(skuUpper) || /^ADT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
       return 'Tesla Charger';
     }
 
@@ -2505,6 +2505,50 @@ export default function Dashboard({ session }: DashboardProps) {
     // For other products, use a simplified title (first 30 chars or up to first dash/pipe)
     const simplified = productTitle.split(/[-|]/)[0].trim();
     return simplified.length > 40 ? simplified.substring(0, 40) + '...' : simplified;
+  };
+
+  // Sort SKUs within a group - special handling for Tesla Charger category
+  const sortSkusInGroup = <T extends { sku: string }>(items: T[], groupName: string): T[] => {
+    const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
+    
+    // Special sort order for Tesla Charger group
+    if (groupName === 'Tesla Charger') {
+      // Priority SKUs in specific order
+      const priorityOrder = ['MBT3Y-DG', 'MBT3YRH-DG', 'CTC-BKC', 'ADT24-L', 'ADTCT-L'];
+      
+      return [...items].sort((a, b) => {
+        const aUpper = a.sku.toUpperCase();
+        const bUpper = b.sku.toUpperCase();
+        
+        const aIndex = priorityOrder.findIndex(p => p.toUpperCase() === aUpper);
+        const bIndex = priorityOrder.findIndex(p => p.toUpperCase() === bUpper);
+        
+        // Both are priority SKUs - sort by priority order
+        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+        // Only a is priority - a comes first
+        if (aIndex !== -1) return -1;
+        // Only b is priority - b comes first
+        if (bIndex !== -1) return 1;
+        
+        // Neither are priority - sort by prefix then alphabetically
+        const aStartsMB = aUpper.startsWith('MB');
+        const bStartsMB = bUpper.startsWith('MB');
+        const aStartsAD = aUpper.startsWith('AD');
+        const bStartsAD = bUpper.startsWith('AD');
+        
+        // MB comes before AD
+        if (aStartsMB && bStartsAD) return -1;
+        if (aStartsAD && bStartsMB) return 1;
+        
+        // Same prefix or neither - alphabetical
+        return aUpper.localeCompare(bUpper);
+      });
+    }
+    
+    // Default sort: reverse for protectors, alphabetical otherwise
+    return [...items].sort((a, b) => 
+      shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
+    );
   };
 
   // Get incoming data from our local transfers (not Shopify) - declare before filteredInventory uses it
@@ -3263,11 +3307,8 @@ export default function Dashboard({ session }: DashboardProps) {
                 <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No inventory items match your filters.</div>
               )}
               {sortedLocationGroupNames.map(groupName => {
-                // Sort items - reverse alphabetical for Screen/Lens Protectors, otherwise alphabetical
-                const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
-                const items = [...groupedLocationDetail[groupName]].sort((a, b) => 
-                  shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
-                );
+                // Sort items within group using helper function
+                const items = sortSkusInGroup(groupedLocationDetail[groupName], groupName);
                 const groupAvailable = items.reduce((sum, item) => sum + item.available, 0);
                 return (
                   <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
@@ -3901,10 +3942,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         }
                         
                         return sortedLocationGroupNames.map(groupName => {
-                          const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
-                          const items = [...groupedLocationItems[groupName]].sort((a, b) => 
-                            shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
-                          );
+                          const items = sortSkusInGroup(groupedLocationItems[groupName], groupName);
                           const groupTotal = items.reduce((sum, item) => sum + item.available, 0);
                           return (
                             <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
@@ -3979,10 +4017,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No inventory items match your filters.</div>
                         )}
                         {sortedGroupNames.map(groupName => {
-                          const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
-                          const items = [...groupedInventory[groupName]].sort((a, b) => 
-                            shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
-                          );
+                          const items = sortSkusInGroup(groupedInventory[groupName], groupName);
                           // Calculate group total using the new formula (LA + DTLA + China + In Transit, exclude ShipBob)
                           const groupTotal = items.reduce((sum, item) => {
                             let inTransit = 0;
@@ -4560,11 +4595,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No forecasting data available.</div>
                     )}
                     {sortedForecastGroupNames.map(groupName => {
-                      // Sort items - reverse alphabetical for Screen/Lens Protectors, otherwise alphabetical
-                      const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
-                      const items = [...groupedForecasting[groupName]].sort((a, b) => 
-                        shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
-                      );
+                      // Sort items within group using helper function
+                      const items = sortSkusInGroup(groupedForecasting[groupName], groupName);
                       const groupInventory = items.reduce((sum, item) => sum + (item.totalInventory || 0), 0);
                       return (
                         <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
@@ -5631,19 +5663,15 @@ export default function Dashboard({ session }: DashboardProps) {
                             <div className="bg-white shadow rounded-lg p-8 text-center text-gray-500">No planning data available.</div>
                           )}
                           {sortedPlanningGroupNames.map(groupName => {
-                            const items = groupedPlanning[groupName];
-                            // Sort items within group - reverse for protectors
-                            const shouldReverseSort = groupName === 'Screen Protectors' || groupName === 'Lens Protectors';
-                            const sortedItems = [...items].sort((a, b) => 
-                              shouldReverseSort ? b.sku.localeCompare(a.sku) : a.sku.localeCompare(b.sku)
-                            );
+                            // Sort items within group using helper function
+                            const sortedItems = sortSkusInGroup(groupedPlanning[groupName], groupName);
                             return (
                               <div key={groupName} className="bg-white shadow rounded-lg overflow-hidden">
                                 <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
                                   <div className="flex justify-between items-center">
                                     <h3 className="text-sm font-semibold text-gray-900">{groupName}</h3>
                                     <div className="flex gap-4 text-xs text-gray-500">
-                                      <span>{items.length} SKUs</span>
+                                      <span>{sortedItems.length} SKUs</span>
                                     </div>
                                   </div>
                                 </div>
@@ -6332,19 +6360,23 @@ export default function Dashboard({ session }: DashboardProps) {
                             {trackerViewMode === 'list' ? (
                               sortedData.map((item, index) => renderTrackerRow(item, index))
                             ) : (
-                              sortedTrackerGroupNames.map(groupName => (
-                                <Fragment key={groupName}>
-                                  {/* Group Header */}
-                                  <tr className="bg-blue-50 border-t-2 border-blue-200">
-                                    <td colSpan={5} className="px-4 py-2">
-                                      <span className="text-sm font-semibold text-blue-800">{groupName}</span>
-                                      <span className="ml-2 text-xs text-blue-600">({groupedTrackerData[groupName].length} SKUs)</span>
-                                    </td>
-                                  </tr>
-                                  {/* Group Items */}
-                                  {groupedTrackerData[groupName].map((item, index) => renderTrackerRow(item, index))}
-                                </Fragment>
-                              ))
+                              sortedTrackerGroupNames.map(groupName => {
+                                // Sort items within group using helper function
+                                const sortedGroupItems = sortSkusInGroup(groupedTrackerData[groupName], groupName);
+                                return (
+                                  <Fragment key={groupName}>
+                                    {/* Group Header */}
+                                    <tr className="bg-blue-50 border-t-2 border-blue-200">
+                                      <td colSpan={5} className="px-4 py-2">
+                                        <span className="text-sm font-semibold text-blue-800">{groupName}</span>
+                                        <span className="ml-2 text-xs text-blue-600">({sortedGroupItems.length} SKUs)</span>
+                                      </td>
+                                    </tr>
+                                    {/* Group Items */}
+                                    {sortedGroupItems.map((item, index) => renderTrackerRow(item, index))}
+                                  </Fragment>
+                                );
+                              })
                             )}
                           </tbody>
                         </table>
