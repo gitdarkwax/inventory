@@ -2999,7 +2999,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'In Sea', description: 'Units in transit via sea freight (from transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
-    { name: 'Need', description: 'Units needed to air-ship to meet target inventory.\n\nLogic:\n1. First check: Is total inventory below target?\n   Target = Target Days × 21-day Burn Rate\n   Total = LA Stock + In Air + In Sea\n\n   If Target > Total:\n     Need = Target - Total (simple shortfall)\n\n2. If total meets target, apply sea gap logic:\n   Calculate Runway Air date (when LA + Air runs out)\n   Check earliest Sea ETA\n\n   If Sea ETA > Runway Air date (gap exists):\n     Need = (Gap Days + 4) × 21-day Burn Rate\n\n   If Sea ETA ≤ Runway Air date:\n     Need = 0 (sea arrives before stockout)' },
+    { name: 'Need', description: 'Units needed to air-ship to meet target inventory.\n\nLogic:\n1. First check: Is total inventory below target?\n   Target = Target Days × Selected Burn Rate\n   Total = LA Stock + In Air + In Sea\n\n   If Target > Total:\n     Need = Target - Total (simple shortfall)\n\n2. If total meets target, apply sea gap logic:\n   Calculate Runway Air date (when LA + Air runs out)\n   Check earliest Sea ETA\n\n   If Sea ETA > Runway Air date (gap exists):\n     Need = (Gap Days + 4) × Selected Burn Rate\n\n   If Sea ETA ≤ Runway Air date:\n     Need = 0 (sea arrives before stockout)' },
     { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA - Committed + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA - Committed + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
     { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on LA Runway = (LA - Committed + Air + Sea) / BR:\n\n• >90 days + active PO → Prod Status\n• >90 days + no PO → No Action\n• ≤90 days + active PO → Push Vendor\n• ≤90 days + no PO → Order More' },
     { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH - Committed + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
@@ -4847,23 +4847,6 @@ export default function Dashboard({ session }: DashboardProps) {
                     }
                   };
                   
-                  // Get 21-day burn rate specifically (used for gap-based Need calculation)
-                  const get21DayBurnRate = (sku: string): number => {
-                    const skuUpper = sku.toUpperCase();
-                    
-                    // Check if this SKU uses combined burn rate
-                    const combinedSkus = combinedBurnRateSkus[skuUpper];
-                    if (combinedSkus) {
-                      return combinedSkus.reduce((total, combinedSku) => {
-                        const forecast = forecastingData.forecasting.find(f => f.sku.toUpperCase() === combinedSku.toUpperCase());
-                        return total + (forecast?.avgDaily21d || 0);
-                      }, 0);
-                    }
-                    
-                    const forecast = forecastingData.forecasting.find(f => f.sku === sku);
-                    return forecast?.avgDaily21d || 0;
-                  };
-                  
                   // Get pending PO quantity for a SKU (from manual production orders)
                   const getPOQuantity = (sku: string): number => {
                     const po = purchaseOrderData?.purchaseOrders?.find(p => p.sku === sku);
@@ -5004,12 +4987,11 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Shows total runway including China warehouse inventory
                       const cnRunway = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea + chinaInventory) / unitsPerDay) : 999;
                       
-                      // Calculate LA Need
-                      const burnRate21d = get21DayBurnRate(inv.sku);
+                      // Calculate LA Need (uses selected burn rate from BR dropdown)
                       let laNeeded = 0;
                       
                       // First check: if total available (LA + Air + Sea) is below target, just return the shortfall
-                      const targetInventory = planningLaTargetDays * burnRate21d;
+                      const targetInventory = planningLaTargetDays * unitsPerDay;
                       const totalAvailable = effectiveLaInventory + inboundAir + inboundSea;
                       
                       if (targetInventory > totalAvailable) {
@@ -5034,7 +5016,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               // Add 4-day buffer to account for shipping/processing time
                               const gapMs = earliestSeaETA.getTime() - runwayAirDate.getTime();
                               const gapDays = Math.ceil(gapMs / (1000 * 60 * 60 * 24));
-                              laNeeded = Math.ceil((gapDays + 4) * burnRate21d);
+                              laNeeded = Math.ceil((gapDays + 4) * unitsPerDay);
                             }
                             // If sea arrives before stockout, laNeeded stays 0
                           } else {
