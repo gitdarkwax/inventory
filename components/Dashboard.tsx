@@ -9967,7 +9967,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     {/* SKU Suggestions - hidden to reduce distraction; table filters as user types */}
                     {false && showCommentSkuSuggestions && commentSkuSearch.length >= 2 && inventoryData?.inventory && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                        {inventoryData.inventory
+                        {(inventoryData?.inventory ?? [])
                           .filter(inv => 
                             inv.sku.toUpperCase().includes(commentSkuSearch) ||
                             inv.productTitle.toLowerCase().includes(commentSkuSearch.toLowerCase())
