@@ -3817,30 +3817,34 @@ export default function Dashboard({ session }: DashboardProps) {
                               const commentTooltip = skuComment 
                                 ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
                                 : undefined;
+                              // Check if SKU is in phase out list or discontinued list
+                              const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+                              const isDiscontinued = DISCONTINUED_SKUS.some(s => s.toLowerCase() === item.sku.toLowerCase());
+                              const isGrayedOut = isPhaseOut || isDiscontinued;
                               return (
-                              <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="w-32 px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
+                              <tr key={item.sku} className={isGrayedOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                <td className={`w-32 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isGrayedOut ? 'text-gray-500' : 'text-gray-900'}`}
                                   title={commentTooltip}>
                                   {item.sku}
                                   {skuComment && <span className="ml-1">💬</span>}
                                 </td>
-                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.onHand <= 0 ? 'text-red-600 font-medium' : item.onHand <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.onHand <= 0 ? 'text-red-600 font-medium' : item.onHand <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                   {item.onHand.toLocaleString()}
                                 </td>
-                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                   {item.available.toLocaleString()}
                                 </td>
-                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${item.committed > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
+                                <td className={`w-24 px-3 sm:px-4 py-3 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.committed > 0 ? 'text-purple-600' : 'text-gray-400')}`}>
                                   {item.committed.toLocaleString()}
                                 </td>
                                 <td 
-                                  className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                  className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400')}`}
                                   title={formatTransferTooltip(item.airTransfers)}
                                 >
                                   {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                                 </td>
                                 <td 
-                                  className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                  className={`w-20 px-3 sm:px-4 py-3 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400')}`}
                                   title={formatTransferTooltip(item.seaTransfers)}
                                 >
                                   {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
@@ -3973,30 +3977,34 @@ export default function Dashboard({ session }: DashboardProps) {
                                       const commentTooltip = skuComment 
                                         ? `${skuComment.comment}\n\n— ${skuComment.updatedBy}, ${new Date(skuComment.updatedAt).toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`
                                         : undefined;
+                                      // Check if SKU is in phase out list or discontinued list
+                                      const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === item.sku.toLowerCase());
+                                      const isDiscontinued = DISCONTINUED_SKUS.some(s => s.toLowerCase() === item.sku.toLowerCase());
+                                      const isGrayedOut = isPhaseOut || isDiscontinued;
                                       return (
-                                      <tr key={item.sku} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        <td className="w-32 px-3 sm:px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis"
+                                      <tr key={item.sku} className={isGrayedOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
+                                        <td className={`w-32 px-3 sm:px-4 py-2 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isGrayedOut ? 'text-gray-500' : 'text-gray-900'}`}
                                           title={commentTooltip}>
                                           {item.sku}
                                           {skuComment && <span className="ml-1">💬</span>}
                                         </td>
-                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.onHand <= 0 ? 'text-red-600 font-medium' : item.onHand <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.onHand <= 0 ? 'text-red-600 font-medium' : item.onHand <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                           {item.onHand.toLocaleString()}
                                         </td>
-                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900'}`}>
+                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.available <= 0 ? 'text-red-600 font-medium' : item.available <= 10 ? 'text-orange-600' : 'text-gray-900')}`}>
                                           {item.available.toLocaleString()}
                                         </td>
-                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${item.committed > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
+                                        <td className={`w-24 px-3 sm:px-4 py-2 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.committed > 0 ? 'text-purple-600' : 'text-gray-400')}`}>
                                           {item.committed.toLocaleString()}
                                         </td>
                                         <td 
-                                          className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                          className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.inboundAir > 0 ? 'text-purple-600 font-medium cursor-help' : 'text-gray-400')}`}
                                           title={formatTransferTooltip(item.airTransfers)}
                                         >
                                           {item.inboundAir > 0 ? item.inboundAir.toLocaleString() : '—'}
                                         </td>
                                         <td 
-                                          className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400'}`}
+                                          className={`w-20 px-3 sm:px-4 py-2 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.inboundSea > 0 ? 'text-blue-600 font-medium cursor-help' : 'text-gray-400')}`}
                                           title={formatTransferTooltip(item.seaTransfers)}
                                         >
                                           {item.inboundSea > 0 ? item.inboundSea.toLocaleString() : '—'}
