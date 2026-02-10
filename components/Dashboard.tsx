@@ -7231,7 +7231,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={productionFilterStatus}
                           onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
+                          className="h-[38px] w-[140px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Orders</option>
                           <option value="open">Open Orders</option>
@@ -7244,7 +7244,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={poDateFilter}
                           onChange={(e) => setPoDateFilter(e.target.value)}
-                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs"
+                          className="h-[38px] w-[140px] px-3 py-1 border border-gray-300 rounded-md text-xs"
                         >
                           <option value="all">All Time</option>
                           <option value="1m">Last 1 Month</option>
@@ -7262,7 +7262,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={transferFilterStatus}
                           onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
-                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
+                          className="h-[38px] w-[140px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Transfers</option>
                           <option value="active">Active</option>
@@ -7275,7 +7275,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={transferDateFilter}
                           onChange={(e) => setTransferDateFilter(e.target.value)}
-                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs"
+                          className="h-[38px] w-[140px] px-3 py-1 border border-gray-300 rounded-md text-xs"
                         >
                           <option value="all">All Time</option>
                           <option value="1m">Last 1 Month</option>
@@ -7404,7 +7404,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewOrderForm(true)}
-                      className="h-[38px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Production
                     </button>
@@ -7578,7 +7578,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewTransferForm(true)}
-                      className="h-[38px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Transfer
                     </button>
