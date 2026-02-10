@@ -463,6 +463,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [mcData, setMcData] = useState<Record<string, number>>({});
   const [showMcEditForm, setShowMcEditForm] = useState(false);
   const [isSavingMcData, setIsSavingMcData] = useState(false);
+  const [mcSearchTerm, setMcSearchTerm] = useState('');
 
   // Inventory Tracker state
   type TrackerLocation = 'LA Office' | 'DTLA WH' | 'China WH';
@@ -713,6 +714,7 @@ export default function Dashboard({ session }: DashboardProps) {
       if (response.ok) {
         setMcData(updatedMcData);
         setShowMcEditForm(false);
+        setMcSearchTerm('');
         showProdNotification('success', 'Saved', 'MC data saved successfully');
       }
     } catch (error) {
@@ -4281,12 +4283,14 @@ export default function Dashboard({ session }: DashboardProps) {
                   >
                     <span>📥</span> Export to Excel
                   </button>
-                  <button
-                    onClick={() => setShowMcEditForm(true)}
-                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm underline"
-                  >
-                    Edit Quantity per MC
-                  </button>
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={() => setShowMcEditForm(true)}
+                      className="text-blue-600 hover:text-blue-800 text-sm underline"
+                    >
+                      Edit Quantity per MC
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -4297,8 +4301,15 @@ export default function Dashboard({ session }: DashboardProps) {
         {showMcEditForm && inventoryData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
-              <div className="px-6 py-4 border-b border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-900">Edit Quantity per Master Carton</h3>
+                <input
+                  type="text"
+                  placeholder="Search SKU..."
+                  value={mcSearchTerm}
+                  onChange={(e) => setMcSearchTerm(e.target.value)}
+                  className="w-64 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
               </div>
               <div className="px-6 py-4 overflow-y-auto flex-1">
                 <table className="min-w-full">
@@ -4312,6 +4323,10 @@ export default function Dashboard({ session }: DashboardProps) {
                     {inventoryData.inventory
                       .map(item => item.sku)
                       .sort()
+                      .filter((sku) => {
+                        if (mcSearchTerm.length < 2) return true;
+                        return sku.toUpperCase().includes(mcSearchTerm.toUpperCase());
+                      })
                       .map((sku) => {
                         const currentValue = mcData[sku.toUpperCase()] || '';
                         return (
@@ -4346,6 +4361,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   type="button"
                   onClick={() => {
                     setShowMcEditForm(false);
+                    setMcSearchTerm('');
                     loadMcData(); // Reload to discard changes
                   }}
                   disabled={isSavingMcData}
