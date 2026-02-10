@@ -7205,26 +7205,23 @@ export default function Dashboard({ session }: DashboardProps) {
                 {/* Left side: View Toggle + Filters */}
                 <div className="flex items-end gap-3">
                   {/* View Toggle */}
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-gray-400 mb-1">View</span>
-                    <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
-                      <button
-                        onClick={() => setProductionViewType('orders')}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                          productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        Production
-                      </button>
-                      <button
-                        onClick={() => setProductionViewType('transfers')}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                          productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                      >
-                        Transfers
-                      </button>
-                    </div>
+                  <div className="flex bg-gray-100 p-1 rounded-lg h-[38px] items-center">
+                    <button
+                      onClick={() => setProductionViewType('orders')}
+                      className={`px-4 py-2 text-xs font-medium rounded-md transition-colors ${
+                        productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Production
+                    </button>
+                    <button
+                      onClick={() => setProductionViewType('transfers')}
+                      className={`px-4 py-2 text-xs font-medium rounded-md transition-colors ${
+                        productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Transfers
+                    </button>
                   </div>
                   
                   {productionViewType === 'orders' ? (
@@ -7234,7 +7231,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={productionFilterStatus}
                           onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
+                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Orders</option>
                           <option value="open">Open Orders</option>
@@ -7247,7 +7244,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={poDateFilter}
                           onChange={(e) => setPoDateFilter(e.target.value)}
-                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs"
+                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs"
                         >
                           <option value="all">All Time</option>
                           <option value="1m">Last 1 Month</option>
@@ -7265,7 +7262,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={transferFilterStatus}
                           onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
-                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
+                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Transfers</option>
                           <option value="active">Active</option>
@@ -7278,7 +7275,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <select
                           value={transferDateFilter}
                           onChange={(e) => setTransferDateFilter(e.target.value)}
-                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs"
+                          className="h-[38px] px-3 py-1 border border-gray-300 rounded-md text-xs"
                         >
                           <option value="all">All Time</option>
                           <option value="1m">Last 1 Month</option>
@@ -7358,7 +7355,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }
                               }}
                               placeholder="Search by SKU, product, or variant..."
-                              className="h-[34px] px-3 py-2 border border-gray-300 rounded-md text-xs w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="h-[38px] px-3 py-2 border border-gray-300 rounded-md text-xs w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             {suggestions.length > 0 && (
                               <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
@@ -7407,7 +7404,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewOrderForm(true)}
-                      className="h-[34px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[38px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Production
                     </button>
@@ -7484,7 +7481,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }
                               }}
                               placeholder="Search by SKU, product, or tracking #..."
-                              className="h-[34px] px-3 py-2 border border-gray-300 rounded-md text-xs w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="h-[38px] px-3 py-2 border border-gray-300 rounded-md text-xs w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             {/* Show tracking number matches from transfers */}
                             {(() => {
@@ -7581,7 +7578,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewTransferForm(true)}
-                      className="h-[34px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[38px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Transfer
                     </button>
