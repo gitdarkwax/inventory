@@ -342,7 +342,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
   const [newTransferEta, setNewTransferEta] = useState('');
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('all');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'active' | 'completed'>('active');
   const [transferDateFilter, setTransferDateFilter] = useState('all');
   const [transferSkuSearchQuery, setTransferSkuSearchQuery] = useState('');
   const [transferSkuSearchSelected, setTransferSkuSearchSelected] = useState('');
@@ -7274,7 +7274,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           className="h-[38px] w-[140px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Transfers</option>
-                          <option value="active">Active</option>
+                          <option value="active">Active Transfers</option>
                           <option value="completed">Completed</option>
                         </select>
                       </div>
