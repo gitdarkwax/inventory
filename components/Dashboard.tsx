@@ -8201,8 +8201,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             min="0"
                             max={remaining}
                             placeholder="0"
-                            className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
+                          <span className="text-sm text-gray-500">of {remaining} remaining</span>
                           <input
                             type="number"
                             value={item.masterCartons}
@@ -8215,7 +8216,6 @@ export default function Dashboard({ session }: DashboardProps) {
                             placeholder="MCs"
                             className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
-                          <span className="text-sm text-gray-500">of {remaining} remaining</span>
                         </div>
                       );
                     })}
@@ -9822,8 +9822,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                 min="0"
                                 max={remaining}
                                 placeholder="0"
-                                className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                               />
+                              <span className="text-sm text-gray-500">of {remaining} remaining</span>
+                              {alreadyReceived > 0 && (
+                                <span className="text-xs text-green-600">({alreadyReceived} already received)</span>
+                              )}
                               <input
                                 type="number"
                                 value={item.masterCartons}
@@ -9836,10 +9840,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                 placeholder="MCs"
                                 className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                               />
-                              <span className="text-sm text-gray-500">of {remaining} remaining</span>
-                              {alreadyReceived > 0 && (
-                                <span className="text-xs text-green-600">({alreadyReceived} already received)</span>
-                              )}
                             </div>
                           );
                         })}
