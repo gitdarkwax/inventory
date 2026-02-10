@@ -7201,37 +7201,40 @@ export default function Dashboard({ session }: DashboardProps) {
             {/* Filtering Block */}
             <div className="bg-white shadow rounded-lg p-4">
               {/* Single Row with All Filters */}
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-end justify-between gap-3">
                 {/* Left side: View Toggle + Filters */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-end gap-3">
                   {/* View Toggle */}
-                  <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button
-                      onClick={() => setProductionViewType('orders')}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Production
-                    </button>
-                    <button
-                      onClick={() => setProductionViewType('transfers')}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Transfers
-                    </button>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-gray-400 mb-1">View</span>
+                    <div className="flex bg-gray-100 p-1 rounded-lg h-[34px] items-center">
+                      <button
+                        onClick={() => setProductionViewType('orders')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                          productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Production
+                      </button>
+                      <button
+                        onClick={() => setProductionViewType('transfers')}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                          productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Transfers
+                      </button>
+                    </div>
                   </div>
                   
                   {productionViewType === 'orders' ? (
                     <>
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Status</span>
                         <select
                           value={productionFilterStatus}
                           onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                          className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Orders</option>
                           <option value="open">Open Orders</option>
@@ -7239,12 +7242,12 @@ export default function Dashboard({ session }: DashboardProps) {
                         </select>
                       </div>
                       
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Period</span>
                         <select
                           value={poDateFilter}
                           onChange={(e) => setPoDateFilter(e.target.value)}
-                          className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs"
                         >
                           <option value="all">All Time</option>
                           <option value="1m">Last 1 Month</option>
@@ -7257,12 +7260,12 @@ export default function Dashboard({ session }: DashboardProps) {
                     </>
                   ) : (
                     <>
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Status</span>
                         <select
                           value={transferFilterStatus}
                           onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
-                          className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs bg-white"
                         >
                           <option value="all">All Transfers</option>
                           <option value="active">Active</option>
@@ -7270,12 +7273,12 @@ export default function Dashboard({ session }: DashboardProps) {
                         </select>
                       </div>
                       
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 mb-1">Period</span>
                         <select
                           value={transferDateFilter}
                           onChange={(e) => setTransferDateFilter(e.target.value)}
-                          className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                          className="h-[34px] px-3 py-1 border border-gray-300 rounded-md text-xs"
                         >
                           <option value="all">All Time</option>
                           <option value="1m">Last 1 Month</option>
@@ -7355,7 +7358,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }
                               }}
                               placeholder="Search by SKU, product, or variant..."
-                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-64"
+                              className="h-[34px] px-3 py-2 border border-gray-300 rounded-md text-xs w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             {suggestions.length > 0 && (
                               <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
@@ -7393,7 +7396,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         setSkuSearchSelected('');
                         setPoDateFilter('all');
                       }}
-                      className="text-sm text-gray-500 hover:text-gray-700"
+                      className="text-xs text-gray-500 hover:text-gray-700"
                     >
                       Clear
                     </button>
@@ -7404,7 +7407,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewOrderForm(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[34px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Production
                     </button>
@@ -7481,7 +7484,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }
                               }}
                               placeholder="Search by SKU, product, or tracking #..."
-                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-64"
+                              className="h-[34px] px-3 py-2 border border-gray-300 rounded-md text-xs w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             {/* Show tracking number matches from transfers */}
                             {(() => {
@@ -7567,7 +7570,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         setTransferFilterStatus('all');
                         setTransferDateFilter('all');
                       }}
-                      className="text-sm text-gray-500 hover:text-gray-700"
+                      className="text-xs text-gray-500 hover:text-gray-700"
                     >
                       Clear
                     </button>
@@ -7578,7 +7581,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewTransferForm(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[34px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Transfer
                     </button>
