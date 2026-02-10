@@ -9,6 +9,7 @@ export interface TransferItem {
   quantity: number;
   receivedQuantity?: number;
   pallet?: string; // For sea shipments: Pallet 1, Pallet 2, etc.
+  masterCartons?: number; // Number of master cartons
 }
 
 export interface ActivityLogEntry {
@@ -279,7 +280,7 @@ export class TransfersService {
     cache.nextTransferNumber = nextNum + 1;
     
     const now = new Date().toISOString();
-    const itemsSummary = items.map(i => `${i.sku} → ${i.quantity}`).join(', ');
+    const itemsSummary = items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
     
     // Build activity log details with notes if present
     let creationDetails = `[${transferType}] ${origin} → ${destination}: ${itemsSummary}`;

@@ -120,6 +120,7 @@ interface ProductionOrderItem {
   sku: string;
   quantity: number;
   receivedQuantity: number;
+  masterCartons?: number;
 }
 
 interface ActivityLogEntry {
@@ -153,6 +154,7 @@ interface TransferItem {
   quantity: number;
   receivedQuantity?: number;
   pallet?: string; // For sea shipments: Pallet 1, Pallet 2, etc.
+  masterCartons?: number;
 }
 
 type TransferStatus = 'draft' | 'in_transit' | 'partial' | 'delivered' | 'cancelled';
@@ -288,7 +290,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [productionOrdersLoading, setProductionOrdersLoading] = useState(false);
   const [showNewOrderForm, setShowNewOrderForm] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null);
-  const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string }[]>([{ sku: '', quantity: '' }]);
+  const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string; masterCartons: string }[]>([{ sku: '', quantity: '', masterCartons: '' }]);
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderVendor, setNewOrderVendor] = useState('');
   const [newOrderEta, setNewOrderEta] = useState('');
@@ -306,7 +308,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [showDeliveryConfirm, setShowDeliveryConfirm] = useState(false);
   const [isUpdatingShopify, setIsUpdatingShopify] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [editOrderItems, setEditOrderItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [editOrderItems, setEditOrderItems] = useState<{ sku: string; quantity: string; masterCartons: string }[]>([]);
   const [editOrderVendor, setEditOrderVendor] = useState('');
   const [editOrderEta, setEditOrderEta] = useState('');
   const [editOrderNotes, setEditOrderNotes] = useState('');
@@ -334,7 +336,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const [newTransferOrigin, setNewTransferOrigin] = useState<string>('');
   const [newTransferDestination, setNewTransferDestination] = useState<string>('');
-  const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string; pallet?: string }[]>([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
+  const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string; pallet?: string; masterCartons: string }[]>([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
   const [newTransferType, setNewTransferType] = useState<TransferType | ''>('');
   const [newTransferCarrier, setNewTransferCarrier] = useState<CarrierType>('');
   const [newTransferTracking, setNewTransferTracking] = useState('');
@@ -353,7 +355,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [editTransferOrigin, setEditTransferOrigin] = useState('');
   const [editTransferDestination, setEditTransferDestination] = useState('');
   const [editTransferType, setEditTransferType] = useState<TransferType | ''>('');
-  const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string; pallet?: string }[]>([]);
+  const [editTransferItems, setEditTransferItems] = useState<{ sku: string; quantity: string; pallet?: string; masterCartons: string }[]>([]);
   const [editTransferCarrier, setEditTransferCarrier] = useState<CarrierType>('');
   const [editTransferTracking, setEditTransferTracking] = useState('');
   const [editTransferEta, setEditTransferEta] = useState('');
@@ -456,6 +458,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isSavingComment, setIsSavingComment] = useState(false);
   const [showCommentSkuSuggestions, setShowCommentSkuSuggestions] = useState(false);
   const commentSkuSearchRef = useRef<HTMLDivElement>(null);
+
+  // Master Cartons (MC) data state
+  const [mcData, setMcData] = useState<Record<string, number>>({});
+  const [showMcEditForm, setShowMcEditForm] = useState(false);
+  const [isSavingMcData, setIsSavingMcData] = useState(false);
 
   // Inventory Tracker state
   type TrackerLocation = 'LA Office' | 'DTLA WH' | 'China WH';
@@ -681,6 +688,48 @@ export default function Dashboard({ session }: DashboardProps) {
     }
   };
 
+  // Load MC data
+  const loadMcData = async () => {
+    try {
+      const response = await fetch('/api/mc-data');
+      if (response.ok) {
+        const data = await response.json();
+        setMcData(data || {});
+      }
+    } catch (error) {
+      console.error('Error loading MC data:', error);
+    }
+  };
+
+  // Save MC data
+  const saveMcData = async (updatedMcData: Record<string, number>) => {
+    setIsSavingMcData(true);
+    try {
+      const response = await fetch('/api/mc-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedMcData),
+      });
+      if (response.ok) {
+        setMcData(updatedMcData);
+        setShowMcEditForm(false);
+        showProdNotification('success', 'Saved', 'MC data saved successfully');
+      }
+    } catch (error) {
+      console.error('Error saving MC data:', error);
+      showProdNotification('error', 'Save Failed', 'Failed to save MC data');
+    } finally {
+      setIsSavingMcData(false);
+    }
+  };
+
+  // Calculate MC from quantity
+  const calculateMC = (sku: string, quantity: number): number | null => {
+    const unitsPerMc = mcData[sku.toUpperCase()];
+    if (!unitsPerMc) return null;
+    return Math.ceil(quantity / unitsPerMc);
+  };
+
   // Load incoming inventory from cache (tracked from app transfers)
   const loadIncomingFromCache = async () => {
     try {
@@ -815,7 +864,8 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ 
         sku: item.sku.trim().toUpperCase(), 
         quantity: parseInt(item.quantity),
-        ...(newTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {})
+        ...(newTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {}),
+        ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
       }));
 
     if (validItems.length === 0) {
@@ -852,7 +902,7 @@ export default function Dashboard({ session }: DashboardProps) {
   };
 
   // Execute the actual transfer creation (for non-immediate or after confirmation)
-  const executeCreateTransfer = async (validItems: { sku: string; quantity: number }[]) => {
+  const executeCreateTransfer = async (validItems: { sku: string; quantity: number; pallet?: string; masterCartons?: number }[]) => {
     setIsCreatingTransfer(true);
 
     try {
@@ -879,7 +929,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferOrigin('');
         setNewTransferDestination('');
         setNewTransferType('');
-        setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
+        setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
         setNewTransferCarrier('');
         setNewTransferTracking('');
         setNewTransferEta('');
@@ -1004,7 +1054,7 @@ export default function Dashboard({ session }: DashboardProps) {
       setNewTransferOrigin('');
       setNewTransferDestination('');
       setNewTransferType('');
-      setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
+      setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
       setNewTransferCarrier('');
       setNewTransferTracking('');
       setNewTransferEta('');
@@ -1296,7 +1346,8 @@ export default function Dashboard({ session }: DashboardProps) {
       .map(item => ({ 
         sku: item.sku.trim().toUpperCase(), 
         quantity: parseInt(item.quantity),
-        ...(editTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {})
+        ...(editTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {}),
+        ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
       }));
 
     if (validItems.length === 0) {
@@ -1471,7 +1522,11 @@ export default function Dashboard({ session }: DashboardProps) {
     
     const validItems = newOrderItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({
+        sku: item.sku.trim().toUpperCase(),
+        quantity: parseInt(item.quantity),
+        ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
+      }));
 
     if (validItems.length === 0) {
       showProdNotification('error', 'Missing Items', 'Please add at least one item with a valid SKU and quantity');
@@ -1502,7 +1557,7 @@ export default function Dashboard({ session }: DashboardProps) {
 
       if (response.ok) {
         setShowNewOrderForm(false);
-        setNewOrderItems([{ sku: '', quantity: '' }]);
+        setNewOrderItems([{ sku: '', quantity: '', masterCartons: '' }]);
         setNewOrderNotes('');
         setNewOrderVendor('');
         setNewOrderEta('');
@@ -1686,7 +1741,11 @@ export default function Dashboard({ session }: DashboardProps) {
     
     const validItems = editOrderItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({
+        sku: item.sku.trim().toUpperCase(),
+        quantity: parseInt(item.quantity),
+        ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
+      }));
 
     if (validItems.length === 0) {
       showProdNotification('error', 'Missing Items', 'Please add at least one item with a valid SKU and quantity');
@@ -1816,6 +1875,7 @@ export default function Dashboard({ session }: DashboardProps) {
     loadPhaseOutSkus(); // Load phase out list
     loadHiddenSkus(); // Load hidden SKUs list for Inventory Counts tab
     loadSkuComments(); // Load SKU comments
+    loadMcData(); // Load MC data
   }, []);
 
   // Close location dropdown when clicking outside
@@ -4221,10 +4281,93 @@ export default function Dashboard({ session }: DashboardProps) {
                   >
                     <span>📥</span> Export to Excel
                   </button>
+                  <button
+                    onClick={() => setShowMcEditForm(true)}
+                    className="mt-2 text-blue-600 hover:text-blue-800 text-sm underline"
+                  >
+                    Edit Quantity per MC
+                  </button>
                 </div>
               </div>
             )}
           </>
+        )}
+
+        {/* MC Edit Form Modal */}
+        {showMcEditForm && inventoryData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Edit Quantity per Master Carton</h3>
+              </div>
+              <div className="px-6 py-4 overflow-y-auto flex-1">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty/MC</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {inventoryData.inventory
+                      .map(item => item.sku)
+                      .sort()
+                      .map((sku) => {
+                        const currentValue = mcData[sku.toUpperCase()] || '';
+                        return (
+                          <tr key={sku}>
+                            <td className="px-4 py-2 text-sm text-gray-900 font-mono">{sku}</td>
+                            <td className="px-4 py-2 text-right">
+                              <input
+                                type="number"
+                                value={currentValue}
+                                onChange={(e) => {
+                                  const updatedMcData = { ...mcData };
+                                  const val = e.target.value;
+                                  if (val === '' || parseInt(val) <= 0) {
+                                    delete updatedMcData[sku.toUpperCase()];
+                                  } else {
+                                    updatedMcData[sku.toUpperCase()] = parseInt(val);
+                                  }
+                                  setMcData(updatedMcData);
+                                }}
+                                className="w-24 px-3 py-1 border border-gray-300 rounded-md text-sm text-right"
+                                placeholder="—"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMcEditForm(false);
+                    loadMcData(); // Reload to discard changes
+                  }}
+                  disabled={isSavingMcData}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveMcData(mcData)}
+                  disabled={isSavingMcData}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${
+                    isSavingMcData
+                      ? 'bg-blue-400 text-white cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                  }`}
+                >
+                  {isSavingMcData ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Forecasting Tab */}
@@ -7611,6 +7754,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                           <thead className="bg-gray-100">
                                             <tr>
                                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">MCs</th>
                                               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Ordered</th>
                                               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Received</th>
                                               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Pending</th>
@@ -7629,6 +7773,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                                     {item.sku}
                                                     {skuComment && <span className="ml-1">💬</span>}
                                                   </td>
+                                                  <td className="px-4 py-2 text-sm text-gray-600 text-right">
+                                                    {item.masterCartons ? item.masterCartons.toLocaleString() : '—'}
+                                                  </td>
                                                   <td className="px-4 py-2 text-sm text-gray-900 text-right">{item.quantity.toLocaleString()}</td>
                                                   <td className="px-4 py-2 text-sm text-green-600 text-right">{(item.receivedQuantity || 0).toLocaleString()}</td>
                                                   <td className={`px-4 py-2 text-sm text-right ${pending > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
@@ -7639,6 +7786,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                             })}
                                             <tr className="bg-gray-100">
                                               <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
+                                              <td className="px-4 py-2 text-sm font-medium text-gray-600 text-right">
+                                                {order.items.reduce((sum, i) => sum + (i.masterCartons || 0), 0).toLocaleString()}
+                                              </td>
                                               <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right">
                                                 {order.items.reduce((sum, i) => sum + i.quantity, 0).toLocaleString()}
                                               </td>
@@ -7716,7 +7866,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                               type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                                setEditOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity), masterCartons: i.masterCartons ? String(i.masterCartons) : '' })));
                                                 setEditOrderVendor(order.vendor || '');
                                                 // Normalize ETA to YYYY-MM-DD format for date input
                                                 setEditOrderEta(order.eta ? order.eta.split('T')[0] : '');
@@ -7743,7 +7893,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                             type="button"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity) })));
+                                              setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity), masterCartons: i.masterCartons ? String(i.masterCartons) : '' })));
                                               setNewOrderVendor(order.vendor || '');
                                               setNewOrderEta('');
                                               setNewOrderNotes(order.notes || '');
@@ -7895,9 +8045,28 @@ export default function Dashboard({ session }: DashboardProps) {
                               onChange={(e) => {
                                 const updated = [...newOrderItems];
                                 updated[index].quantity = e.target.value;
+                                // Auto-calculate MCs if SKU is known
+                                if (updated[index].sku && e.target.value) {
+                                  const calculatedMc = calculateMC(updated[index].sku, parseInt(e.target.value) || 0);
+                                  if (calculatedMc !== null) {
+                                    updated[index].masterCartons = calculatedMc.toString();
+                                  }
+                                }
                                 setNewOrderItems(updated);
                               }}
                               className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            />
+                            <input
+                              type="number"
+                              placeholder="MCs"
+                              title="Master Cartons"
+                              value={item.masterCartons}
+                              onChange={(e) => {
+                                const updated = [...newOrderItems];
+                                updated[index].masterCartons = e.target.value;
+                                setNewOrderItems(updated);
+                              }}
+                              className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                             />
                             {newOrderItems.length > 1 && (
                               <button
@@ -7911,7 +8080,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         );
                       })}
                       <button
-                        onClick={() => setNewOrderItems([...newOrderItems, { sku: '', quantity: '' }])}
+                        onClick={() => setNewOrderItems([...newOrderItems, { sku: '', quantity: '', masterCartons: '' }])}
                         className="text-sm text-blue-600 hover:text-blue-800"
                       >
                         + Add another SKU
@@ -7956,7 +8125,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       type="button"
                       onClick={() => {
                         setShowNewOrderForm(false);
-                        setNewOrderItems([{ sku: '', quantity: '' }]);
+                        setNewOrderItems([{ sku: '', quantity: '', masterCartons: '' }]);
                         setNewOrderNotes('');
                         setNewOrderVendor('');
                         setNewOrderEta('');
@@ -8199,9 +8368,28 @@ export default function Dashboard({ session }: DashboardProps) {
                               onChange={(e) => {
                                 const updated = [...editOrderItems];
                                 updated[index].quantity = e.target.value;
+                                // Auto-calculate MCs if SKU is known
+                                if (updated[index].sku && e.target.value) {
+                                  const calculatedMc = calculateMC(updated[index].sku, parseInt(e.target.value) || 0);
+                                  if (calculatedMc !== null) {
+                                    updated[index].masterCartons = calculatedMc.toString();
+                                  }
+                                }
                                 setEditOrderItems(updated);
                               }}
                               className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            />
+                            <input
+                              type="number"
+                              placeholder="MCs"
+                              title="Master Cartons"
+                              value={item.masterCartons}
+                              onChange={(e) => {
+                                const updated = [...editOrderItems];
+                                updated[index].masterCartons = e.target.value;
+                                setEditOrderItems(updated);
+                              }}
+                              className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                             />
                             {editOrderItems.length > 1 && (
                               <button
@@ -8215,7 +8403,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         );
                       })}
                       <button
-                        onClick={() => setEditOrderItems([...editOrderItems, { sku: '', quantity: '' }])}
+                        onClick={() => setEditOrderItems([...editOrderItems, { sku: '', quantity: '', masterCartons: '' }])}
                         className="text-sm text-blue-600 hover:text-blue-800"
                       >
                         + Add another SKU
@@ -8569,6 +8757,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                               <thead className="bg-gray-100">
                                                 <tr>
                                                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">MCs</th>
                                                   {transfer.transferType === 'Sea' && transfer.items.some(i => i.pallet) && (
                                                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Pallet</th>
                                                   )}
@@ -8602,6 +8791,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                                           {item.sku}
                                                           {skuComment && <span className="ml-1">💬</span>}
                                                         </td>
+                                                        <td className="px-4 py-2 text-sm text-gray-600 text-right">
+                                                          {item.masterCartons ? item.masterCartons.toLocaleString() : '—'}
+                                                        </td>
                                                         {hasPallets && (
                                                           <td className="px-4 py-2 text-sm text-gray-900">{item.pallet || '—'}</td>
                                                         )}
@@ -8616,6 +8808,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                                 })()}
                                                 <tr className="bg-gray-100">
                                                   <td className="px-4 py-2 text-sm font-medium text-gray-900">Total</td>
+                                                  <td className="px-4 py-2 text-sm font-medium text-gray-600 text-right">
+                                                    {transfer.items.reduce((sum, i) => sum + (i.masterCartons || 0), 0).toLocaleString()}
+                                                  </td>
                                                   {transfer.transferType === 'Sea' && transfer.items.some(i => i.pallet) && (
                                                     <td className="px-4 py-2 text-sm font-medium text-gray-900"></td>
                                                   )}
@@ -8722,7 +8917,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                                     setEditTransferItems(transfer.items.map(i => ({ 
                                                       sku: i.sku, 
                                                       quantity: String(i.quantity),
-                                                      pallet: i.pallet || 'Pallet 1'
+                                                      pallet: i.pallet || 'Pallet 1',
+                                                      masterCartons: i.masterCartons ? String(i.masterCartons) : ''
                                                     })));
                                                     setEditTransferCarrier(transfer.carrier || '');
                                                     setEditTransferTracking(transfer.trackingNumber || '');
@@ -8753,7 +8949,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   setNewTransferItems(transfer.items.map(i => ({ 
                                                     sku: i.sku, 
                                                     quantity: String(i.quantity),
-                                                    pallet: i.pallet || 'Pallet 1'
+                                                    pallet: i.pallet || 'Pallet 1',
+                                                    masterCartons: i.masterCartons ? String(i.masterCartons) : ''
                                                   })));
                                                   setNewTransferCarrier(transfer.carrier || '');
                                                   setNewTransferTracking('');
@@ -8900,9 +9097,28 @@ export default function Dashboard({ session }: DashboardProps) {
                                   onChange={(e) => {
                                     const updated = [...newTransferItems];
                                     updated[index].quantity = e.target.value;
+                                    // Auto-calculate MCs if SKU is known
+                                    if (updated[index].sku && e.target.value) {
+                                      const calculatedMc = calculateMC(updated[index].sku, parseInt(e.target.value) || 0);
+                                      if (calculatedMc !== null) {
+                                        updated[index].masterCartons = calculatedMc.toString();
+                                      }
+                                    }
                                     setNewTransferItems(updated);
                                   }}
                                   className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="MCs"
+                                  title="Master Cartons"
+                                  value={item.masterCartons}
+                                  onChange={(e) => {
+                                    const updated = [...newTransferItems];
+                                    updated[index].masterCartons = e.target.value;
+                                    setNewTransferItems(updated);
+                                  }}
+                                  className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                                 />
                                 {newTransferType === 'Sea' && (
                                   <select
@@ -8933,7 +9149,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <button
                             onClick={() => {
                               const lastPallet = newTransferItems[newTransferItems.length - 1]?.pallet || 'Pallet 1';
-                              setNewTransferItems([...newTransferItems, { sku: '', quantity: '', pallet: lastPallet }]);
+                              setNewTransferItems([...newTransferItems, { sku: '', quantity: '', pallet: lastPallet, masterCartons: '' }]);
                             }}
                             className="text-sm text-blue-600 hover:text-blue-800"
                           >
@@ -8996,7 +9212,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             setShowNewTransferForm(false);
                             setNewTransferOrigin('');
                             setNewTransferDestination('');
-                            setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1' }]);
+                            setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
                             setNewTransferCarrier('');
                             setNewTransferTracking('');
                             setNewTransferEta('');
@@ -9139,9 +9355,28 @@ export default function Dashboard({ session }: DashboardProps) {
                                   onChange={(e) => {
                                     const updated = [...editTransferItems];
                                     updated[index].quantity = e.target.value;
+                                    // Auto-calculate MCs if SKU is known
+                                    if (updated[index].sku && e.target.value) {
+                                      const calculatedMc = calculateMC(updated[index].sku, parseInt(e.target.value) || 0);
+                                      if (calculatedMc !== null) {
+                                        updated[index].masterCartons = calculatedMc.toString();
+                                      }
+                                    }
                                     setEditTransferItems(updated);
                                   }}
                                   className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="MCs"
+                                  title="Master Cartons"
+                                  value={item.masterCartons}
+                                  onChange={(e) => {
+                                    const updated = [...editTransferItems];
+                                    updated[index].masterCartons = e.target.value;
+                                    setEditTransferItems(updated);
+                                  }}
+                                  className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                                 />
                                 {editTransferType === 'Sea' && (
                                   <select
@@ -9172,7 +9407,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           <button
                             onClick={() => {
                               const lastPallet = editTransferItems[editTransferItems.length - 1]?.pallet || 'Pallet 1';
-                              setEditTransferItems([...editTransferItems, { sku: '', quantity: '', pallet: lastPallet }]);
+                              setEditTransferItems([...editTransferItems, { sku: '', quantity: '', pallet: lastPallet, masterCartons: '' }]);
                             }}
                             className="text-sm text-blue-600 hover:text-blue-800"
                           >

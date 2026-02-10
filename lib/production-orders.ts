@@ -8,6 +8,7 @@ export interface ProductionOrderItem {
   sku: string;
   quantity: number;
   receivedQuantity: number; // Track how much has been received
+  masterCartons?: number; // Number of master cartons
 }
 
 export interface ActivityLogEntry {
@@ -252,7 +253,7 @@ export class ProductionOrdersService {
    * Create a new production order
    */
   static async createOrder(
-    items: { sku: string; quantity: number }[],
+    items: { sku: string; quantity: number; masterCartons?: number }[],
     notes: string,
     createdBy: string,
     createdByEmail: string,
@@ -272,10 +273,11 @@ export class ProductionOrdersService {
       sku: item.sku,
       quantity: item.quantity,
       receivedQuantity: 0,
+      ...(item.masterCartons ? { masterCartons: item.masterCartons } : {}),
     }));
     
     const now = new Date().toISOString();
-    const itemsSummary = orderItems.map(i => `${i.sku} → ${i.quantity}`).join(', ');
+    const itemsSummary = orderItems.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
     
     // Build creation details with notes if present
     let creationDetails = itemsSummary;
@@ -318,7 +320,7 @@ export class ProductionOrdersService {
   static async updateOrder(
     orderId: string,
     updates: Partial<Pick<ProductionOrder, 'notes' | 'poNumber' | 'vendor' | 'eta' | 'status'>> & {
-      items?: { sku: string; quantity: number }[];
+      items?: { sku: string; quantity: number; masterCartons?: number }[];
     },
     changedBy?: string,
     changedByEmail?: string
@@ -350,6 +352,7 @@ export class ProductionOrdersService {
           sku: newItem.sku,
           quantity: newItem.quantity,
           receivedQuantity: existingItem?.receivedQuantity || 0,
+          ...(newItem.masterCartons ? { masterCartons: newItem.masterCartons } : {}),
         };
       });
     }
@@ -504,7 +507,8 @@ export class ProductionOrdersService {
         if (item.receivedQuantity > item.quantity) {
           item.receivedQuantity = item.quantity;
         }
-        deliveryDetails.push(`${item.sku} → ${delivery.quantity}`);
+        const mcInfo = item.masterCartons ? ` (${item.masterCartons} MCs)` : '';
+        deliveryDetails.push(`${item.sku} → ${delivery.quantity}${mcInfo}`);
       }
     }
 
