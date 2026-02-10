@@ -7247,17 +7247,34 @@ export default function Dashboard({ session }: DashboardProps) {
               {/* Filters Row */}
               {productionViewType === 'orders' ? (
                 <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
-                    <select
-                      value={productionFilterStatus}
-                      onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                      className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
-                    >
-                      <option value="all">All Orders</option>
-                      <option value="open">Open Orders</option>
-                      <option value="completed">Completed</option>
-                    </select>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                      <select
+                        value={productionFilterStatus}
+                        onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                      >
+                        <option value="all">All Orders</option>
+                        <option value="open">Open Orders</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                      <select
+                        value={poDateFilter}
+                        onChange={(e) => setPoDateFilter(e.target.value)}
+                        className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                      >
+                        <option value="all">All Time</option>
+                        <option value="1m">Last 1 Month</option>
+                        <option value="3m">Last 3 Months</option>
+                        <option value="6m">Last 6 Months</option>
+                        <option value="1y">Last 1 Year</option>
+                        <option value="2y">Last 2 Years</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                   <div className="relative" ref={skuSearchRef}>
@@ -7353,21 +7370,6 @@ export default function Dashboard({ session }: DashboardProps) {
                       })()}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
-                    <select
-                      value={poDateFilter}
-                      onChange={(e) => setPoDateFilter(e.target.value)}
-                      className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
-                    >
-                      <option value="all">All Time</option>
-                      <option value="1m">Last 1 Month</option>
-                      <option value="3m">Last 3 Months</option>
-                      <option value="6m">Last 6 Months</option>
-                      <option value="1y">Last 1 Year</option>
-                      <option value="2y">Last 2 Years</option>
-                    </select>
-                  </div>
                   {(skuSearchSelected || poDateFilter !== 'all') && (
                     <button
                       type="button"
@@ -7385,17 +7387,34 @@ export default function Dashboard({ session }: DashboardProps) {
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
-                    <select
-                      value={transferFilterStatus}
-                      onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
-                      className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
-                    >
-                      <option value="all">All Transfers</option>
-                      <option value="active">Active</option>
-                      <option value="completed">Completed</option>
-                    </select>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                      <select
+                        value={transferFilterStatus}
+                        onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
+                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                      >
+                        <option value="all">All Transfers</option>
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                      <select
+                        value={transferDateFilter}
+                        onChange={(e) => setTransferDateFilter(e.target.value)}
+                        className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                      >
+                        <option value="all">All Time</option>
+                        <option value="1m">Last 1 Month</option>
+                        <option value="3m">Last 3 Months</option>
+                        <option value="6m">Last 6 Months</option>
+                        <option value="1y">Last 1 Year</option>
+                        <option value="2y">Last 2 Years</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                   <div className="relative" ref={transferSkuSearchRef}>
@@ -7543,21 +7562,6 @@ export default function Dashboard({ session }: DashboardProps) {
                         );
                       })()}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
-                    <select
-                      value={transferDateFilter}
-                      onChange={(e) => setTransferDateFilter(e.target.value)}
-                      className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
-                    >
-                      <option value="all">All Time</option>
-                      <option value="1m">Last 1 Month</option>
-                      <option value="3m">Last 3 Months</option>
-                      <option value="6m">Last 6 Months</option>
-                      <option value="1y">Last 1 Year</option>
-                      <option value="2y">Last 2 Years</option>
-                    </select>
                   </div>
                   {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'all') && (
                     <button
