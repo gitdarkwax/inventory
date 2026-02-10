@@ -3280,7 +3280,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         }}
                         className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       />
-                      {suggestions.length > 0 && (
+                      {false && suggestions.length > 0 && (
                         <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
                           {suggestions.map((s, idx) => (
                             <button
@@ -3755,7 +3755,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 }}
                                 className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                               />
-                              {suggestions.length > 0 && (
+                              {false && suggestions.length > 0 && (
                                 <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
                                   {suggestions.map((s, idx) => (
                                     <button
@@ -4615,7 +4615,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               }}
                               className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                             />
-                            {suggestions.length > 0 && (
+                            {false && suggestions.length > 0 && (
                               <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
                                 {suggestions.map((s, idx) => (
                                   <button
@@ -5750,7 +5750,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       }}
                                       className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                                     />
-                                    {suggestions.length > 0 && (
+                                    {false && suggestions.length > 0 && (
                                       <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
                                         {suggestions.map((s, idx) => (
                                           <button
@@ -6335,7 +6335,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       }}
                                       className="h-[34px] w-64 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
                                     />
-                                    {suggestions.length > 0 && (
+                                    {false && suggestions.length > 0 && (
                                       <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 w-full min-w-[320px] max-h-64 overflow-y-auto">
                                         {suggestions.map((s, idx) => (
                                           <button
@@ -9964,8 +9964,8 @@ export default function Dashboard({ session }: DashboardProps) {
                       placeholder="Search for SKU..."
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
                     />
-                    {/* SKU Suggestions */}
-                    {showCommentSkuSuggestions && commentSkuSearch.length >= 2 && inventoryData?.inventory && (
+                    {/* SKU Suggestions - hidden to reduce distraction; table filters as user types */}
+                    {false && showCommentSkuSuggestions && commentSkuSearch.length >= 2 && inventoryData?.inventory && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
                         {inventoryData.inventory
                           .filter(inv => 
