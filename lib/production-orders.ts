@@ -277,7 +277,7 @@ export class ProductionOrdersService {
     }));
     
     const now = new Date().toISOString();
-    const itemsSummary = orderItems.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
+    const itemsSummary = orderItems.map(i => `- ${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
     
     // Build creation details with notes if present
     let creationDetails = itemsSummary;
@@ -341,10 +341,11 @@ export class ProductionOrdersService {
     
     // Update items if provided (preserve receivedQuantity for existing SKUs)
     if (updates.items) {
-      const oldItems = order.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
-      const newItems = updates.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
-      if (oldItems !== newItems) {
-        changes.push(`Items: ${newItems}`);
+      const oldItems = order.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
+      const newItemsNormalized = updates.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
+      if (oldItems !== newItemsNormalized) {
+        const newItemsDisplay = updates.items.map(i => `- ${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
+        changes.push(`Items:\n${newItemsDisplay}`);
       }
       order.items = updates.items.map(newItem => {
         const existingItem = order.items.find(i => i.sku === newItem.sku);
@@ -410,7 +411,7 @@ export class ProductionOrdersService {
         action: 'Order Updated',
         changedBy,
         changedByEmail,
-        details: changes.join('; '),
+        details: changes.join('\n'),
       });
     }
     
@@ -540,12 +541,13 @@ export class ProductionOrdersService {
       if (allReceived && oldStatus !== 'completed') {
         action = 'Delivery Logged (Order Completed)';
       }
+      const detailsFormatted = deliveryDetails.map(d => `- ${d}`).join('\n');
       order.activityLog.push({
         timestamp: now,
         action,
         changedBy,
         changedByEmail,
-        details: deliveryDetails.join(', '),
+        details: detailsFormatted,
       });
     }
 

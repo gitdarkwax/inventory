@@ -280,10 +280,10 @@ export class TransfersService {
     cache.nextTransferNumber = nextNum + 1;
     
     const now = new Date().toISOString();
-    const itemsSummary = items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
+    const itemsSummary = items.map(i => `- ${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
     
     // Build activity log details with notes if present
-    let creationDetails = `[${transferType}] ${origin} → ${destination}: ${itemsSummary}`;
+    let creationDetails = `[${transferType}] ${origin} → ${destination}:\n${itemsSummary}`;
     if (notes && notes.trim()) {
       creationDetails += `\nNotes: ${notes.trim()}`;
     }
@@ -364,7 +364,7 @@ export class TransfersService {
       });
       
       if (isDeliveryUpdate) {
-        // Format delivery details: "SKU: qty, SKU: qty"
+        // Format delivery details as list with MCs: "- SKU → qty (X MCs)"
         const deliveryDetails = updates.items
           .filter(newItem => {
             const oldItem = transfer.items.find(i => i.sku === newItem.sku);
@@ -373,16 +373,18 @@ export class TransfersService {
           .map(newItem => {
             const oldItem = transfer.items.find(i => i.sku === newItem.sku);
             const thisDelivery = (newItem.receivedQuantity || 0) - (oldItem?.receivedQuantity || 0);
-            return `${newItem.sku}: ${thisDelivery.toLocaleString()}`;
+            const mcInfo = newItem.masterCartons ? ` (${newItem.masterCartons} MCs)` : '';
+            return `- ${newItem.sku} → ${thisDelivery.toLocaleString()}${mcInfo}`;
           })
-          .join(', ');
+          .join('\n');
         changes.push(deliveryDetails);
         transfer.items = updates.items;
       } else {
-        const oldItems = transfer.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
-        const newItems = updates.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
-        if (oldItems !== newItems) {
-          changes.push(`Items: ${newItems}`);
+        const oldItems = transfer.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
+        const newItemsNormalized = updates.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
+        if (oldItems !== newItemsNormalized) {
+          const newItemsDisplay = updates.items.map(i => `- ${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
+          changes.push(`Items:\n${newItemsDisplay}`);
           transfer.items = updates.items;
         }
       }
@@ -436,19 +438,18 @@ export class TransfersService {
     
     // Add activity log entry if there were changes (not counting notes which are handled separately)
     if (changes.length > 0 && changedBy && changedByEmail) {
-      // Check if this is a delivery update (has SKU: qty format without Status: prefix)
-      const deliveryItemsChange = changes.find(c => /^[A-Z0-9-]+:\s*[\d,]+/.test(c) && !c.startsWith('Status:'));
+      // Check if this is a delivery update (has "- SKU → qty" format, possibly multi-line)
+      const deliveryItemsChange = changes.find(c => c.startsWith('- ') && c.includes(' → ') && !c.startsWith('Status:'));
       const statusChange = changes.find(c => c.startsWith('Status:'));
       const isDeliveryLog = !!deliveryItemsChange;
       
       let action = 'Transfer Updated';
-      let details = changes.join('; ');
+      let details = changes.join('\n');
       
       if (isDeliveryLog) {
-        // Format: "Delivery Logged: SKU: qty, SKU: qty"
-        action = `Delivery Logged: ${deliveryItemsChange}`;
-        // Details only shows status if present
-        details = statusChange || '';
+        action = 'Delivery Logged';
+        // Details: item list + status on following line
+        details = deliveryItemsChange + (statusChange ? `\n${statusChange}` : '');
       } else if (updates.status === 'cancelled') {
         action = 'Transfer Cancelled';
       } else if (updates.status === 'in_transit') {

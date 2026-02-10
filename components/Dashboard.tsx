@@ -2944,10 +2944,22 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Format activity log text to show SKU items on separate lines and handle notes
   const formatActivityLogText = (text: string): React.ReactNode => {
-    // First check if text contains newlines (e.g., notes on separate line)
+    if (!text || typeof text !== 'string') return text;
+    // When backend sends list format (e.g. "- SKU → qty (X MCs)\n- SKU → qty\nStatus: Delivered"), render each line as a block
+    if (text.includes('\n')) {
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      return (
+        <span>
+          {lines.map((line, idx) => (
+            <span key={idx} className="block">{line}</span>
+          ))}
+        </span>
+      );
+    }
+    
     const lines = text.split('\n');
     
-    // Process first line for SKU patterns
+    // Process first line for SKU patterns (legacy comma-separated content)
     const firstLine = lines[0];
     const skuPattern = /([A-Z0-9-]+)\s*→\s*(\d+)/g;
     const matches = [...firstLine.matchAll(skuPattern)];
