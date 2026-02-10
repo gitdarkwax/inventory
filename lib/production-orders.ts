@@ -265,7 +265,7 @@ export class ProductionOrdersService {
     
     // Generate sequential PO number for internal ID
     const nextNum = cache.nextOrderNumber || 1;
-    const orderId = `PO-${String(nextNum).padStart(3, '0')}`;
+    const orderId = `PO-${String(nextNum).padStart(4, '0')}`;
     cache.nextOrderNumber = nextNum + 1;
     
     // Initialize items with receivedQuantity = 0

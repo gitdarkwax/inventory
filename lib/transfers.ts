@@ -25,7 +25,7 @@ export type CarrierType = 'FedEx' | 'DHL' | 'UPS' | '';
 export type TransferType = 'Air Express' | 'Air Slow' | 'Sea' | 'Immediate';
 
 export interface Transfer {
-  id: string; // T001, T002, etc.
+  id: string; // T0001, T0002, etc.
   origin: string;
   destination: string;
   transferType: TransferType;
@@ -276,7 +276,7 @@ export class TransfersService {
     
     // Generate sequential transfer number
     const nextNum = cache.nextTransferNumber || 1;
-    const transferId = `T${String(nextNum).padStart(3, '0')}`;
+    const transferId = `T${String(nextNum).padStart(4, '0')}`;
     cache.nextTransferNumber = nextNum + 1;
     
     const now = new Date().toISOString();
