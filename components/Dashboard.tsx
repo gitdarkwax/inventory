@@ -4296,63 +4296,59 @@ export default function Dashboard({ session }: DashboardProps) {
         {/* MC Edit Form Modal */}
         {showMcEditForm && inventoryData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col">
-              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">Edit Quantity per Master Carton</h3>
-                <input
-                  type="text"
-                  placeholder="Search SKU..."
-                  value={mcSearchTerm}
-                  onChange={(e) => setMcSearchTerm(e.target.value)}
-                  className="w-64 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                />
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">Quantity per Master Carton</h3>
+                <p className="text-sm text-gray-500 mt-1">Set units per MC for automatic calculation</p>
               </div>
-              <div className="px-6 py-4 overflow-y-auto flex-1">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty/MC</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {inventoryData.inventory
-                      .map(item => item.sku)
-                      .sort()
-                      .filter((sku) => {
-                        if (mcSearchTerm.length < 2) return true;
-                        return sku.toUpperCase().includes(mcSearchTerm.toUpperCase());
-                      })
-                      .map((sku) => {
-                        const currentValue = mcData[sku.toUpperCase()] || '';
-                        return (
-                          <tr key={sku}>
-                            <td className="px-4 py-2 text-sm text-gray-900 font-mono">{sku}</td>
-                            <td className="px-4 py-2 text-right">
-                              <input
-                                type="number"
-                                value={currentValue}
-                                onChange={(e) => {
-                                  const updatedMcData = { ...mcData };
-                                  const val = e.target.value;
-                                  if (val === '' || parseInt(val) <= 0) {
-                                    delete updatedMcData[sku.toUpperCase()];
-                                  } else {
-                                    updatedMcData[sku.toUpperCase()] = parseInt(val);
-                                  }
-                                  setMcData(updatedMcData);
-                                }}
-                                className="w-24 px-3 py-1 border border-gray-300 rounded-md text-sm text-right"
-                                placeholder="—"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+              <div className="px-6 py-4 flex-1 overflow-y-auto">
+                {/* Search box */}
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    placeholder="Search SKU..."
+                    value={mcSearchTerm}
+                    onChange={(e) => setMcSearchTerm(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                {/* SKU list */}
+                <div className="space-y-2">
+                  {inventoryData.inventory
+                    .map(item => item.sku)
+                    .sort()
+                    .filter((sku) => {
+                      if (mcSearchTerm.length < 2) return true;
+                      return sku.toUpperCase().includes(mcSearchTerm.toUpperCase());
+                    })
+                    .map((sku) => {
+                      const currentValue = mcData[sku.toUpperCase()] || '';
+                      return (
+                        <div key={sku} className="flex items-center justify-between bg-gray-50 px-3 py-2 rounded-md gap-3">
+                          <span className="text-sm font-medium text-gray-900 font-mono">{sku}</span>
+                          <input
+                            type="number"
+                            value={currentValue}
+                            onChange={(e) => {
+                              const updatedMcData = { ...mcData };
+                              const val = e.target.value;
+                              if (val === '' || parseInt(val) <= 0) {
+                                delete updatedMcData[sku.toUpperCase()];
+                              } else {
+                                updatedMcData[sku.toUpperCase()] = parseInt(val);
+                              }
+                              setMcData(updatedMcData);
+                            }}
+                            className="w-20 px-2 py-1 border border-gray-300 rounded-md text-sm text-right focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="—"
+                          />
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
-              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -4361,7 +4357,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     loadMcData(); // Reload to discard changes
                   }}
                   disabled={isSavingMcData}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
+                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -4369,10 +4365,10 @@ export default function Dashboard({ session }: DashboardProps) {
                   type="button"
                   onClick={() => saveMcData(mcData)}
                   disabled={isSavingMcData}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium ${
                     isSavingMcData
                       ? 'bg-blue-400 text-white cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
                   {isSavingMcData ? 'Saving...' : 'Save'}
