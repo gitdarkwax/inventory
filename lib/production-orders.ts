@@ -480,7 +480,7 @@ export class ProductionOrdersService {
    */
   static async logDelivery(
     orderId: string,
-    deliveries: { sku: string; quantity: number }[],
+    deliveries: { sku: string; quantity: number; masterCartons?: number }[],
     changedBy?: string,
     changedByEmail?: string
   ): Promise<ProductionOrder | null> {
@@ -497,7 +497,7 @@ export class ProductionOrdersService {
       order.activityLog = [];
     }
     
-    // Update received quantities
+    // Update received quantities and master cartons if provided
     const deliveryDetails: string[] = [];
     for (const delivery of deliveries) {
       const item = order.items.find(i => i.sku === delivery.sku);
@@ -506,6 +506,10 @@ export class ProductionOrdersService {
         // Cap at ordered quantity
         if (item.receivedQuantity > item.quantity) {
           item.receivedQuantity = item.quantity;
+        }
+        // Update master cartons if provided
+        if (delivery.masterCartons !== undefined && delivery.masterCartons > 0) {
+          item.masterCartons = delivery.masterCartons;
         }
         const mcInfo = item.masterCartons ? ` (${item.masterCartons} MCs)` : '';
         deliveryDetails.push(`${item.sku} → ${delivery.quantity}${mcInfo}`);

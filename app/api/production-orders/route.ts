@@ -128,7 +128,7 @@ export async function PATCH(request: NextRequest) {
       vendor?: string;
       eta?: string;
       status?: 'in_production' | 'partial' | 'completed' | 'cancelled';
-      deliveries?: { sku: string; quantity: number }[];
+      deliveries?: { sku: string; quantity: number; masterCartons?: number }[];
     };
 
     if (!orderId) {

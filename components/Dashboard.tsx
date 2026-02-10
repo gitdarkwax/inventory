@@ -303,7 +303,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [skuSuggestionIndex, setSkuSuggestionIndex] = useState<number | null>(null);
   const skuSearchRef = useRef<HTMLDivElement>(null);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
-  const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [deliveryItems, setDeliveryItems] = useState<{ sku: string; quantity: string; masterCartons: string }[]>([]);
   const [deliveryLocation, setDeliveryLocation] = useState<'LA Office' | 'DTLA WH' | 'ShipBob' | 'China WH'>('China WH');
   const [showDeliveryConfirm, setShowDeliveryConfirm] = useState(false);
   const [isUpdatingShopify, setIsUpdatingShopify] = useState(false);
@@ -366,7 +366,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isCancellingTransfer, setIsCancellingTransfer] = useState(false);
   const [isUpdatingTransferStatus, setIsUpdatingTransferStatus] = useState(false);
   const [showTransferDeliveryForm, setShowTransferDeliveryForm] = useState(false);
-  const [transferDeliveryItems, setTransferDeliveryItems] = useState<{ sku: string; quantity: string }[]>([]);
+  const [transferDeliveryItems, setTransferDeliveryItems] = useState<{ sku: string; quantity: string; masterCartons: string }[]>([]);
   const [showMarkInTransitConfirm, setShowMarkInTransitConfirm] = useState(false);
   const [transferToMarkInTransit, setTransferToMarkInTransit] = useState<Transfer | null>(null);
   const [isMarkingInTransit, setIsMarkingInTransit] = useState(false);
@@ -1250,7 +1250,11 @@ export default function Dashboard({ session }: DashboardProps) {
     
     const validDeliveries = transferDeliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({ 
+        sku: item.sku.trim().toUpperCase(), 
+        quantity: parseInt(item.quantity),
+        masterCartons: item.masterCartons && parseInt(item.masterCartons) > 0 ? parseInt(item.masterCartons) : undefined
+      }));
 
     if (validDeliveries.length === 0) {
       showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
@@ -1280,7 +1284,7 @@ export default function Dashboard({ session }: DashboardProps) {
         return;
       }
 
-      // Step 2: Update transfer items with received quantities
+      // Step 2: Update transfer items with received quantities and master cartons
       const updatedItems = selectedTransfer.items.map(item => {
         const delivery = validDeliveries.find(d => d.sku === item.sku);
         const currentReceived = item.receivedQuantity || 0;
@@ -1288,6 +1292,7 @@ export default function Dashboard({ session }: DashboardProps) {
         return {
           ...item,
           receivedQuantity: newReceived,
+          ...(delivery?.masterCartons ? { masterCartons: delivery.masterCartons } : {}),
         };
       });
 
@@ -1601,7 +1606,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const getValidDeliveries = () => {
     return deliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({ 
+        sku: item.sku.trim().toUpperCase(), 
+        quantity: parseInt(item.quantity),
+        masterCartons: item.masterCartons && parseInt(item.masterCartons) > 0 ? parseInt(item.masterCartons) : undefined
+      }));
   };
 
   // Show order delivery confirmation (first step - validates and shows confirmation modal)
@@ -3447,7 +3456,7 @@ export default function Dashboard({ session }: DashboardProps) {
         <div className="bg-white shadow rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4">
             <div className="flex-1">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">📦 MagBak Inventory Dashboard</h1>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">📦 MagBak Inventory Master Tracker</h1>
               <p className="text-sm text-gray-500 mt-1">Real-time stock levels and forecasting</p>
               {inventoryData?.lastUpdated && (
                 <p className="text-xs text-gray-400 mt-1">
@@ -7886,7 +7895,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                                     .filter(item => item.quantity - (item.receivedQuantity || 0) > 0)
                                                     .map(item => ({ 
                                                       sku: item.sku, 
-                                                      quantity: String(item.quantity - (item.receivedQuantity || 0))
+                                                      quantity: String(item.quantity - (item.receivedQuantity || 0)),
+                                                      masterCartons: item.masterCartons ? String(item.masterCartons) : ''
                                                     }))
                                                 );
                                                 setShowDeliveryForm(true);
@@ -8182,12 +8192,28 @@ export default function Dashboard({ session }: DashboardProps) {
                             onChange={(e) => {
                               const updated = [...deliveryItems];
                               updated[index].quantity = e.target.value;
+                              const qty = parseInt(e.target.value) || 0;
+                              if (qty > 0 && mcData[item.sku]) {
+                                updated[index].masterCartons = String(Math.ceil(qty / mcData[item.sku]));
+                              }
                               setDeliveryItems(updated);
                             }}
                             min="0"
                             max={remaining}
                             placeholder="0"
                             className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          />
+                          <input
+                            type="number"
+                            value={item.masterCartons}
+                            onChange={(e) => {
+                              const updated = [...deliveryItems];
+                              updated[index].masterCartons = e.target.value;
+                              setDeliveryItems(updated);
+                            }}
+                            min="0"
+                            placeholder="MCs"
+                            className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                           />
                           <span className="text-sm text-gray-500">of {remaining} remaining</span>
                         </div>
@@ -8885,6 +8911,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                                         transfer.items.map(item => ({
                                                           sku: item.sku,
                                                           quantity: '',
+                                                          masterCartons: item.masterCartons ? String(item.masterCartons) : ''
                                                         }))
                                                       );
                                                       setShowTransferDeliveryForm(true);
@@ -9786,12 +9813,28 @@ export default function Dashboard({ session }: DashboardProps) {
                                 onChange={(e) => {
                                   const updated = [...transferDeliveryItems];
                                   updated[index].quantity = e.target.value;
+                                  const qty = parseInt(e.target.value) || 0;
+                                  if (qty > 0 && mcData[item.sku]) {
+                                    updated[index].masterCartons = String(Math.ceil(qty / mcData[item.sku]));
+                                  }
                                   setTransferDeliveryItems(updated);
                                 }}
                                 min="0"
                                 max={remaining}
                                 placeholder="0"
                                 className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              />
+                              <input
+                                type="number"
+                                value={item.masterCartons}
+                                onChange={(e) => {
+                                  const updated = [...transferDeliveryItems];
+                                  updated[index].masterCartons = e.target.value;
+                                  setTransferDeliveryItems(updated);
+                                }}
+                                min="0"
+                                placeholder="MCs"
+                                className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                               />
                               <span className="text-sm text-gray-500">of {remaining} remaining</span>
                               {alreadyReceived > 0 && (

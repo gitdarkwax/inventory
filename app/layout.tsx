@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Inventory Dashboard",
+  title: "MagBak Inventory Master Tracker",
   description: "Real-time Shopify inventory tracking and analytics",
 };
 
