@@ -7212,7 +7212,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                       }`}
                     >
-                      Production Orders
+                      Production
                     </button>
                     <button
                       onClick={() => setProductionViewType('transfers')}
