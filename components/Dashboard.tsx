@@ -7259,6 +7259,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <option value="completed">Completed</option>
                     </select>
                   </div>
+                  <div className="flex items-center gap-3">
                   <div className="relative" ref={skuSearchRef}>
                     <div className="relative">
                       {(() => {
@@ -7380,6 +7381,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       Clear
                     </button>
                   )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
@@ -7395,6 +7397,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <option value="completed">Completed</option>
                     </select>
                   </div>
+                  <div className="flex items-center gap-3">
                   <div className="relative" ref={transferSkuSearchRef}>
                     <div className="relative">
                       {(() => {
@@ -7570,6 +7573,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       Clear
                     </button>
                   )}
+                  </div>
                 </div>
               )}
             </div>
