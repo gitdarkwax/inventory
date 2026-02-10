@@ -239,3 +239,55 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+// DELETE - Permanently remove production orders by ID (e.g. test data cleanup)
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Forbidden. Write access required to delete production orders.' }, { status: 403 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { orderIds } = body as { orderIds?: string[] };
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Request body must include orderIds: string[]' },
+        { status: 400 }
+      );
+    }
+
+    const cache = await ProductionOrdersService.loadOrders();
+    const idsToRemove = new Set(orderIds.map((id: string) => String(id)));
+    const removed = cache.orders.filter(o => idsToRemove.has(o.id));
+    const kept = cache.orders.filter(o => !idsToRemove.has(o.id));
+
+    if (removed.length === 0) {
+      return NextResponse.json({
+        message: 'No matching production orders found to delete',
+        deletedCount: 0,
+        orders: cache.orders,
+      });
+    }
+
+    cache.orders = kept;
+    cache.lastUpdated = new Date().toISOString();
+    await ProductionOrdersService.saveOrders(cache);
+
+    return NextResponse.json({
+      message: `Permanently deleted ${removed.length} production order(s)`,
+      deletedCount: removed.length,
+      deletedIds: removed.map(o => o.id),
+      orders: kept,
+    });
+  } catch (error) {
+    console.error('Production Orders DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete production orders' },
+      { status: 500 }
+    );
+  }
+}
