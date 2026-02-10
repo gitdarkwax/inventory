@@ -3475,16 +3475,6 @@ export default function Dashboard({ session }: DashboardProps) {
             )}
           </div>
 
-          {/* Phase Out Link */}
-          <div className="flex justify-end mb-1">
-            <button
-              onClick={() => setShowPhaseOutModal(true)}
-              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-            >
-              Manage Phase Outs
-            </button>
-          </div>
-          
           {/* Tabs and Refresh */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -4283,12 +4273,20 @@ export default function Dashboard({ session }: DashboardProps) {
                   >
                     <span>📥</span> Export to Excel
                   </button>
-                  <button
-                    onClick={() => setShowMcEditForm(true)}
-                    className="text-blue-600 hover:text-blue-800 text-sm underline"
-                  >
-                    Edit Quantity per MC
-                  </button>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => setShowMcEditForm(true)}
+                      className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                    >
+                      Manage Qty per MC
+                    </button>
+                    <button
+                      onClick={() => setShowPhaseOutModal(true)}
+                      className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                    >
+                      Manage Phase Outs
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -5933,7 +5931,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
 
                       {/* Export Button */}
-                      <div className="mt-6 flex justify-end">
+                      <div className="mt-6 flex flex-col items-end gap-2">
                         <button
                           onClick={() => {
                             // Build CSV content
@@ -5978,6 +5976,20 @@ export default function Dashboard({ session }: DashboardProps) {
                         >
                           <span>📥</span> Export to Excel
                         </button>
+                        <div className="flex gap-4">
+                          <button
+                            onClick={() => setShowMcEditForm(true)}
+                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                          >
+                            Manage Qty per MC
+                          </button>
+                          <button
+                            onClick={() => setShowPhaseOutModal(true)}
+                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                          >
+                            Manage Phase Outs
+                          </button>
+                        </div>
                       </div>
                     </>
                   );
