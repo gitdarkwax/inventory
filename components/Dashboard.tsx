@@ -7959,52 +7959,6 @@ export default function Dashboard({ session }: DashboardProps) {
                       </tbody>
                     </table>
                   </div>
-                  {/* Export Button */}
-                  <div className="mt-6 flex justify-end">
-                    <button
-                      onClick={() => {
-                        // Build CSV content for PO Tracker
-                        const headers = ['PO#', 'PO Date', 'SKUs', 'Ordered', 'Received', 'Pending', 'Vendor', 'ETA', 'Status', 'Notes'];
-                        const rows = filteredOrders.map(order => {
-                          const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
-                          const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
-                          const skuList = order.items.map(i => `${i.sku} (${i.quantity})`).join('; ');
-                          return [
-                            order.id,
-                            new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }),
-                            `"${skuList.replace(/"/g, '""')}"`,
-                            totalOrdered,
-                            totalReceived,
-                            totalOrdered - totalReceived,
-                            order.vendor || '',
-                            order.eta ? new Date(order.eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '',
-                            order.status === 'in_production' ? 'In Production' : order.status === 'partial' ? 'Partial Delivery' : order.status === 'cancelled' ? 'Cancelled' : 'Completed',
-                            `"${(order.notes || '').replace(/"/g, '""')}"`
-                          ];
-                        });
-                        
-                        const csvContent = [
-                          headers.join(','),
-                          ...rows.map(row => row.join(','))
-                        ].join('\n');
-                        
-                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                        const link = document.createElement('a');
-                        const url = URL.createObjectURL(blob);
-                        link.setAttribute('href', url);
-                        const now = new Date();
-                        const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${String(now.getHours() % 12 || 12).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${now.getHours() >= 12 ? 'PM' : 'AM'}`;
-                        link.setAttribute('download', `po-tracker-export-${timestamp}.csv`);
-                        link.style.visibility = 'hidden';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      }}
-                      className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                    >
-                      <span>📥</span> Export to Excel
-                    </button>
-                  </div>
                 </>
               );
             })()}
