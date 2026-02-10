@@ -7404,7 +7404,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewOrderForm(true)}
-                      className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Production
                     </button>
@@ -7578,7 +7578,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     <button
                       type="button"
                       onClick={() => setShowNewTransferForm(true)}
-                      className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700 active:bg-blue-800"
+                      className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Transfer
                     </button>
