@@ -4212,7 +4212,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 )}
                 
                 {/* Export Button */}
-                <div className="mt-6 flex justify-end">
+                <div className="mt-6 flex flex-col items-end gap-2">
                   <button
                     onClick={() => {
                       // Build CSV content for Inventory
@@ -4283,14 +4283,12 @@ export default function Dashboard({ session }: DashboardProps) {
                   >
                     <span>📥</span> Export to Excel
                   </button>
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      onClick={() => setShowMcEditForm(true)}
-                      className="text-blue-600 hover:text-blue-800 text-sm underline"
-                    >
-                      Edit Quantity per MC
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setShowMcEditForm(true)}
+                    className="text-blue-600 hover:text-blue-800 text-sm underline"
+                  >
+                    Edit Quantity per MC
+                  </button>
                 </div>
               </div>
             )}
