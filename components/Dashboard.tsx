@@ -7406,7 +7406,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       onClick={() => setShowNewOrderForm(true)}
                       className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
-                      + New Production Order
+                      + New Production
                     </button>
                   )}
                   </div>
