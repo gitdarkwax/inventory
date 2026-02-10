@@ -6267,10 +6267,10 @@ export default function Dashboard({ session }: DashboardProps) {
                               </button>
                             </div>
                           </div>
-                          {/* Search */}
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-gray-400 mb-1">Search</span>
-                            <div className="relative" ref={trackerSearchRef}>
+                        </div>
+                        {/* Search - right side */}
+                        <div className="flex flex-col">
+                          <div className="relative" ref={trackerSearchRef}>
                               {(() => {
                                 const term = trackerSearchTerm.toLowerCase();
                                 const suggestions = showTrackerSearchSuggestions && trackerSearchTerm.length >= 2 && inventoryData?.inventory
@@ -6352,7 +6352,6 @@ export default function Dashboard({ session }: DashboardProps) {
                               })()}
                             </div>
                           </div>
-                        </div>
                       </div>
                     </div>
                     
@@ -7247,7 +7246,7 @@ export default function Dashboard({ session }: DashboardProps) {
               
               {/* Filters Row */}
               {productionViewType === 'orders' ? (
-                <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
                     <select
@@ -7260,8 +7259,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <option value="completed">Completed</option>
                     </select>
                   </div>
-                  <div className="flex items-center gap-2 relative" ref={skuSearchRef}>
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Search:</label>
+                  <div className="relative" ref={skuSearchRef}>
                     <div className="relative">
                       {(() => {
                         const term = skuSearchQuery.toLowerCase();
@@ -7323,8 +7321,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                   setSkuSearchSuggestionIndex(-1);
                                 }
                               }}
-                              placeholder="SKU, product, or variant..."
-                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
+                              placeholder="Search by SKU, product, or variant..."
+                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-64"
                             />
                             {suggestions.length > 0 && (
                               <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-md shadow-lg z-50 min-w-[320px] max-h-64 overflow-y-auto">
@@ -7384,7 +7382,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+                <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
                     <select
@@ -7397,8 +7395,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <option value="completed">Completed</option>
                     </select>
                   </div>
-                  <div className="flex items-center gap-2 relative" ref={transferSkuSearchRef}>
-                    <label className="text-sm text-gray-600 whitespace-nowrap">Search:</label>
+                  <div className="relative" ref={transferSkuSearchRef}>
                     <div className="relative">
                       {(() => {
                         const term = transferSkuSearchQuery.toLowerCase();
@@ -7466,8 +7463,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                   setTransferSkuSearchSuggestionIndex(prev => prev > 0 ? prev - 1 : suggestions.length - 1);
                                 }
                               }}
-                              placeholder="SKU, product, or tracking #..."
-                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-52"
+                              placeholder="Search by SKU, product, or tracking #..."
+                              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-64"
                             />
                             {/* Show tracking number matches from transfers */}
                             {(() => {
