@@ -379,8 +379,8 @@ export class TransfersService {
         changes.push(deliveryDetails);
         transfer.items = updates.items;
       } else {
-        const oldItems = transfer.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
-        const newItems = updates.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+        const oldItems = transfer.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
+        const newItems = updates.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
         if (oldItems !== newItems) {
           changes.push(`Items: ${newItems}`);
           transfer.items = updates.items;

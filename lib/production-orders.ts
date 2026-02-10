@@ -341,8 +341,8 @@ export class ProductionOrdersService {
     
     // Update items if provided (preserve receivedQuantity for existing SKUs)
     if (updates.items) {
-      const oldItems = order.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
-      const newItems = updates.items.map(i => `${i.sku} x${i.quantity}`).join(', ');
+      const oldItems = order.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
+      const newItems = updates.items.map(i => `${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join(', ');
       if (oldItems !== newItems) {
         changes.push(`Items: ${newItems}`);
       }
