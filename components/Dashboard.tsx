@@ -6416,13 +6416,6 @@ export default function Dashboard({ session }: DashboardProps) {
                         
                         {/* Right: Action Buttons */}
                         <div className="flex items-center gap-3">
-                          {/* Hidden SKUs Link */}
-                          <button
-                            onClick={() => setShowHiddenSkusModal(true)}
-                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-                          >
-                            Hidden SKUs{hiddenSkus.length > 0 ? ` (${hiddenSkus.length})` : ''}
-                          </button>
                           {/* View Logs Button - hidden on mobile (portrait & landscape) */}
                           <button
                             onClick={() => {
@@ -6581,9 +6574,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
                     </div>
 
-                    {/* Export Section - hidden on mobile (portrait & landscape) */}
-                    {sortedData.length > 0 && (
-                      <div className="hidden md:flex mt-4 justify-end">
+                    {/* Export Section and Hidden SKUs - hidden on mobile (portrait & landscape) */}
+                    <div className="hidden md:flex mt-4 justify-end flex-col items-end gap-2">
+                      {sortedData.length > 0 && (
                         <button
                           onClick={() => {
                             // Build CSV content with all visible data
@@ -6618,8 +6611,14 @@ export default function Dashboard({ session }: DashboardProps) {
                         >
                           <span>📥</span> Export to Excel
                         </button>
-                      </div>
-                    )}
+                      )}
+                      <button
+                        onClick={() => setShowHiddenSkusModal(true)}
+                        className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                      >
+                        Hidden SKUs{hiddenSkus.length > 0 ? ` (${hiddenSkus.length})` : ''}
+                      </button>
+                    </div>
 
                     {/* Clear Confirmation Modal */}
                     {showTrackerClearConfirm && (
