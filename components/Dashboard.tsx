@@ -7199,83 +7199,98 @@ export default function Dashboard({ session }: DashboardProps) {
         {activeTab === 'production' && (
           <div className="space-y-4">
             {/* Filtering Block */}
-            <div className="bg-white shadow rounded-lg p-4 space-y-4">
-              {/* View Toggle + Action Button Row */}
-              <div className="flex justify-between items-center">
-                {/* View Toggle */}
-                <div className="flex bg-gray-100 p-1 rounded-lg">
-                  <button
-                    onClick={() => setProductionViewType('orders')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                      productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Production Orders
-                  </button>
-                  <button
-                    onClick={() => setProductionViewType('transfers')}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                      productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    Transfers
-                  </button>
+            <div className="bg-white shadow rounded-lg p-4">
+              {/* Single Row with All Filters */}
+              <div className="flex items-center justify-between gap-3">
+                {/* Left side: View Toggle + Filters */}
+                <div className="flex items-center gap-3">
+                  {/* View Toggle */}
+                  <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button
+                      onClick={() => setProductionViewType('orders')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        productionViewType === 'orders' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Production Orders
+                    </button>
+                    <button
+                      onClick={() => setProductionViewType('transfers')}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        productionViewType === 'transfers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Transfers
+                    </button>
+                  </div>
+                  
+                  {productionViewType === 'orders' ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                        <select
+                          value={productionFilterStatus}
+                          onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
+                          className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                        >
+                          <option value="all">All Orders</option>
+                          <option value="open">Open Orders</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                        <select
+                          value={poDateFilter}
+                          onChange={(e) => setPoDateFilter(e.target.value)}
+                          className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                        >
+                          <option value="all">All Time</option>
+                          <option value="1m">Last 1 Month</option>
+                          <option value="3m">Last 3 Months</option>
+                          <option value="6m">Last 6 Months</option>
+                          <option value="1y">Last 1 Year</option>
+                          <option value="2y">Last 2 Years</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                        <select
+                          value={transferFilterStatus}
+                          onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
+                          className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                        >
+                          <option value="all">All Transfers</option>
+                          <option value="active">Active</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
+                        <select
+                          value={transferDateFilter}
+                          onChange={(e) => setTransferDateFilter(e.target.value)}
+                          className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                        >
+                          <option value="all">All Time</option>
+                          <option value="1m">Last 1 Month</option>
+                          <option value="3m">Last 3 Months</option>
+                          <option value="6m">Last 6 Months</option>
+                          <option value="1y">Last 1 Year</option>
+                          <option value="2y">Last 2 Years</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
                 </div>
                 
-                {/* Action Button - hidden for read-only users */}
-                {!isReadOnly && (
-                  productionViewType === 'orders' ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowNewOrderForm(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                    >
-                      + New Production Order
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowNewTransferForm(true)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
-                    >
-                      + New Transfer
-                    </button>
-                  )
-                )}
-              </div>
-              
-              {/* Filters Row */}
-              {productionViewType === 'orders' ? (
-                <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
-                      <select
-                        value={productionFilterStatus}
-                        onChange={(e) => setProductionFilterStatus(e.target.value as 'all' | 'open' | 'completed')}
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
-                      >
-                        <option value="all">All Orders</option>
-                        <option value="open">Open Orders</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
-                      <select
-                        value={poDateFilter}
-                        onChange={(e) => setPoDateFilter(e.target.value)}
-                        className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
-                      >
-                        <option value="all">All Time</option>
-                        <option value="1m">Last 1 Month</option>
-                        <option value="3m">Last 3 Months</option>
-                        <option value="6m">Last 6 Months</option>
-                        <option value="1y">Last 1 Year</option>
-                        <option value="2y">Last 2 Years</option>
-                      </select>
-                    </div>
-                  </div>
+                {/* Right side: Search + Clear + Action Button */}
+                {productionViewType === 'orders' ? (
                   <div className="flex items-center gap-3">
                   <div className="relative" ref={skuSearchRef}>
                     <div className="relative">
@@ -7383,39 +7398,19 @@ export default function Dashboard({ session }: DashboardProps) {
                       Clear
                     </button>
                   )}
+                  
+                  {/* Action Button - hidden for read-only users */}
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewOrderForm(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                    >
+                      + New Production Order
+                    </button>
+                  )}
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
-                      <select
-                        value={transferFilterStatus}
-                        onChange={(e) => setTransferFilterStatus(e.target.value as 'all' | 'active' | 'completed')}
-                        className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
-                      >
-                        <option value="all">All Transfers</option>
-                        <option value="active">Active</option>
-                        <option value="completed">Completed</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600 whitespace-nowrap">Period:</label>
-                      <select
-                        value={transferDateFilter}
-                        onChange={(e) => setTransferDateFilter(e.target.value)}
-                        className="px-2 py-1.5 border border-gray-300 rounded-md text-sm"
-                      >
-                        <option value="all">All Time</option>
-                        <option value="1m">Last 1 Month</option>
-                        <option value="3m">Last 3 Months</option>
-                        <option value="6m">Last 6 Months</option>
-                        <option value="1y">Last 1 Year</option>
-                        <option value="2y">Last 2 Years</option>
-                      </select>
-                    </div>
-                  </div>
+                ) : (
                   <div className="flex items-center gap-3">
                   <div className="relative" ref={transferSkuSearchRef}>
                     <div className="relative">
@@ -7577,9 +7572,20 @@ export default function Dashboard({ session }: DashboardProps) {
                       Clear
                     </button>
                   )}
+                  
+                  {/* Action Button - hidden for read-only users */}
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNewTransferForm(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
+                    >
+                      + New Transfer
+                    </button>
+                  )}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Production Orders View */}
