@@ -338,3 +338,67 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+// DELETE - Permanently remove transfers by ID (e.g. test data cleanup)
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!canWrite(session.user.email)) {
+      return NextResponse.json({ error: 'Forbidden. Write access required to delete transfers.' }, { status: 403 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const { transferIds } = body as { transferIds?: string[] };
+    if (!Array.isArray(transferIds) || transferIds.length === 0) {
+      return NextResponse.json(
+        { error: 'Request body must include transferIds: string[]' },
+        { status: 400 }
+      );
+    }
+
+    const cache = await TransfersService.loadTransfers();
+    const idsToRemove = new Set(transferIds.map((id: string) => String(id).toUpperCase()));
+    const removed = cache.transfers.filter(t => idsToRemove.has(t.id));
+    const kept = cache.transfers.filter(t => !idsToRemove.has(t.id));
+
+    if (removed.length === 0) {
+      return NextResponse.json({
+        message: 'No matching transfers found to delete',
+        deletedCount: 0,
+        transfers: cache.transfers,
+      });
+    }
+
+    // Remove deleted transfers from incoming inventory cache if they were in transit or partial
+    const cacheService = new InventoryCacheService();
+    for (const t of removed) {
+      if (t.status === 'in_transit' || t.status === 'partial') {
+        try {
+          await cacheService.removeTransferFromIncoming(t.destination, t.id);
+        } catch (err) {
+          console.error(`Failed to remove transfer ${t.id} from incoming cache:`, err);
+        }
+      }
+    }
+
+    cache.transfers = kept;
+    cache.lastUpdated = new Date().toISOString();
+    await TransfersService.saveTransfers(cache);
+
+    return NextResponse.json({
+      message: `Permanently deleted ${removed.length} transfer(s)`,
+      deletedCount: removed.length,
+      deletedIds: removed.map(t => t.id),
+      transfers: kept,
+    });
+  } catch (error) {
+    console.error('Transfers DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete transfers' },
+      { status: 500 }
+    );
+  }
+}
