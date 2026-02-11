@@ -463,14 +463,19 @@ Sales velocity can be filtered by location:
 
 ## Slack Notifications
 
-### Transfers Channel (`SLACK_CHANNEL_TRANSFERS`)
+### Production Channel (`SLACK_CHANNEL_PRODUCTION`)
 
 | Event | Details Included |
 |-------|------------------|
 | PO Created | PO#, Creator, Vendor, ETA, Items |
 | PO Delivered | PO#, Status, Vendor, Receiver, Location, Delivered items, Pending items |
 | PO Cancelled | PO#, Cancelled By, Vendor, Items |
-| Transfer Created | T#, Creator, Origin, Destination, Shipment Type, Tracking, ETA, Items |
+
+### Incoming / Transfers Channel (`SLACK_CHANNEL_INCOMING`)
+
+| Event | Details Included |
+|-------|------------------|
+| Transfer In Transit | T#, Marked By, Origin, Destination, Shipment Type, Tracking, ETA, Items |
 | Transfer Delivered | T#, Status, Receiver, Origin, Destination, Shipment Type, Tracking, Items |
 | Transfer Cancelled | T#, Cancelled By, Origin, Destination, Shipment Type, Items |
 
@@ -559,7 +564,8 @@ SKUs are grouped into product categories based on naming conventions:
 | `GOOGLE_DRIVE_FOLDER_ID` | Folder for cache storage |
 | `NEXTAUTH_SECRET` | Authentication secret |
 | `SLACK_BOT_TOKEN` | Slack bot OAuth token |
-| `SLACK_CHANNEL_TRANSFERS` | Channel for PO/Transfer notifications |
+| `SLACK_CHANNEL_PRODUCTION` | Channel for production order notifications (PO created, delivery, cancelled) |
+| `SLACK_CHANNEL_INCOMING` | Channel for transfer notifications (in transit, delivery, cancelled) |
 | `SLACK_CHANNEL_ALERTS` | Channel for low stock alerts |
 | `CRON_SECRET` | Secret for hourly refresh authorization |
 

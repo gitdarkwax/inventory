@@ -19,16 +19,16 @@ export class SlackService {
   private client: WebClient;
   private channelId: string;
 
-  constructor(channelOverride?: string) {
+  /** Pass channel ID (e.g. process.env.SLACK_CHANNEL_PRODUCTION or SLACK_CHANNEL_INCOMING) */
+  constructor(channelId: string) {
     const token = process.env.SLACK_BOT_TOKEN;
-    const channelId = channelOverride || process.env.SLACK_CHANNEL_TRANSFERS;
 
     if (!token) {
       throw new Error('Missing SLACK_BOT_TOKEN');
     }
 
     if (!channelId) {
-      throw new Error('Missing SLACK_CHANNEL_TRANSFERS');
+      throw new Error('Slack channel ID is required (e.g. SLACK_CHANNEL_PRODUCTION or SLACK_CHANNEL_INCOMING)');
     }
 
     this.client = new WebClient(token);
@@ -438,7 +438,7 @@ export class SlackService {
  */
 export async function sendSlackNotification(
   notifyFn: () => Promise<void>,
-  channelEnvVar: string = 'SLACK_CHANNEL_TRANSFERS'
+  channelEnvVar: string
 ): Promise<void> {
   // Check if required env vars exist before attempting
   if (!process.env.SLACK_BOT_TOKEN) {

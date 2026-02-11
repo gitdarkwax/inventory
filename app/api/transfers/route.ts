@@ -240,7 +240,7 @@ export async function PATCH(request: NextRequest) {
     
     if (isMarkedInTransit) {
       sendSlackNotification(async () => {
-        const slack = new SlackService();
+        const slack = new SlackService(process.env.SLACK_CHANNEL_INCOMING!);
         await slack.notifyTransferInTransit({
           transferId: updatedTransfer.id,
           markedBy: userName,
@@ -255,7 +255,7 @@ export async function PATCH(request: NextRequest) {
             quantity: item.quantity,
           })),
         });
-      });
+      }, 'SLACK_CHANNEL_INCOMING');
     }
 
     // Send Slack notification if delivery was logged (status changed to partial or delivered)
@@ -265,7 +265,7 @@ export async function PATCH(request: NextRequest) {
     
     if (isDeliveryLogged) {
       sendSlackNotification(async () => {
-        const slack = new SlackService();
+        const slack = new SlackService(process.env.SLACK_CHANNEL_INCOMING!);
         
         // Build items with delivery progress for Slack notification
         const itemsWithProgress = updatedTransfer.items.map(item => ({
@@ -286,7 +286,7 @@ export async function PATCH(request: NextRequest) {
           trackingNumber: updatedTransfer.trackingNumber,
           items: itemsWithProgress,
         });
-      });
+      }, 'SLACK_CHANNEL_INCOMING');
     }
 
     // Handle transfer cancellation - update incoming inventory cache and notify
@@ -311,7 +311,7 @@ export async function PATCH(request: NextRequest) {
       // Send Slack notification (skip for draft transfers - no need to notify)
       if (previousStatus !== 'draft') {
         sendSlackNotification(async () => {
-          const slack = new SlackService();
+          const slack = new SlackService(process.env.SLACK_CHANNEL_INCOMING!);
           await slack.notifyTransferCancelled({
             transferId: updatedTransfer.id,
             cancelledBy: userName,
@@ -324,7 +324,7 @@ export async function PATCH(request: NextRequest) {
             })),
             restockedItems: restockedItems,
           });
-        });
+        }, 'SLACK_CHANNEL_INCOMING');
       }
     }
 

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Send Slack notification (non-blocking)
     sendSlackNotification(async () => {
-      const slack = new SlackService();
+      const slack = new SlackService(process.env.SLACK_CHANNEL_PRODUCTION!);
       await slack.notifyPOCreated({
         poNumber: newOrder.id,
         createdBy: session.user?.name || 'Unknown',
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
         eta: eta || null,
         items: items,
       });
-    });
+    }, 'SLACK_CHANNEL_PRODUCTION');
 
     return NextResponse.json({ order: newOrder }, { status: 201 });
 
@@ -162,7 +162,7 @@ export async function PATCH(request: NextRequest) {
 
       // Send Slack notification (non-blocking)
       sendSlackNotification(async () => {
-        const slack = new SlackService();
+        const slack = new SlackService(process.env.SLACK_CHANNEL_PRODUCTION!);
         
         // Calculate pending items
         const pendingItems = updatedOrder.items
@@ -181,7 +181,7 @@ export async function PATCH(request: NextRequest) {
           deliveredItems: deliveries,
           pendingItems: pendingItems.length > 0 ? pendingItems : undefined,
         });
-      });
+      }, 'SLACK_CHANNEL_PRODUCTION');
 
       return NextResponse.json({ order: updatedOrder });
     }
@@ -216,7 +216,7 @@ export async function PATCH(request: NextRequest) {
     // Send Slack notification if order was cancelled (skip for in_production - essentially a draft)
     if (status === 'cancelled' && previousStatus !== 'cancelled' && previousStatus !== 'in_production') {
       sendSlackNotification(async () => {
-        const slack = new SlackService();
+        const slack = new SlackService(process.env.SLACK_CHANNEL_PRODUCTION!);
         await slack.notifyPOCancelled({
           poNumber: updatedOrder.id,
           cancelledBy: userName,
@@ -226,7 +226,7 @@ export async function PATCH(request: NextRequest) {
             quantity: item.quantity,
           })),
         });
-      });
+      }, 'SLACK_CHANNEL_PRODUCTION');
     }
 
     return NextResponse.json({ order: updatedOrder });
