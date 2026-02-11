@@ -6837,12 +6837,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ updates }),
                                     });
-                                      
-                                      result = await response.json();
-                                      
-                                      if (!response.ok) {
-                                        throw new Error(result.error || 'Failed to update inventory');
-                                      }
+                                    
+                                    result = await response.json();
+                                    
+                                    if (!response.ok) {
+                                      throw new Error(result.error || 'Failed to update inventory');
                                     }
                                     
                                     // Save to submission log in Google Drive
