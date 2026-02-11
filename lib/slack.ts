@@ -431,6 +431,42 @@ export class SlackService {
       blocks,
     });
   }
+
+  /**
+   * Send notification when an inventory count is submitted
+   */
+  async notifyInventoryCountSubmitted(data: {
+    location: string;
+    submittedBy: string;
+    skusUpdated: number;
+    discrepancies: number;
+    totalDiff: number;
+  }): Promise<void> {
+    const emoji = data.totalDiff === 0 ? '✅' : (Math.abs(data.totalDiff) > 100 ? '⚠️' : '📊');
+    
+    // Format total diff with + or - sign and absolute value
+    const diffFormatted = data.totalDiff > 0 
+      ? `+${data.totalDiff.toLocaleString()}` 
+      : data.totalDiff < 0 
+        ? `${data.totalDiff.toLocaleString()}` 
+        : '0';
+    
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${emoji} Inventory Count Submitted*\n*Location:* ${data.location}    *Submitted By:* ${data.submittedBy}\n*SKUs Updated:* ${data.skusUpdated}    *Discrepancies:* ${data.discrepancies}\n*Total Diff:* ${diffFormatted} units`,
+        },
+      },
+    ];
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `Inventory Count Submitted: ${data.location} - ${data.skusUpdated} SKUs, ${diffFormatted} diff`,
+      blocks,
+    });
+  }
 }
 
 /**

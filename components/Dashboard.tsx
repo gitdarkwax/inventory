@@ -502,7 +502,7 @@ export default function Dashboard({ session }: DashboardProps) {
     'DTLA WH': null,
     'China WH': null,
   });
-  const [trackerLastSubmission, setTrackerLastSubmission] = useState<Record<TrackerLocation, { submittedAt: string; submittedBy: string; skuCount: number; isTest?: boolean } | null>>({
+  const [trackerLastSubmission, setTrackerLastSubmission] = useState<Record<TrackerLocation, { submittedAt: string; submittedBy: string; skuCount: number } | null>>({
     'LA Office': null,
     'DTLA WH': null,
     'China WH': null,
@@ -513,7 +513,6 @@ export default function Dashboard({ session }: DashboardProps) {
     title: string;
     message: string;
   } | null>(null);
-  const [trackerTestMode, setTrackerTestMode] = useState(false);
   
   // Shared draft state (auto-merged from all contributors)
   const [draftContributors, setDraftContributors] = useState<string[]>([]);
@@ -2132,15 +2131,12 @@ export default function Dashboard({ session }: DashboardProps) {
                 // Get the most recent submission (first in the array)
                 const lastSubmission = logs[0];
                 if (lastSubmission) {
-                  // Check if it was a test submission
-                  const isTest = lastSubmission.testMode || lastSubmission.submittedBy?.startsWith('[TEST]');
                   setTrackerLastSubmission(prev => ({
                     ...prev,
                     [loc]: {
                       submittedAt: lastSubmission.timestamp,
-                      submittedBy: lastSubmission.submittedBy?.replace('[TEST] ', '') || 'Unknown',
+                      submittedBy: lastSubmission.submittedBy || 'Unknown',
                       skuCount: lastSubmission.updates?.length || 0,
-                      isTest: isTest,
                     },
                   }));
                 }
@@ -2407,14 +2403,12 @@ export default function Dashboard({ session }: DashboardProps) {
         const logs = logsData.logs || [];
         const lastSubmission = logs[0];
         if (lastSubmission) {
-          const isTest = lastSubmission.testMode || lastSubmission.submittedBy?.startsWith('[TEST]');
           setTrackerLastSubmission(prev => ({
             ...prev,
             [location]: {
               submittedAt: lastSubmission.timestamp,
-              submittedBy: lastSubmission.submittedBy?.replace('[TEST] ', '') || 'Unknown',
+              submittedBy: lastSubmission.submittedBy || 'Unknown',
               skuCount: lastSubmission.updates?.length || 0,
-              isTest: isTest,
             },
           }));
         }
@@ -6403,13 +6397,8 @@ export default function Dashboard({ session }: DashboardProps) {
                             </div>
                           )}
                           {!currentDraftInfo && currentLastSubmission && (
-                            <div className={`text-xs px-3 py-1.5 rounded-full ${
-                              currentLastSubmission.isTest 
-                                ? 'text-amber-700 bg-amber-100' 
-                                : 'text-green-700 bg-green-100'
-                            }`}>
-                              {currentLastSubmission.isTest ? '🧪 Test: ' : '✓ Submitted: '}
-                              {formatBadgeDate(currentLastSubmission.submittedAt)} by {currentLastSubmission.submittedBy}
+                            <div className="text-xs px-3 py-1.5 rounded-full text-green-700 bg-green-100">
+                              ✓ Submitted: {formatBadgeDate(currentLastSubmission.submittedAt)} by {currentLastSubmission.submittedBy}
                             </div>
                           )}
                         </div>
@@ -6751,20 +6740,6 @@ export default function Dashboard({ session }: DashboardProps) {
                             <p className="text-xs text-gray-500 mt-4">
                               This will update the on-hand quantities in Shopify for all {allItemsWithCounts.length} counted SKUs.
                             </p>
-                            
-                            {/* Test Mode Toggle */}
-                            <label className="flex items-center gap-2 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={trackerTestMode}
-                                onChange={(e) => setTrackerTestMode(e.target.checked)}
-                                className="w-4 h-4 text-amber-600 rounded border-gray-300 focus:ring-amber-500"
-                              />
-                              <div>
-                                <span className="text-sm font-medium text-amber-800">Test Mode</span>
-                                <p className="text-xs text-amber-600">Skip Shopify update, only save to logs</p>
-                              </div>
-                            </label>
                           </div>
                           <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                             <button
@@ -6777,15 +6752,15 @@ export default function Dashboard({ session }: DashboardProps) {
                               onClick={async () => {
                                   setIsSubmittingTracker(true);
                                   setGlobalStatus({ 
-                                    message: trackerTestMode ? 'Processing Test Submission...' : 'Updating Shopify Inventory...', 
+                                    message: 'Updating Shopify Inventory...', 
                                     subMessage: 'Please do not close this window' 
                                   });
                                   try {
                                     // Get the location ID for current tracker location
                                     const locationId = inventoryData?.locationIds?.[trackerLocation];
                                     
-                                    // In test mode, we don't need the location ID
-                                    if (!locationId && !trackerTestMode) {
+                                    // In production, we need the location ID
+                                    if (!locationId) {
                                       throw new Error(`${trackerLocation} location ID not found. Please click "Refresh Data" to update the inventory data.`);
                                     }
                                     
@@ -6856,22 +6831,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                     
                                     let result;
                                     
-                                    if (trackerTestMode) {
-                                      // Test mode - simulate success without calling Shopify
-                                      result = {
-                                        summary: {
-                                          total: updates.length,
-                                          success: updates.length,
-                                          failed: 0,
-                                        }
-                                      };
-                                    } else {
-                                      // Submit to Shopify
-                                      const response = await fetch('/api/inventory/update', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ updates }),
-                                      });
+                                    // Submit to Shopify
+                                    const response = await fetch('/api/inventory/update', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ updates }),
+                                    });
                                       
                                       result = await response.json();
                                       
@@ -6883,8 +6848,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     // Save to submission log in Google Drive
                                     const logEntry = {
                                       timestamp: new Date().toISOString(),
-                                      submittedBy: (trackerTestMode ? '[TEST] ' : '') + (session?.user?.name || 'Unknown'),
-                                      testMode: trackerTestMode,
+                                      submittedBy: session?.user?.name || 'Unknown',
                                       summary: {
                                         totalSKUs: updates.length,
                                         discrepancies: discrepancies.length,
@@ -6933,16 +6897,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                       ...prev,
                                       [trackerLocation]: {
                                         submittedAt: logEntry.timestamp,
-                                        submittedBy: trackerTestMode ? (session?.user?.name || 'Unknown') : logEntry.submittedBy,
+                                        submittedBy: logEntry.submittedBy,
                                         skuCount: updates.length,
-                                        isTest: trackerTestMode,
                                       },
                                     }));
                                     
-                                    if (trackerTestMode) {
-                                      showTrackerNotification('success', 'Test Submission Logged', 
-                                        `${updates.length} SKUs logged (Shopify not updated). Check logs to verify.`);
-                                    } else if (result.summary.failed > 0) {
+                                    if (result.summary.failed > 0) {
                                       // Get the first error message from failed results
                                       const failedResults = result.results?.filter((r: { success: boolean }) => !r.success) || [];
                                       const firstError = failedResults[0]?.error || 'Unknown error';
@@ -6954,7 +6914,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     }
                                     
                                     // Update local inventory data to reflect submitted counts (temporary until next refresh)
-                                    if (!trackerTestMode && inventoryData) {
+                                    if (inventoryData) {
                                       setInventoryData(prev => {
                                         if (!prev) return prev;
                                         
@@ -7035,7 +6995,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
                           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                            <h3 className="text-lg font-semibold text-gray-900">Submission Logs</h3>
+                            <h3 className="text-lg font-semibold text-gray-900">Submission Logs - {trackerLocation}</h3>
                             <button
                               onClick={() => setShowTrackerLogs(false)}
                               className="text-gray-400 hover:text-gray-600"

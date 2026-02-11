@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { google } from 'googleapis';
+import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
 
@@ -232,6 +233,18 @@ export async function POST(request: NextRequest) {
         supportsAllDrives: true,
       });
     }
+
+    // Send Slack notification (non-blocking)
+    sendSlackNotification(async () => {
+      const slack = new SlackService(process.env.SLACK_CHANNEL_COUNTS!);
+      await slack.notifyInventoryCountSubmitted({
+        location: location,
+        submittedBy: log.submittedBy || 'Unknown',
+        skusUpdated: log.summary?.totalSKUs || 0,
+        discrepancies: log.summary?.discrepancies || 0,
+        totalDiff: log.summary?.totalDifference || 0,
+      });
+    }, 'SLACK_CHANNEL_COUNTS');
 
     return NextResponse.json({ success: true, totalLogs: logs.length });
   } catch (error) {
