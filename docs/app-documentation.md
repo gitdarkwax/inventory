@@ -103,7 +103,7 @@ The LA Planning tab is a forecasting and replenishment planning tool focused on 
 | **In Sea** | Units in sea transit to LA area | Sum of sea transfers to LA Office + DTLA WH |
 | **China** | Available units at China WH | Shopify `available` at China WH |
 | **In Prod** | Pending production quantity | Sum of pending quantities from open POs for this SKU |
-| **Need** | Units needed to meet target | `(Target Days × BR) - (In Stock - Committed)` |
+| **Need** | Units needed to meet target | `(Target Days × BR) - In Stock` (In Stock is already available = On Hand - Committed) |
 | **Ship Type** | Recommended shipping method | See Ship Type Logic below |
 | **Prod Status** | Production recommendation | See Prod Status Logic below |
 | **Runway Air** | Days of stock with air shipments | `(In Stock + In Air) ÷ BR` |

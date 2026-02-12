@@ -3134,18 +3134,18 @@ export default function Dashboard({ session }: DashboardProps) {
   // Column definitions for Planning tab
   const columnDefinitions = [
     { name: 'SKU', description: 'Product SKU identifier' },
-    { name: 'LA Stock', description: 'Available inventory at LA Office + DTLA WH minus committed orders.\n\nFormula: (LA Office + DTLA WH) - Committed' },
+    { name: 'LA Stock', description: 'Available inventory at LA Office + DTLA WH (Available = On Hand - Committed per Shopify).\n\nUses sum of available from each location.' },
     { name: 'BR', description: 'Burn Rate: Average daily sales velocity (selectable: 7d, 21d, or 90d)' },
     { name: 'In Air', description: 'Units in transit via air freight (from transfers tagged "air")' },
     { name: 'In Sea', description: 'Units in transit via sea freight (from transfers tagged "sea")' },
     { name: 'China', description: 'Available inventory at China warehouse' },
     { name: 'In Prod', description: 'Pending quantity from production orders (Open POs)' },
     { name: 'Need', description: 'Units needed to air-ship to meet target inventory.\n\nLogic:\n1. First check: Is total inventory below target?\n   Target = Target Days × Selected Burn Rate\n   Total = LA Stock + In Air + In Sea\n\n   If Target > Total:\n     Need = Target - Total (simple shortfall)\n\n2. If total meets target, apply sea gap logic:\n   Calculate Runway Air date (when LA + Air runs out)\n   Check earliest Sea ETA\n\n   If Sea ETA > Runway Air date (gap exists):\n     Need = (Gap Days + 4) × Selected Burn Rate\n\n   If Sea ETA ≤ Runway Air date:\n     Need = 0 (sea arrives before stockout)' },
-    { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA - Committed + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA - Committed + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
-    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on CN Runway = (LA - Committed + Air + Sea + China WH) / BR:\n\n• >90 days + active PO → Prod Status\n• >90 days + no PO → No Action\n• ≤90 days + active PO → Push Vendor\n• ≤90 days + no PO → Order More' },
-    { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office + DTLA WH - Committed + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
-    { name: 'LA Runway', description: 'Days until stockout based on LA inventory + incoming shipments.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
-    { name: 'CN Runway', description: 'Days until stockout including China warehouse inventory.\n\nFormula: (LA Office + DTLA WH - Committed + In Air + In Sea + China WH) / BR\n\nThis shows total runway if all China inventory were shipped.' },
+    { name: 'Ship Type', description: 'Recommended shipping method.\n\nLogic:\n1. Calculate Runway Air date (when LA available + Air runs out)\n2. Only include sea inventory if ETA arrives before Runway Air date\n\nDays of Stock = (LA available + Air + Effective Sea) / BR\n\nWith China inventory:\n• ≤15 days → Express\n• ≤60 days → Slow Air\n• ≤90 days → Sea\n• >90 days → No Action\n\nNo China inventory:\n• <60 days → No CN Inv\n• ≥60 days → No Action\n\nPhase out SKU with no China → Phase Out' },
+    { name: 'Prod Status', description: 'Production action recommendation.\n\nBased on CN Runway = (LA available + Air + Sea + China WH) / BR:\n\n• >90 days + active PO → Prod Status\n• >90 days + no PO → No Action\n• ≤90 days + active PO → Push Vendor\n• ≤90 days + no PO → Order More' },
+    { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office available + DTLA WH available + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
+    { name: 'LA Runway', description: 'Days until stockout based on LA inventory + incoming shipments.\n\nFormula: (LA Office available + DTLA WH available + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
+    { name: 'CN Runway', description: 'Days until stockout including China warehouse inventory.\n\nFormula: (LA Office available + DTLA WH available + In Air + In Sea + China WH) / BR\n\nThis shows total runway if all China inventory were shipped.' },
   ];
 
   // Location Detail View
@@ -4964,6 +4964,7 @@ export default function Dashboard({ session }: DashboardProps) {
                   const inventoriedSkus = new Set(inventoryData.inventory.map(item => item.sku));
                   
                   // Get LA inventory (LA Office + DTLA WH available)
+                  // Note: inv.locations stores Shopify "available" = onHand - committed (already net of committed)
                   const getLAInventory = (sku: string): number => {
                     const inv = inventoryData.inventory.find(i => i.sku === sku);
                     if (!inv) return 0;
@@ -5026,22 +5027,6 @@ export default function Dashboard({ session }: DashboardProps) {
                     if (laData) transfers.push(...laData.seaTransfers);
                     if (dtlaData) transfers.push(...dtlaData.seaTransfers);
                     return transfers;
-                  };
-                  
-                  // Get committed from LA (LA Office + DTLA WH)
-                  const getLACommitted = (sku: string): number => {
-                    const laOfficeDetails = inventoryData.locationDetails?.['LA Office'];
-                    const dtlaDetails = inventoryData.locationDetails?.['DTLA WH'];
-                    let committed = 0;
-                    if (laOfficeDetails) {
-                      const detail = laOfficeDetails.find(d => d.sku === sku);
-                      committed += detail?.committed || 0;
-                    }
-                    if (dtlaDetails) {
-                      const detail = dtlaDetails.find(d => d.sku === sku);
-                      committed += detail?.committed || 0;
-                    }
-                    return committed;
                   };
                   
                   // Get China WH inventory
@@ -5186,7 +5171,6 @@ export default function Dashboard({ session }: DashboardProps) {
                   const allPlanningItems = inventoryData.inventory
                     .map(inv => {
                       const laInventory = getLAInventory(inv.sku);
-                      const laCommitted = getLACommitted(inv.sku);
                       const inboundAir = getLAInboundAir(inv.sku);
                       const inboundSea = getLAInboundSea(inv.sku);
                       const incoming = inboundAir + inboundSea;
@@ -5200,8 +5184,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Check if SKU is in phase out list
                       const isPhaseOut = phaseOutSkus.some(s => s.toLowerCase() === inv.sku.toLowerCase());
                       
-                      // Effective LA inventory = LA inventory - committed (units actually available for sale)
-                      const effectiveLaInventory = Math.max(0, laInventory - laCommitted);
+                      // LA inventory from getLAInventory is already "available" (onHand - committed from Shopify)
+                      // Do NOT subtract committed again - that would double-count
+                      const effectiveLaInventory = Math.max(0, laInventory);
                       
                       // Calculate total inventory across all warehouses (LA + China + Incoming + In Production)
                       const totalInventory = effectiveLaInventory + chinaInventory + incoming + poQty;
@@ -5285,7 +5270,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       return {
                         sku: inv.sku,
                         productTitle: inv.productTitle,
-                        la: effectiveLaInventory, // LA inventory minus committed
+                        la: effectiveLaInventory, // LA available (onHand - committed, already net)
                         inboundAir,
                         inboundSea,
                         transferNotes,
@@ -6939,16 +6924,20 @@ export default function Dashboard({ session }: DashboardProps) {
                                         }
                                         
                                         // Update main inventory array totals
+                                        // Note: locations stores "available" (onHand - committed), not onHand
                                         const updatedInventory = prev.inventory.map(item => {
                                           const newQty = updateMap.get(item.sku);
                                           if (newQty !== undefined) {
-                                            const oldQty = item.locations[trackerLocation] || 0;
-                                            const diff = newQty - oldQty;
+                                            const detail = prev.locationDetails[trackerLocation]?.find(d => d.sku === item.sku);
+                                            const committed = detail?.committed || 0;
+                                            const newAvailable = Math.max(0, newQty - committed);
+                                            const oldAvailable = item.locations[trackerLocation] || 0;
+                                            const diff = newAvailable - oldAvailable;
                                             return {
                                               ...item,
                                               locations: {
                                                 ...item.locations,
-                                                [trackerLocation]: newQty,
+                                                [trackerLocation]: newAvailable,
                                               },
                                               totalAvailable: item.totalAvailable + diff,
                                             };
