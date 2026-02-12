@@ -3539,10 +3539,10 @@ export default function Dashboard({ session }: DashboardProps) {
             <div className="hidden md:flex flex-col items-end shrink-0">
               <button 
                 onClick={() => refreshAllData()} 
-                disabled={isRefreshing}
-                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+                disabled={isRefreshing || isReadOnly}
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md ${isRefreshing || isReadOnly ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
               >
-                {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh'}
+                {isRefreshing ? '⏳ Refreshing...' : isReadOnly ? '🔄 Refresh (Read-only)' : '🔄 Refresh'}
               </button>
               <p className="text-xs text-red-500 mt-1">Data auto-refreshes every hour</p>
             </div>
@@ -3562,9 +3562,9 @@ export default function Dashboard({ session }: DashboardProps) {
             {inventoryError && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{inventoryError}</p>
-                <button onClick={() => refreshAllData()} disabled={isRefreshing}
-                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing || isReadOnly}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing || isReadOnly ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : isReadOnly ? '🔄 Refresh (Read-only)' : '🔄 Refresh Data'}
                 </button>
               </div>
             )}
@@ -4406,9 +4406,9 @@ export default function Dashboard({ session }: DashboardProps) {
             {forecastingError && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{forecastingError}</p>
-                <button onClick={() => refreshAllData()} disabled={isRefreshing}
-                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing || isReadOnly}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing || isReadOnly ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : isReadOnly ? '🔄 Refresh (Read-only)' : '🔄 Refresh Data'}
                 </button>
               </div>
             )}
@@ -4950,9 +4950,9 @@ export default function Dashboard({ session }: DashboardProps) {
             {(inventoryError || forecastingError) && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{inventoryError || forecastingError}</p>
-                <button onClick={() => refreshAllData()} disabled={isRefreshing}
-                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing || isReadOnly}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing || isReadOnly ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : isReadOnly ? '🔄 Refresh (Read-only)' : '🔄 Refresh Data'}
                 </button>
               </div>
             )}
@@ -6008,9 +6008,9 @@ export default function Dashboard({ session }: DashboardProps) {
             {inventoryError && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-4 text-center">
                 <p className="text-sm text-yellow-800 mb-4">{inventoryError}</p>
-                <button onClick={() => refreshAllData()} disabled={isRefreshing}
-                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
-                  {isRefreshing ? '⏳ Loading data from Shopify...' : '🔄 Refresh Data'}
+                <button onClick={() => refreshAllData()} disabled={isRefreshing || isReadOnly}
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${isRefreshing || isReadOnly ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}>
+                  {isRefreshing ? '⏳ Loading data from Shopify...' : isReadOnly ? '🔄 Refresh (Read-only)' : '🔄 Refresh Data'}
                 </button>
               </div>
             )}
