@@ -4217,8 +4217,17 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 )}
                 
-                {/* Export Button */}
-                <div className="mt-6 flex flex-col items-end gap-2">
+                {/* User Guide + Export */}
+                <div className="mt-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <Link
+                    href="/guide"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    📖 User Guide
+                  </Link>
+                  <div className="flex flex-col items-end gap-2">
                   <button
                     onClick={() => {
                       // Build CSV content for Inventory
@@ -4302,6 +4311,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     >
                       Manage Phase Outs
                     </button>
+                  </div>
                   </div>
                 </div>
               </div>
@@ -4884,8 +4894,16 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 )}
                 
-                {/* Export Button */}
-                <div className="mt-6 flex justify-end">
+                {/* User Guide + Export */}
+                <div className="mt-6 flex justify-between items-center">
+                  <Link
+                    href="/guide"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    📖 User Guide
+                  </Link>
                   <button
                     onClick={() => {
                       // Build CSV content for Forecasting
@@ -5927,8 +5945,17 @@ export default function Dashboard({ session }: DashboardProps) {
                         </div>
                       )}
 
-                      {/* Export Button */}
-                      <div className="mt-6 flex flex-col items-end gap-2">
+                      {/* User Guide + Export */}
+                      <div className="mt-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <Link
+                          href="/guide"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+                        >
+                          📖 User Guide
+                        </Link>
+                        <div className="flex flex-col items-end gap-2">
                         <button
                           onClick={() => {
                             // Build CSV content
@@ -5986,6 +6013,7 @@ export default function Dashboard({ session }: DashboardProps) {
                           >
                             Manage Phase Outs
                           </button>
+                        </div>
                         </div>
                       </div>
                     </>
@@ -6549,8 +6577,17 @@ export default function Dashboard({ session }: DashboardProps) {
                       )}
                     </div>
 
-                    {/* Export Section and Hidden SKUs - hidden on mobile (portrait & landscape) */}
-                    <div className="hidden md:flex mt-4 justify-end flex-col items-end gap-2">
+                    {/* User Guide + Export Section and Hidden SKUs - hidden on mobile (portrait & landscape) */}
+                    <div className="hidden md:flex mt-4 justify-between items-start gap-3">
+                      <Link
+                        href="/guide"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 shrink-0"
+                      >
+                        📖 User Guide
+                      </Link>
+                      <div className="flex flex-col items-end gap-2">
                       {sortedData.length > 0 && (
                         <button
                           onClick={() => {
@@ -6593,6 +6630,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       >
                         Hidden SKUs{hiddenSkus.length > 0 ? ` (${hiddenSkus.length})` : ''}
                       </button>
+                      </div>
                     </div>
 
                     {/* Clear Confirmation Modal */}
@@ -7258,9 +7296,17 @@ export default function Dashboard({ session }: DashboardProps) {
                   )}
                 </div>
                 
-                {/* Right side: Search + Clear + Action Button */}
+                {/* Right side: User Guide + Search + Clear + Action Button */}
                 {productionViewType === 'orders' ? (
                   <div className="flex items-center gap-3">
+                  <Link
+                    href="/guide"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 shrink-0"
+                  >
+                    📖 User Guide
+                  </Link>
                   <div className="relative" ref={skuSearchRef}>
                     <div className="relative">
                       {(() => {
@@ -7381,6 +7427,14 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
+                  <Link
+                    href="/guide"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 shrink-0"
+                  >
+                    📖 User Guide
+                  </Link>
                   <div className="relative" ref={transferSkuSearchRef}>
                     <div className="relative">
                       {(() => {
@@ -10212,15 +10266,6 @@ export default function Dashboard({ session }: DashboardProps) {
       </div>
     </div>
 
-      {/* User Guide - fixed bottom left, opens in new tab */}
-      <Link
-        href="/guide"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 left-6 z-50 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 hover:border-gray-400 transition-colors"
-      >
-        📖 User Guide
-      </Link>
     </>
   );
 }
