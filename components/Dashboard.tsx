@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useRef, Fragment, startTransition } from 'react';
+import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { PRODUCT_CATEGORIES, findProductCategory } from '@/lib/constants';
 
@@ -10210,6 +10211,16 @@ export default function Dashboard({ session }: DashboardProps) {
         )}
       </div>
     </div>
+
+      {/* User Guide - fixed bottom left, opens in new tab */}
+      <Link
+        href="/guide"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 left-6 z-50 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-md hover:bg-gray-50 hover:border-gray-400 transition-colors"
+      >
+        📖 User Guide
+      </Link>
     </>
   );
 }
