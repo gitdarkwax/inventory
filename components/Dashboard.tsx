@@ -4294,7 +4294,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       link.click();
                       document.body.removeChild(link);
                     }}
-                    className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
                   >
                     <span>📥</span> Export to Excel
                   </button>
@@ -4946,7 +4946,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       link.click();
                       document.body.removeChild(link);
                     }}
-                    className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                    className="px-4 py-2 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
                   >
                     <span>📥</span> Export to Excel
                   </button>
@@ -5996,7 +5996,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             link.click();
                             document.body.removeChild(link);
                           }}
-                          className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                          className="px-4 py-2 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
                         >
                           <span>📥</span> Export to Excel
                         </button>
@@ -6619,7 +6619,7 @@ export default function Dashboard({ session }: DashboardProps) {
                             link.click();
                             document.body.removeChild(link);
                           }}
-                          className="px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                          className="px-4 py-2 bg-green-600 text-white text-xs font-medium rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
                         >
                           <span>📥</span> Export to Excel
                         </button>
