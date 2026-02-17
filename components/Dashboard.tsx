@@ -7296,17 +7296,9 @@ export default function Dashboard({ session }: DashboardProps) {
                   )}
                 </div>
                 
-                {/* Right side: User Guide + Search + Clear + Action Button */}
+                {/* Right side: Search + Clear + Action Button */}
                 {productionViewType === 'orders' ? (
                   <div className="flex items-center gap-3">
-                  <Link
-                    href="/guide"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 shrink-0"
-                  >
-                    📖 User Guide
-                  </Link>
                   <div className="relative" ref={skuSearchRef}>
                     <div className="relative">
                       {(() => {
@@ -7427,14 +7419,6 @@ export default function Dashboard({ session }: DashboardProps) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                  <Link
-                    href="/guide"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 shrink-0"
-                  >
-                    📖 User Guide
-                  </Link>
                   <div className="relative" ref={transferSkuSearchRef}>
                     <div className="relative">
                       {(() => {
