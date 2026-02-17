@@ -7565,20 +7565,6 @@ export default function Dashboard({ session }: DashboardProps) {
                       })()}
                     </div>
                   </div>
-                  {(transferSkuSearchSelected || transferDateFilter !== 'all' || transferFilterStatus !== 'all') && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTransferSkuSearchQuery('');
-                        setTransferSkuSearchSelected('');
-                        setTransferFilterStatus('all');
-                        setTransferDateFilter('all');
-                      }}
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                    >
-                      Clear
-                    </button>
-                  )}
                   
                   {/* Action Button - hidden for read-only users */}
                   {!isReadOnly && (
