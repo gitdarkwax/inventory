@@ -4298,20 +4298,22 @@ export default function Dashboard({ session }: DashboardProps) {
                   >
                     <span>📥</span> Export to Excel
                   </button>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => setShowMcEditForm(true)}
-                      className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-                    >
-                      Manage Qty per MC
-                    </button>
-                    <button
-                      onClick={() => setShowPhaseOutModal(true)}
-                      className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-                    >
-                      Manage Phase Outs
-                    </button>
-                  </div>
+                  {!isReadOnly && (
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setShowMcEditForm(true)}
+                        className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                      >
+                        Manage Qty per MC
+                      </button>
+                      <button
+                        onClick={() => setShowPhaseOutModal(true)}
+                        className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                      >
+                        Manage Phase Outs
+                      </button>
+                    </div>
+                  )}
                   </div>
                 </div>
               </div>
@@ -6000,20 +6002,22 @@ export default function Dashboard({ session }: DashboardProps) {
                         >
                           <span>📥</span> Export to Excel
                         </button>
-                        <div className="flex gap-4">
-                          <button
-                            onClick={() => setShowMcEditForm(true)}
-                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-                          >
-                            Manage Qty per MC
-                          </button>
-                          <button
-                            onClick={() => setShowPhaseOutModal(true)}
-                            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-                          >
-                            Manage Phase Outs
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex gap-4">
+                            <button
+                              onClick={() => setShowMcEditForm(true)}
+                              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                            >
+                              Manage Qty per MC
+                            </button>
+                            <button
+                              onClick={() => setShowPhaseOutModal(true)}
+                              className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+                            >
+                              Manage Phase Outs
+                            </button>
+                          </div>
+                        )}
                         </div>
                       </div>
                     </>
