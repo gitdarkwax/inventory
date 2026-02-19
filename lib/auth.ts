@@ -27,6 +27,7 @@ export function canWrite(email: string | null | undefined): boolean {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true, // Required when using multiple domains (vercel.app + custom)
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
