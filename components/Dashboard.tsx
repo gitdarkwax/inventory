@@ -279,7 +279,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const productDropdownRef = useRef<HTMLDivElement>(null);
   const [planningListMode, setPlanningListMode] = useState<'list' | 'grouped'>('grouped');
   const [planningRunwayDisplay, setPlanningRunwayDisplay] = useState<'days' | 'dates'>('days');
-  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'laRunway' | 'cnRunway'>('shipType');
+  const [planningSortBy, setPlanningSortBy] = useState<'sku' | 'la' | 'inboundAir' | 'inboundSea' | 'china' | 'poQty' | 'unitsPerDay' | 'laNeed' | 'shipType' | 'runwayAir' | 'prodStatus' | 'laRunway' | 'cnRunway' | 'runwayTotal'>('shipType');
   const [planningSortOrder, setPlanningSortOrder] = useState<'asc' | 'desc'>('asc');
   const [planningLaTargetDays, setPlanningLaTargetDays] = useState<number>(30);
 
@@ -3147,6 +3147,7 @@ export default function Dashboard({ session }: DashboardProps) {
     { name: 'Runway Air', description: 'Days until stockout based on LA + Air only.\n\nFormula: (LA Office available + DTLA WH available + In Air) / BR\n\nColor: Red if < 60 days\n\nThis date is used to determine if sea shipments will arrive in time.' },
     { name: 'LA Runway', description: 'Days until stockout based on LA inventory + incoming shipments.\n\nFormula: (LA Office available + DTLA WH available + In Air + In Sea) / BR\n\nColor: Red if < 90 days' },
     { name: 'CN Runway', description: 'Days until stockout including China warehouse inventory.\n\nFormula: (LA Office available + DTLA WH available + In Air + In Sea + China WH) / BR\n\nThis shows total runway if all China inventory were shipped.' },
+    { name: 'Runway Total', description: 'Days until stockout including China warehouse and production orders.\n\nFormula: (LA Office available + DTLA WH available + In Air + In Sea + China WH + In Prod) / BR\n\nShows total runway if all inventory (including in-production) were available.' },
   ];
 
   // Location Detail View
@@ -5233,6 +5234,9 @@ export default function Dashboard({ session }: DashboardProps) {
                       // Shows total runway including China warehouse inventory
                       const cnRunway = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea + chinaInventory) / unitsPerDay) : 999;
                       
+                      // Calculate Runway Total (includes In Prod - total runway with everything)
+                      const runwayTotal = unitsPerDay > 0 ? Math.round((effectiveLaInventory + inboundAir + inboundSea + chinaInventory + poQty) / unitsPerDay) : 999;
+                      
                       // Calculate LA Need (uses selected burn rate from BR dropdown)
                       let laNeeded = 0;
                       
@@ -5305,6 +5309,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         runwayAir,
                         laRunway,
                         cnRunway,
+                        runwayTotal,
                         prodStatus,
                       };
                     })
@@ -5355,6 +5360,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         case 'prodStatus': comparison = (prodStatusPriority[a.prodStatus] || 99) - (prodStatusPriority[b.prodStatus] || 99); break;
                         case 'laRunway': comparison = a.laRunway - b.laRunway; break;
                         case 'cnRunway': comparison = a.cnRunway - b.cnRunway; break;
+                        case 'runwayTotal': comparison = a.runwayTotal - b.runwayTotal; break;
                       }
                       return planningSortOrder === 'asc' ? comparison : -comparison;
                     });
@@ -5447,6 +5453,9 @@ export default function Dashboard({ session }: DashboardProps) {
                             <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('cnRunway')}>
                               R-CN <SortIcon active={planningSortBy === 'cnRunway'} order={planningSortOrder} />
                             </th>
+                            <th className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100" onClick={() => handlePlanningSort('runwayTotal')}>
+                              R-Total <SortIcon active={planningSortBy === 'runwayTotal'} order={planningSortOrder} />
+                            </th>
                           </tr>
                         </thead>
                       )}
@@ -5511,6 +5520,12 @@ export default function Dashboard({ session }: DashboardProps) {
                               title={`Runs out: ${getRunoutDate(item.cnRunway)}`}
                             >
                               {formatRunway(item.cnRunway)}
+                            </td>
+                            <td 
+                              className={`w-16 px-2 py-3 text-sm text-center cursor-help ${isGrayedOut ? 'text-gray-500' : 'text-gray-900'}`}
+                              title={`Runs out: ${getRunoutDate(item.runwayTotal)}`}
+                            >
+                              {formatRunway(item.runwayTotal)}
                             </td>
                           </tr>
                         );})}
@@ -5872,6 +5887,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                         <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-Air</th>
                                         <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-LA</th>
                                         <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-CN</th>
+                                        <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">R-Total</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -5936,6 +5952,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                           >
                                             {formatRunway(item.cnRunway)}
                                           </td>
+                                          <td 
+                                            className={`w-16 px-2 py-2 text-sm text-center cursor-help ${isGrayedOut ? 'text-gray-500' : 'text-gray-900'}`}
+                                            title={`Runs out: ${getRunoutDate(item.runwayTotal)}`}
+                                          >
+                                            {formatRunway(item.runwayTotal)}
+                                          </td>
                                         </tr>
                                       );})}
                                     </tbody>
@@ -5961,7 +5983,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <button
                           onClick={() => {
                             // Build CSV content
-                            const headers = ['SKU', 'Product', 'LA Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'LA Runway', 'CN Runway', 'Transfer Notes'];
+                            const headers = ['SKU', 'Product', 'LA Stock', 'BR', 'In Air', 'In Sea', 'China', 'In Prod', 'Need', 'Ship Type', 'Prod Status', 'Runway Air', 'LA Runway', 'CN Runway', 'Runway Total', 'Transfer Notes'];
                             const rows = planningItems.map(item => [
                               item.sku,
                               `"${item.productTitle.replace(/"/g, '""')}"`,
@@ -5977,6 +5999,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               item.runwayAir >= 999 ? 'N/A' : `${item.runwayAir}d`,
                               item.laRunway >= 999 ? 'N/A' : `${item.laRunway}d`,
                               item.cnRunway >= 999 ? 'N/A' : `${item.cnRunway}d`,
+                              item.runwayTotal >= 999 ? 'N/A' : `${item.runwayTotal}d`,
                               `"${item.transferNotes.filter(t => t.note).map(t => `${t.id}: ${t.note}`).join('; ').replace(/"/g, '""')}"`
                             ]);
                             

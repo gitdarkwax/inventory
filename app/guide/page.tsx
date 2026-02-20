@@ -255,6 +255,15 @@ export default function GuidePage() {
                 </div>
               </div>
             </li>
+            <li><strong>Runway Total</strong> – Days until stockout including China and production orders
+              <div className="mt-2 ml-4 p-4 bg-slate-100 rounded-md text-sm space-y-2">
+                <p className="font-medium text-slate-700">How this is calculated:</p>
+                <div className="pl-4 border-l-2 border-slate-200 space-y-1">
+                  <p className="font-mono text-slate-800 text-xs">Runway Total = (LA Office available + DTLA WH available + In Air + In Sea + China WH + In Prod) ÷ BR</p>
+                  <p className="text-slate-500 text-xs">Shows total runway if all inventory (including in-production) were available.</p>
+                </div>
+              </div>
+            </li>
           </ul>
 
           <h3 className="text-lg font-medium text-slate-800 mt-6 mb-2">Ship Type Quick Reference</h3>
