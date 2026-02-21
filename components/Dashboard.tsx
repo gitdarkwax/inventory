@@ -367,7 +367,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [isCancellingTransfer, setIsCancellingTransfer] = useState(false);
   const [isUpdatingTransferStatus, setIsUpdatingTransferStatus] = useState(false);
   const [showTransferDeliveryForm, setShowTransferDeliveryForm] = useState(false);
-  const [transferDeliveryItems, setTransferDeliveryItems] = useState<{ sku: string; quantity: string; masterCartons: string }[]>([]);
+  const [transferDeliveryItems, setTransferDeliveryItems] = useState<{ sku: string; quantity: string; masterCartons: string; pallet?: string }[]>([]);
   const [showMarkInTransitConfirm, setShowMarkInTransitConfirm] = useState(false);
   const [transferToMarkInTransit, setTransferToMarkInTransit] = useState<Transfer | null>(null);
   const [isMarkingInTransit, setIsMarkingInTransit] = useState(false);
@@ -1249,11 +1249,13 @@ export default function Dashboard({ session }: DashboardProps) {
     if (isLoggingDelivery || !selectedTransfer) return;
     
     const validDeliveries = transferDeliveryItems
+      .map((item, index) => ({ ...item, originalIndex: index }))
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ 
         sku: item.sku.trim().toUpperCase(), 
         quantity: parseInt(item.quantity),
-        masterCartons: item.masterCartons && parseInt(item.masterCartons) > 0 ? parseInt(item.masterCartons) : undefined
+        masterCartons: item.masterCartons && parseInt(item.masterCartons) > 0 ? parseInt(item.masterCartons) : undefined,
+        originalIndex: item.originalIndex,
       }));
 
     if (validDeliveries.length === 0) {
@@ -1264,6 +1266,14 @@ export default function Dashboard({ session }: DashboardProps) {
     setIsLoggingDelivery(true);
     setGlobalStatus({ message: 'Logging Transfer Delivery...', subMessage: 'Updating Shopify inventory' });
     try {
+      // Aggregate by SKU for Shopify/incoming cache (same SKU on multiple pallets = sum quantities)
+      const aggregatedForInventory = Object.entries(
+        validDeliveries.reduce<Record<string, number>>((acc, d) => {
+          acc[d.sku] = (acc[d.sku] || 0) + d.quantity;
+          return acc;
+        }, {})
+      ).map(([sku, quantity]) => ({ sku, quantity }));
+
       // Step 1: Update Shopify inventory (add to destination on_hand) and update incoming cache
       const inventoryResponse = await fetch('/api/transfers/inventory', {
         method: 'POST',
@@ -1273,7 +1283,7 @@ export default function Dashboard({ session }: DashboardProps) {
           transferId: selectedTransfer.id,
           destination: selectedTransfer.destination,
           shipmentType: selectedTransfer.transferType,
-          items: validDeliveries,
+          items: aggregatedForInventory,
         }),
       });
 
@@ -1284,9 +1294,9 @@ export default function Dashboard({ session }: DashboardProps) {
         return;
       }
 
-      // Step 2: Update transfer items with received quantities and master cartons
-      const updatedItems = selectedTransfer.items.map(item => {
-        const delivery = validDeliveries.find(d => d.sku === item.sku);
+      // Step 2: Update transfer items with received quantities (match by index for per-pallet)
+      const updatedItems = selectedTransfer.items.map((item, index) => {
+        const delivery = validDeliveries.find(d => d.originalIndex === index);
         const currentReceived = item.receivedQuantity || 0;
         const newReceived = delivery ? currentReceived + delivery.quantity : currentReceived;
         return {
@@ -8922,7 +8932,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                                         transfer.items.map(item => ({
                                                           sku: item.sku,
                                                           quantity: '',
-                                                          masterCartons: item.masterCartons ? String(item.masterCartons) : ''
+                                                          masterCartons: item.masterCartons ? String(item.masterCartons) : '',
+                                                          pallet: item.pallet
                                                         }))
                                                       );
                                                       setShowTransferDeliveryForm(true);
@@ -9759,7 +9770,12 @@ export default function Dashboard({ session }: DashboardProps) {
                               .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
                               .map((item, idx) => (
                                 <div key={idx} className="flex justify-between text-sm">
-                                  <span className="font-mono text-gray-600">{item.sku}</span>
+                                  <span className="font-mono text-gray-600">
+                                    {item.sku}
+                                    {selectedTransfer.transferType === 'Sea' && item.pallet && (
+                                      <span className="ml-1 text-gray-400 font-normal">({item.pallet})</span>
+                                    )}
+                                  </span>
                                   <span className="text-gray-900">{parseInt(item.quantity).toLocaleString()} units</span>
                                 </div>
                               ))}
@@ -9811,13 +9827,18 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                       <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
                         {transferDeliveryItems.map((item, index) => {
-                          const transferItem = selectedTransfer.items.find(i => i.sku === item.sku);
+                          // Match by index: each row corresponds to one transfer item (per-pallet for sea shipments)
+                          const transferItem = selectedTransfer.items[index];
                           const totalQty = transferItem?.quantity || 0;
                           const alreadyReceived = transferItem?.receivedQuantity || 0;
                           const remaining = totalQty - alreadyReceived;
+                          const hasPallets = selectedTransfer.transferType === 'Sea' && selectedTransfer.items.some(i => i.pallet);
                           return (
                             <div key={index} className="flex items-center gap-3">
                               <span className="text-sm font-medium text-gray-900 w-32 font-mono">{item.sku}</span>
+                              {hasPallets && item.pallet && (
+                                <span className="text-xs text-gray-500 w-16">{item.pallet}</span>
+                              )}
                               <input
                                 type="number"
                                 value={item.quantity}
