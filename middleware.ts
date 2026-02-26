@@ -22,6 +22,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Never redirect cron - Vercel cron hits vercel.app URL and does NOT follow redirects
+  if (pathname.startsWith('/api/cron')) {
+    return NextResponse.next();
+  }
+
   // Only redirect vercel.app domains to the main domain
   if (host.endsWith('.vercel.app')) {
     const url = request.nextUrl.clone();
