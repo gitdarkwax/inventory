@@ -485,6 +485,18 @@ Sales velocity can be filtered by location:
 |-------|------------------|
 | Low Stock Alert | SKUs below 100 units at LA Office |
 
+### Low Inventory Alert Channel (`SLACK_CHANNEL_LOW_INV_ALERT`)
+
+| Event | Details Included |
+|-------|------------------|
+| Transfer to LA Office | SKUs with <7 days runway at LA Office, DTLA has stock |
+
+**Transfer to LA Office Logic**:
+- Uses 7-day burn rate (avgDaily7d) for runway calculation
+- Triggers when LA Office runway < 7 days AND DTLA WH has inventory
+- Message includes: LA Office qty, units to transfer from DTLA, product title
+- Runs on every refresh (manual and hourly cron)
+
 **Low Stock Alert Logic**:
 - Triggers when LA Office stock falls below 100 units
 - Only alerts once per SKU until restocked above threshold
@@ -567,6 +579,7 @@ SKUs are grouped into product categories based on naming conventions:
 | `SLACK_CHANNEL_PRODUCTION` | Channel for production order notifications (PO created, delivery, cancelled) |
 | `SLACK_CHANNEL_INCOMING` | Channel for transfer notifications (in transit, delivery, cancelled) |
 | `SLACK_CHANNEL_ALERTS` | Channel for low stock alerts |
+| `SLACK_CHANNEL_LOW_INV_ALERT` | Channel for transfer-to-LA Office alerts (<7 days runway) |
 | `CRON_SECRET` | Secret for hourly refresh authorization |
 
 ---

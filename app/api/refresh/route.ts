@@ -747,6 +747,48 @@ export async function checkLowStockAlerts(
       return total;
     };
 
+    // Build LA Office–only and DTLA-only maps for transfer-to-LA alert
+    const laOfficeMap = new Map<string, { available: number; variantTitle: string; productTitle: string }>();
+    for (const item of laOfficeDetails) {
+      laOfficeMap.set(item.sku, {
+        available: item.available,
+        variantTitle: item.variantTitle,
+        productTitle: item.productTitle,
+      });
+    }
+    const dtlaMap = new Map<string, number>();
+    for (const item of dtlaDetails) {
+      dtlaMap.set(item.sku, item.available);
+    }
+
+    // Build 7-day burn rate map for LA Office runway calculation
+    const burnRate7dMap = new Map<string, number>();
+    for (const item of forecastingData) {
+      burnRate7dMap.set(item.sku, item.avgDaily7d);
+    }
+
+    // Build transfer-to-LA alert items: LA Office <7 days runway AND DTLA has stock
+    const transferToLAItems: Array<{ sku: string; laOfficeQty: number; unitsToTransfer: number; productTitle: string }> = [];
+    for (const [sku, data] of laOfficeMap) {
+      const laQty = data.available;
+      const productTitle = data.variantTitle || data.productTitle || '';
+      const burn7d = burnRate7dMap.get(sku) || 0;
+      const dtlaQty = dtlaMap.get(sku) || 0;
+      const runwayLA = burn7d > 0 ? laQty / burn7d : 999;
+      if (runwayLA < 7 && dtlaQty > 0) {
+        const unitsNeeded = 14 * burn7d;
+        const unitsToTransfer = Math.max(0, Math.ceil(unitsNeeded - laQty));
+        if (unitsToTransfer > 0) {
+          transferToLAItems.push({
+            sku,
+            laOfficeQty: laQty,
+            unitsToTransfer,
+            productTitle,
+          });
+        }
+      }
+    }
+
     // Get existing alerts
     const existingAlerts = await cache.getLowStockAlerts();
     
@@ -844,6 +886,15 @@ export async function checkLowStockAlerts(
     } else {
       const trackedCount = Object.keys(newAlerts).length;
       console.log(`✅ No new stock alerts needed (${trackedCount} SKUs being tracked)`);
+    }
+
+    // Transfer-to-LA Office alert: SKUs with <7 days runway at LA Office, DTLA has stock
+    if (transferToLAItems.length > 0) {
+      console.log(`📦 Sending transfer-to-LA alert: ${transferToLAItems.length} SKU(s)`);
+      sendSlackNotification(async () => {
+        const slack = new SlackService(process.env.SLACK_CHANNEL_LOW_INV_ALERT!);
+        await slack.notifyTransferToLAOffice({ items: transferToLAItems });
+      }, 'SLACK_CHANNEL_LOW_INV_ALERT');
     }
 
   } catch (error) {

@@ -433,6 +433,35 @@ export class SlackService {
   }
 
   /**
+   * Send notification for LA Office transfer alert (SKUs with <7 days runway, DTLA has stock)
+   */
+  async notifyTransferToLAOffice(data: {
+    items: Array<{ sku: string; laOfficeQty: number; unitsToTransfer: number; productTitle: string }>;
+  }): Promise<void> {
+    if (data.items.length === 0) return;
+
+    const itemsList = data.items
+      .map(item => `• *${item.sku}*: ${item.laOfficeQty} units, need ${item.unitsToTransfer} more to cover 2 weeks${item.productTitle ? ` (${item.productTitle})` : ''}`)
+      .join('\n');
+
+    const blocks: Array<{ type: string; text?: { type: string; text: string } }> = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Transfer to LA Office (from DTLA WH)*\nThe following SKUs have <7 days runway at the LA Office:\n${itemsList}`,
+        },
+      },
+    ];
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `Transfer to LA Office: ${data.items.length} SKU(s) with <7 days runway`,
+      blocks,
+    });
+  }
+
+  /**
    * Send notification when an inventory count is submitted
    */
   async notifyInventoryCountSubmitted(data: {
