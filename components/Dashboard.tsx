@@ -1766,10 +1766,11 @@ export default function Dashboard({ session }: DashboardProps) {
   const saveEditOrder = async (orderId: string) => {
     if (isSavingOrder) return; // Prevent double-clicks
     
+    const isNonSku = selectedOrder?.isNonSku ?? false;
     const validItems = editOrderItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({
-        sku: item.sku.trim().toUpperCase(),
+        sku: isNonSku ? item.sku.trim() : item.sku.trim().toUpperCase(),
         quantity: parseInt(item.quantity),
         ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
       }));
@@ -1779,13 +1780,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate all SKUs exist in inventory
-    const invalidSkus = validItems.filter(item => 
-      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
-    );
-    if (invalidSkus.length > 0) {
-      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
-      return;
+    // Validate all SKUs exist in inventory (skip for non-SKU orders)
+    if (!isNonSku) {
+      const invalidSkus = validItems.filter(item => 
+        !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+      );
+      if (invalidSkus.length > 0) {
+        showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+        return;
+      }
     }
 
     setIsSavingOrder(true);
@@ -8392,10 +8395,12 @@ export default function Dashboard({ session }: DashboardProps) {
                   <div className="px-6 py-4 space-y-4">
                     {/* Items */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Items {selectedOrder.isNonSku && <span className="text-gray-500 font-normal">(free form)</span>}
+                      </label>
                       {editOrderItems.map((item, index) => {
                         const inputValue = item.sku.toUpperCase();
-                        const skuSuggestions = inputValue.length >= 2 && inventoryData
+                        const skuSuggestions = !selectedOrder.isNonSku && inputValue.length >= 2 && inventoryData
                           ? inventoryData.inventory
                               .filter(inv => inv.sku.toUpperCase().includes(inputValue))
                               .slice(0, 8)
@@ -8407,11 +8412,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             <div className="relative flex-1">
                               <input
                                 type="text"
-                                placeholder="SKU"
+                                placeholder={selectedOrder.isNonSku ? 'Item / SKU (any)' : 'SKU'}
                                 value={item.sku}
                                 onChange={(e) => {
                                   const updated = [...editOrderItems];
-                                  updated[index].sku = e.target.value.toUpperCase();
+                                  updated[index].sku = selectedOrder.isNonSku ? e.target.value : e.target.value.toUpperCase();
                                   setEditOrderItems(updated);
                                   setEditOrderSkuSuggestionIndex(index);
                                 }}
@@ -8419,7 +8424,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                 onBlur={() => setTimeout(() => setEditOrderSkuSuggestionIndex(null), 150)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                               />
-                              {editOrderSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                              {!selectedOrder.isNonSku && editOrderSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                                   {skuSuggestions.map((sku) => (
                                     <button
