@@ -48,12 +48,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { items, notes, vendor, eta, poNumber } = body as { 
-      items: { sku: string; quantity: number }[]; 
+    const { items, notes, vendor, eta, poNumber, isNonSku } = body as { 
+      items: { sku: string; quantity: number; masterCartons?: number }[]; 
       notes: string;
       vendor?: string;
       eta?: string;
       poNumber?: string;
+      isNonSku?: boolean;
     };
 
     if (!items || items.length === 0) {
@@ -80,7 +81,8 @@ export async function POST(request: NextRequest) {
       session.user.email || 'unknown@example.com',
       vendor,
       eta,
-      poNumber
+      poNumber,
+      isNonSku
     );
 
     // Send Slack notification (non-blocking)

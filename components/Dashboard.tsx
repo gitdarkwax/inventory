@@ -140,6 +140,7 @@ interface ProductionOrder {
   vendor?: string;
   eta?: string;
   status: 'in_production' | 'partial' | 'completed' | 'cancelled';
+  isNonSku?: boolean;
   createdBy: string;
   createdByEmail: string;
   createdAt: string;
@@ -294,6 +295,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newOrderItems, setNewOrderItems] = useState<{ sku: string; quantity: string; masterCartons: string }[]>([{ sku: '', quantity: '', masterCartons: '' }]);
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderVendor, setNewOrderVendor] = useState('');
+  const [newOrderIsNonSku, setNewOrderIsNonSku] = useState(false);
   const [newOrderEta, setNewOrderEta] = useState('');
   const [productionFilterStatus, setProductionFilterStatus] = useState<'all' | 'open' | 'completed'>('open');
   const [skuSearchQuery, setSkuSearchQuery] = useState('');
@@ -1540,7 +1542,7 @@ export default function Dashboard({ session }: DashboardProps) {
     const validItems = newOrderItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({
-        sku: item.sku.trim().toUpperCase(),
+        sku: newOrderIsNonSku ? item.sku.trim() : item.sku.trim().toUpperCase(),
         quantity: parseInt(item.quantity),
         ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
       }));
@@ -1550,13 +1552,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate all SKUs exist in inventory
-    const invalidSkus = validItems.filter(item => 
-      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
-    );
-    if (invalidSkus.length > 0) {
-      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
-      return;
+    // Validate all SKUs exist in inventory (skip for non-SKU orders)
+    if (!newOrderIsNonSku) {
+      const invalidSkus = validItems.filter(item => 
+        !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+      );
+      if (invalidSkus.length > 0) {
+        showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+        return;
+      }
     }
 
     setIsCreatingOrder(true);
@@ -1569,6 +1573,7 @@ export default function Dashboard({ session }: DashboardProps) {
           notes: newOrderNotes,
           vendor: newOrderVendor || undefined,
           eta: newOrderEta || undefined,
+          isNonSku: newOrderIsNonSku,
         }),
       });
 
@@ -1578,6 +1583,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewOrderNotes('');
         setNewOrderVendor('');
         setNewOrderEta('');
+        setNewOrderIsNonSku(false);
         await loadProductionOrders();
       } else {
         const data = await response.json();
@@ -1617,7 +1623,7 @@ export default function Dashboard({ session }: DashboardProps) {
     return deliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ 
-        sku: item.sku.trim().toUpperCase(), 
+        sku: selectedOrder?.isNonSku ? item.sku.trim() : item.sku.trim().toUpperCase(), 
         quantity: parseInt(item.quantity),
         masterCartons: item.masterCartons && parseInt(item.masterCartons) > 0 ? parseInt(item.masterCartons) : undefined
       }));
@@ -1632,13 +1638,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate all SKUs exist in inventory
-    const invalidSkus = validDeliveries.filter(item => 
-      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
-    );
-    if (invalidSkus.length > 0) {
-      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
-      return;
+    // Validate all SKUs exist in inventory (skip for non-SKU orders)
+    if (!selectedOrder?.isNonSku) {
+      const invalidSkus = validDeliveries.filter(item => 
+        !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+      );
+      if (invalidSkus.length > 0) {
+        showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+        return;
+      }
     }
 
     setShowDeliveryConfirm(true);
@@ -1652,83 +1660,79 @@ export default function Dashboard({ session }: DashboardProps) {
     
     setIsLoggingDelivery(true);
     setIsUpdatingShopify(true);
-    setGlobalStatus({ message: 'Logging Delivery to Shopify...', subMessage: 'Updating inventory counts' });
+    setGlobalStatus({ message: selectedOrder.isNonSku ? 'Logging Delivery...' : 'Logging Delivery to Shopify...', subMessage: selectedOrder.isNonSku ? 'Updating PO status' : 'Updating inventory counts' });
     
     try {
-      // Step 1: Get location ID for the delivery location
-      const locationId = inventoryData?.locationIds?.[deliveryLocation];
-      if (!locationId) {
-        throw new Error(`${deliveryLocation} location ID not found. Please refresh the data.`);
-      }
+      let shopifyResult: { summary: { success: number; failed: number } } | null = null;
 
-      // Step 2: Build Shopify inventory updates using locationDetails for inventoryItemId
-      const locationDetails = inventoryData?.locationDetails?.[deliveryLocation] || [];
-      
-      const shopifyUpdates = validDeliveries.map(delivery => {
-        // Find the item in locationDetails to get inventoryItemId
-        const detailItem = locationDetails.find(d => d.sku === delivery.sku);
-        if (!detailItem) {
-          // Try to find in any location's details
-          const allLocations = Object.keys(inventoryData?.locationDetails || {});
-          let foundItem = null;
-          for (const loc of allLocations) {
-            foundItem = inventoryData?.locationDetails?.[loc]?.find(d => d.sku === delivery.sku);
-            if (foundItem) break;
+      // For standard SKU orders: update Shopify inventory first
+      if (!selectedOrder.isNonSku) {
+        const locationId = inventoryData?.locationIds?.[deliveryLocation];
+        if (!locationId) {
+          throw new Error(`${deliveryLocation} location ID not found. Please refresh the data.`);
+        }
+
+        const locationDetails = inventoryData?.locationDetails?.[deliveryLocation] || [];
+        
+        const shopifyUpdates = validDeliveries.map(delivery => {
+          const detailItem = locationDetails.find(d => d.sku === delivery.sku);
+          if (!detailItem) {
+            const allLocations = Object.keys(inventoryData?.locationDetails || {});
+            let foundItem = null;
+            for (const loc of allLocations) {
+              foundItem = inventoryData?.locationDetails?.[loc]?.find(d => d.sku === delivery.sku);
+              if (foundItem) break;
+            }
+            if (!foundItem) {
+              throw new Error(`SKU ${delivery.sku} not found in inventory data. Please refresh the data.`);
+            }
+            const currentQty = inventoryData?.inventory.find(i => i.sku === delivery.sku)?.locations[deliveryLocation] || 0;
+            return {
+              sku: delivery.sku,
+              inventoryItemId: foundItem.inventoryItemId,
+              quantity: currentQty + delivery.quantity,
+              locationId,
+            };
           }
-          if (!foundItem) {
-            throw new Error(`SKU ${delivery.sku} not found in inventory data. Please refresh the data.`);
-          }
-          // Use the found item's inventoryItemId
-          const currentQty = inventoryData?.inventory.find(i => i.sku === delivery.sku)?.locations[deliveryLocation] || 0;
+          const currentQty = detailItem.onHand || 0;
           return {
             sku: delivery.sku,
-            inventoryItemId: foundItem.inventoryItemId,
+            inventoryItemId: detailItem.inventoryItemId,
             quantity: currentQty + delivery.quantity,
             locationId,
           };
+        });
+
+        const shopifyResponse = await fetch('/api/inventory/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            updates: shopifyUpdates,
+            reason: `PO Delivery - ${selectedOrder.id}`,
+          }),
+        });
+
+        if (!shopifyResponse.ok) {
+          const shopifyError = await shopifyResponse.json();
+          throw new Error(shopifyError.error || 'Failed to update Shopify inventory');
         }
-        
-        // Get current quantity at the delivery location
-        const currentQty = detailItem.onHand || 0;
-        
-        return {
-          sku: delivery.sku,
-          inventoryItemId: detailItem.inventoryItemId,
-          quantity: currentQty + delivery.quantity, // Add to existing quantity
-          locationId,
-        };
-      });
 
-      // Step 3: Update Shopify inventory
-      const shopifyResponse = await fetch('/api/inventory/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          updates: shopifyUpdates,
-          reason: `PO Delivery - ${selectedOrder.id}`,
-        }),
-      });
-
-      if (!shopifyResponse.ok) {
-        const shopifyError = await shopifyResponse.json();
-        throw new Error(shopifyError.error || 'Failed to update Shopify inventory');
+        const result = await shopifyResponse.json();
+        shopifyResult = result;
+        if (result.summary.failed > 0) {
+          showProdNotification('warning', 'Partial Update', 
+            `${result.summary.success} SKUs updated in Shopify, ${result.summary.failed} failed`);
+        }
       }
 
-      const shopifyResult = await shopifyResponse.json();
-      
-      if (shopifyResult.summary.failed > 0) {
-        showProdNotification('warning', 'Partial Update', 
-          `${shopifyResult.summary.success} SKUs updated in Shopify, ${shopifyResult.summary.failed} failed`);
-      }
-
-      // Step 4: Update production order in our system
+      // Update production order (for both standard and non-SKU orders)
       const response = await fetch('/api/production-orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           orderId: selectedOrder.id, 
           deliveries: validDeliveries,
-          deliveryLocation,
+          deliveryLocation: selectedOrder.isNonSku ? undefined : deliveryLocation,
         }),
       });
 
@@ -1741,7 +1745,9 @@ export default function Dashboard({ session }: DashboardProps) {
         setSelectedOrder(data.order);
         await loadProductionOrders();
         showProdNotification('success', 'Delivery Logged', 
-          `Delivery recorded and ${shopifyResult.summary.success} SKUs updated in Shopify at ${deliveryLocation}`);
+          selectedOrder.isNonSku 
+            ? 'PO marked delivered'
+            : `Delivery recorded and ${shopifyResult!.summary.success} SKUs updated in Shopify at ${deliveryLocation}`);
       } else {
         const data = await response.json();
         showProdNotification('error', 'Log Failed', data.error || 'Failed to log delivery');
@@ -7751,6 +7757,9 @@ export default function Dashboard({ session }: DashboardProps) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
                                   {order.id}
+                                  {order.isNonSku && (
+                                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Items not in SKU list">Non SKU</span>
+                                  )}
                                 </span>
                               </td>
                               <td className="w-[10%] px-4 py-3 text-sm text-gray-600">
@@ -7953,17 +7962,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                             </button>
                                           </>
                                         ) : (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity), masterCartons: i.masterCartons ? String(i.masterCartons) : '' })));
-                                              setNewOrderVendor(order.vendor || '');
-                                              setNewOrderEta('');
-                                              setNewOrderNotes(order.notes || '');
-                                              setSelectedOrder(null);
-                                              setShowNewOrderForm(true);
-                                            }}
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setNewOrderItems(order.items.map(i => ({ sku: i.sku, quantity: String(i.quantity), masterCartons: i.masterCartons ? String(i.masterCartons) : '' })));
+                                                setNewOrderVendor(order.vendor || '');
+                                                setNewOrderEta(order.eta ? order.eta.split('T')[0] : '');
+                                                setNewOrderNotes(order.notes || '');
+                                                setNewOrderIsNonSku(order.isNonSku || false);
+                                                setSelectedOrder(null);
+                                                setShowNewOrderForm(true);
+                                              }}
                                             className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                                           >
                                             Duplicate Order
@@ -7998,19 +8008,37 @@ export default function Dashboard({ session }: DashboardProps) {
             {showNewOrderForm && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                  <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">New Production Order</h3>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <span className="text-sm text-gray-600">Non SKUs</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={newOrderIsNonSku}
+                        onClick={() => setNewOrderIsNonSku(!newOrderIsNonSku)}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          newOrderIsNonSku ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${
+                          newOrderIsNonSku ? 'translate-x-4' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </label>
                   </div>
                   <div className="px-6 py-4 space-y-4">
                     {/* Note: PO# is auto-assigned */}
                     <p className="text-xs text-gray-500 italic">PO number will be auto-assigned (e.g., PO-001, PO-002, etc.)</p>
                     {/* Items */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Items {newOrderIsNonSku && <span className="text-gray-500 font-normal">(free form)</span>}
+                      </label>
                       {newOrderItems.map((item, index) => {
-                        // Get SKU suggestions based on input
+                        // Get SKU suggestions based on input (only when not Non SKUs)
                         const inputValue = item.sku.toUpperCase();
-                        const skuSuggestions = inputValue.length >= 2 && inventoryData
+                        const skuSuggestions = !newOrderIsNonSku && inputValue.length >= 2 && inventoryData
                           ? inventoryData.inventory
                               .filter(inv => inv.sku.toUpperCase().includes(inputValue))
                               .slice(0, 8)
@@ -8022,11 +8050,11 @@ export default function Dashboard({ session }: DashboardProps) {
                             <div className="relative flex-1">
                               <input
                                 type="text"
-                                placeholder="SKU"
+                                placeholder={newOrderIsNonSku ? 'Item / SKU (any)' : 'SKU'}
                                 value={item.sku}
                                 onChange={(e) => {
                                   const updated = [...newOrderItems];
-                                  updated[index].sku = e.target.value.toUpperCase();
+                                  updated[index].sku = newOrderIsNonSku ? e.target.value : e.target.value.toUpperCase();
                                   setNewOrderItems(updated);
                                   setSkuSuggestionIndex(index);
                                 }}
@@ -8034,8 +8062,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                 onBlur={() => setTimeout(() => setSkuSuggestionIndex(null), 150)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                               />
-                              {/* SKU Suggestions Dropdown */}
-                              {skuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                              {/* SKU Suggestions Dropdown (hidden for Non SKUs) */}
+                              {!newOrderIsNonSku && skuSuggestionIndex === index && skuSuggestions.length > 0 && (
                                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                                   {skuSuggestions.map((sku) => (
                                     <button
@@ -8147,6 +8175,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         setNewOrderNotes('');
                         setNewOrderVendor('');
                         setNewOrderEta('');
+                        setNewOrderIsNonSku(false);
                       }}
                       className="px-4 py-2 text-gray-700 hover:bg-gray-100 active:bg-gray-200 rounded-md text-sm font-medium"
                     >
@@ -8175,28 +8204,32 @@ export default function Dashboard({ session }: DashboardProps) {
                 <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
                   <div className="px-6 py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900">Log Delivery - {selectedOrder.id}</h3>
-                    <p className="text-sm text-gray-500 mt-1">Enter quantities received for each SKU</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {selectedOrder.isNonSku ? 'Enter quantities received (no Shopify update)' : 'Enter quantities received for each SKU'}
+                    </p>
                   </div>
                   <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                    {/* Receiving Warehouse Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Receiving Warehouse <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={deliveryLocation}
-                        onChange={(e) => setDeliveryLocation(e.target.value as typeof deliveryLocation)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
-                      >
-                        <option value="China WH">China WH</option>
-                        <option value="LA Office">LA Office</option>
-                        <option value="DTLA WH">DTLA WH</option>
-                        <option value="ShipBob">ShipBob</option>
-                      </select>
-                    </div>
+                    {/* Receiving Warehouse Selection (hidden for non-SKU orders) */}
+                    {!selectedOrder.isNonSku && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Receiving Warehouse <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={deliveryLocation}
+                          onChange={(e) => setDeliveryLocation(e.target.value as typeof deliveryLocation)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white"
+                        >
+                          <option value="China WH">China WH</option>
+                          <option value="LA Office">LA Office</option>
+                          <option value="DTLA WH">DTLA WH</option>
+                          <option value="ShipBob">ShipBob</option>
+                        </select>
+                      </div>
+                    )}
                     
                     {/* Divider */}
-                    <div className="border-t border-gray-200 pt-3">
+                    <div className={selectedOrder.isNonSku ? '' : 'border-t border-gray-200 pt-3'}>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Quantities Received</label>
                     </div>
                     
@@ -8270,18 +8303,28 @@ export default function Dashboard({ session }: DashboardProps) {
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
                   <div className="px-6 py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-gray-900">Confirm Delivery to Shopify</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {selectedOrder.isNonSku ? 'Confirm Delivery' : 'Confirm Delivery to Shopify'}
+                    </h3>
                   </div>
                   <div className="px-6 py-4 space-y-4">
-                    {/* Warning Banner */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <div className="flex gap-2">
-                        <span className="text-amber-600">⚠️</span>
-                        <p className="text-sm text-amber-800">
-                          Clicking the Confirm button below will update the inventory counts for <strong>{deliveryLocation}</strong> in Shopify.
+                    {/* Warning Banner (different for non-SKU) */}
+                    {selectedOrder.isNonSku ? (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-sm text-blue-800">
+                          This will mark the PO as delivered. No Shopify inventory will be updated.
                         </p>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <div className="flex gap-2">
+                          <span className="text-amber-600">⚠️</span>
+                          <p className="text-sm text-amber-800">
+                            Clicking the Confirm button below will update the inventory counts for <strong>{deliveryLocation}</strong> in Shopify.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Delivery Summary */}
                     <div className="bg-gray-50 rounded-lg p-4">
@@ -8291,10 +8334,12 @@ export default function Dashboard({ session }: DashboardProps) {
                           <span className="text-gray-500">PO:</span>
                           <span className="font-medium">{selectedOrder.id}</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Receiving Location:</span>
-                          <span className="font-medium">{deliveryLocation}</span>
-                        </div>
+                        {!selectedOrder.isNonSku && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">Receiving Location:</span>
+                            <span className="font-medium">{deliveryLocation}</span>
+                          </div>
+                        )}
                         <div className="border-t border-gray-200 pt-2 mt-2">
                           <span className="text-gray-500 block mb-2">Items:</span>
                           {getValidDeliveries().map((item, idx) => (

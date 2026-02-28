@@ -27,6 +27,7 @@ export interface ProductionOrder {
   vendor?: string;
   eta?: string; // ISO date string
   status: 'in_production' | 'partial' | 'completed' | 'cancelled';
+  isNonSku?: boolean; // Items not in SKU list; no Shopify update on delivery
   createdBy: string;
   createdByEmail: string;
   createdAt: string;
@@ -259,7 +260,8 @@ export class ProductionOrdersService {
     createdByEmail: string,
     vendor?: string,
     eta?: string,
-    poNumber?: string
+    poNumber?: string,
+    isNonSku?: boolean
   ): Promise<ProductionOrder> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -293,6 +295,7 @@ export class ProductionOrdersService {
       vendor,
       eta,
       status: 'in_production',
+      isNonSku: isNonSku || false,
       createdBy,
       createdByEmail,
       createdAt: now,
@@ -460,6 +463,8 @@ export class ProductionOrdersService {
     const quantities = new Map<string, number>();
 
     for (const order of cache.orders) {
+      // Skip non-SKU orders (excluded from forecasting/planning)
+      if (order.isNonSku) continue;
       // Only count in_production and partial orders (not completed)
       if (['in_production', 'partial'].includes(order.status)) {
         for (const item of order.items) {
