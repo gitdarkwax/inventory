@@ -8378,7 +8378,9 @@ export default function Dashboard({ session }: DashboardProps) {
                           : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                       }`}
                     >
-                      {isLoggingDelivery ? (isUpdatingShopify ? 'Updating Shopify...' : 'Processing...') : 'Confirm & Update Shopify'}
+                      {isLoggingDelivery
+                        ? (selectedOrder.isNonSku ? 'Saving...' : isUpdatingShopify ? 'Updating Shopify...' : 'Processing...')
+                        : selectedOrder.isNonSku ? 'Confirm Delivery' : 'Confirm & Update Shopify'}
                     </button>
                   </div>
                 </div>
