@@ -29,6 +29,7 @@ export interface Transfer {
   origin: string;
   destination: string;
   transferType: TransferType;
+  isNonSku?: boolean; // Free-form transfer, no Shopify/incoming inventory side effects
   items: TransferItem[];
   carrier?: CarrierType;
   trackingNumber?: string;
@@ -270,7 +271,8 @@ export class TransfersService {
     carrier?: CarrierType,
     trackingNumber?: string,
     eta?: string,
-    notes?: string
+    notes?: string,
+    isNonSku?: boolean
   ): Promise<Transfer> {
     const cache = await TransfersService.loadTransfers();
     
@@ -283,7 +285,7 @@ export class TransfersService {
     const itemsSummary = items.map(i => `- ${i.sku} → ${i.quantity}${i.masterCartons ? ` (${i.masterCartons} MCs)` : ''}`).join('\n');
     
     // Build activity log details with notes if present
-    let creationDetails = `[${transferType}] ${origin} → ${destination}:\n${itemsSummary}`;
+    let creationDetails = `[${transferType}] ${origin} → ${destination}${isNonSku ? ' [Non SKU]' : ''}:\n${itemsSummary}`;
     if (notes && notes.trim()) {
       creationDetails += `\nNotes: ${notes.trim()}`;
     }
@@ -293,6 +295,7 @@ export class TransfersService {
       origin,
       destination,
       transferType,
+      isNonSku: isNonSku || false,
       items,
       carrier: carrier || '',
       trackingNumber: trackingNumber || '',

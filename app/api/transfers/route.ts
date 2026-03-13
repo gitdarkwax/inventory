@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { origin, destination, transferType, items, carrier, trackingNumber, eta, notes } = body as { 
+    const { origin, destination, transferType, items, carrier, trackingNumber, eta, notes, isNonSku } = body as { 
       origin: string;
       destination: string;
       transferType: TransferType;
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       trackingNumber?: string;
       eta?: string;
       notes?: string;
+      isNonSku?: boolean;
     };
 
     // Validate required fields
@@ -129,7 +130,8 @@ export async function POST(request: NextRequest) {
       carrier,
       trackingNumber,
       eta,
-      notes
+      notes,
+      isNonSku
     );
 
     return NextResponse.json({ transfer: newTransfer }, { status: 201 });
@@ -292,7 +294,7 @@ export async function PATCH(request: NextRequest) {
     // Handle transfer cancellation - update incoming inventory cache and notify
     if (status === 'cancelled' && previousStatus !== 'cancelled') {
       // Remove from incoming inventory cache if it was in transit (Air/Sea)
-      if (previousStatus === 'in_transit' || previousStatus === 'partial') {
+      if (!updatedTransfer.isNonSku && (previousStatus === 'in_transit' || previousStatus === 'partial')) {
         const shipType = updatedTransfer.transferType;
         if (shipType === 'Air Express' || shipType === 'Air Slow' || shipType === 'Sea') {
           try {
@@ -375,7 +377,7 @@ export async function DELETE(request: NextRequest) {
     // Remove deleted transfers from incoming inventory cache if they were in transit or partial
     const cacheService = new InventoryCacheService();
     for (const t of removed) {
-      if (t.status === 'in_transit' || t.status === 'partial') {
+      if (!t.isNonSku && (t.status === 'in_transit' || t.status === 'partial')) {
         try {
           await cacheService.removeTransferFromIncoming(t.destination, t.id);
         } catch (err) {

@@ -560,6 +560,7 @@ export async function POST(request: NextRequest) {
         const newIncoming: IncomingInventoryCache = {};
         
         for (const transfer of activeTransfers) {
+          if (transfer.isNonSku) continue;
           // Skip Immediate transfers (they don't contribute to incoming)
           if (transfer.transferType === 'Immediate') continue;
           

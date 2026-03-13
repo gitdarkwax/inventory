@@ -168,6 +168,7 @@ interface Transfer {
   origin: string;
   destination: string;
   transferType: TransferType;
+  isNonSku?: boolean;
   items: TransferItem[];
   carrier?: CarrierType;
   trackingNumber?: string;
@@ -341,6 +342,7 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newTransferDestination, setNewTransferDestination] = useState<string>('');
   const [newTransferItems, setNewTransferItems] = useState<{ sku: string; quantity: string; pallet?: string; masterCartons: string }[]>([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
   const [newTransferType, setNewTransferType] = useState<TransferType | ''>('');
+  const [newTransferIsNonSku, setNewTransferIsNonSku] = useState(false);
   const [newTransferCarrier, setNewTransferCarrier] = useState<CarrierType>('');
   const [newTransferTracking, setNewTransferTracking] = useState('');
   const [newTransferNotes, setNewTransferNotes] = useState('');
@@ -379,6 +381,7 @@ export default function Dashboard({ session }: DashboardProps) {
     origin: string;
     destination: string;
     items: { sku: string; quantity: number }[];
+    isNonSku?: boolean;
     carrier?: string;
     trackingNumber?: string;
     eta?: string;
@@ -866,7 +869,7 @@ export default function Dashboard({ session }: DashboardProps) {
     const validItems = newTransferItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ 
-        sku: item.sku.trim().toUpperCase(), 
+        sku: newTransferIsNonSku ? item.sku.trim() : item.sku.trim().toUpperCase(),
         quantity: parseInt(item.quantity),
         ...(newTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {}),
         ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
@@ -877,13 +880,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate all SKUs exist in inventory
-    const invalidSkus = validItems.filter(item => 
-      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
-    );
-    if (invalidSkus.length > 0) {
-      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
-      return;
+    // Validate all SKUs exist in inventory (skip for non-SKU transfers)
+    if (!newTransferIsNonSku) {
+      const invalidSkus = validItems.filter(item => 
+        !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+      );
+      if (invalidSkus.length > 0) {
+        showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+        return;
+      }
     }
 
     // For Immediate transfers, show confirmation modal
@@ -892,6 +897,7 @@ export default function Dashboard({ session }: DashboardProps) {
         origin: newTransferOrigin,
         destination: newTransferDestination,
         items: validItems,
+        isNonSku: newTransferIsNonSku,
         carrier: newTransferCarrier || undefined,
         trackingNumber: newTransferTracking.trim() || undefined,
         eta: newTransferEta || undefined,
@@ -918,6 +924,7 @@ export default function Dashboard({ session }: DashboardProps) {
           destination: newTransferDestination,
           transferType: newTransferType,
           items: validItems,
+          isNonSku: newTransferIsNonSku,
           carrier: newTransferCarrier || undefined,
           trackingNumber: newTransferTracking.trim() || undefined,
           eta: newTransferEta || undefined,
@@ -933,6 +940,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setNewTransferOrigin('');
         setNewTransferDestination('');
         setNewTransferType('');
+        setNewTransferIsNonSku(false);
         setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
         setNewTransferCarrier('');
         setNewTransferTracking('');
@@ -954,30 +962,32 @@ export default function Dashboard({ session }: DashboardProps) {
   const confirmImmediateTransfer = async () => {
     if (!pendingImmediateTransfer || isExecutingImmediateTransfer) return;
     
-    // Check stock availability at origin before proceeding
-    const originDetails = inventoryData?.locationDetails?.[pendingImmediateTransfer.origin];
-    if (originDetails) {
-      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
-      
-      for (const item of pendingImmediateTransfer.items) {
-        const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
-        const availableAtOrigin = detail?.onHand || 0;
+    // Check stock availability at origin before proceeding (skip for non-SKU)
+    if (!pendingImmediateTransfer.isNonSku) {
+      const originDetails = inventoryData?.locationDetails?.[pendingImmediateTransfer.origin];
+      if (originDetails) {
+        const insufficientStock: { sku: string; requested: number; available: number }[] = [];
         
-        if (availableAtOrigin < item.quantity) {
-          insufficientStock.push({
-            sku: item.sku,
-            requested: item.quantity,
-            available: availableAtOrigin,
-          });
+        for (const item of pendingImmediateTransfer.items) {
+          const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
+          const availableAtOrigin = detail?.onHand || 0;
+          
+          if (availableAtOrigin < item.quantity) {
+            insufficientStock.push({
+              sku: item.sku,
+              requested: item.quantity,
+              available: availableAtOrigin,
+            });
+          }
         }
-      }
-      
-      if (insufficientStock.length > 0) {
-        const stockDetails = insufficientStock
-          .map(s => `${s.sku}: need ${s.requested.toLocaleString()}, only ${s.available.toLocaleString()} at ${pendingImmediateTransfer.origin}`)
-          .join('\n');
-        showProdNotification('error', 'Insufficient Stock', stockDetails);
-        return;
+
+        if (insufficientStock.length > 0) {
+          const stockDetails = insufficientStock
+            .map(s => `${s.sku}: need ${s.requested.toLocaleString()}, only ${s.available.toLocaleString()} at ${pendingImmediateTransfer.origin}`)
+            .join('\n');
+          showProdNotification('error', 'Insufficient Stock', stockDetails);
+          return;
+        }
       }
     }
     
@@ -993,6 +1003,7 @@ export default function Dashboard({ session }: DashboardProps) {
           destination: pendingImmediateTransfer.destination,
           transferType: 'Immediate',
           items: pendingImmediateTransfer.items,
+          isNonSku: pendingImmediateTransfer.isNonSku,
           carrier: pendingImmediateTransfer.carrier,
           trackingNumber: pendingImmediateTransfer.trackingNumber,
           eta: pendingImmediateTransfer.eta,
@@ -1009,27 +1020,29 @@ export default function Dashboard({ session }: DashboardProps) {
 
       const newTransfer = createData.transfer;
 
-      // Step 2: Update Shopify inventory (subtract from origin, add to destination)
-      const inventoryResponse = await fetch('/api/transfers/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'mark_in_transit',
-          transferId: newTransfer.id,
-          origin: pendingImmediateTransfer.origin,
-          destination: pendingImmediateTransfer.destination,
-          shipmentType: 'Immediate',
-          items: pendingImmediateTransfer.items,
-        }),
-      });
+      // Step 2: Update Shopify inventory (skip for non-SKU transfers)
+      if (!pendingImmediateTransfer.isNonSku) {
+        const inventoryResponse = await fetch('/api/transfers/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'mark_in_transit',
+            transferId: newTransfer.id,
+            origin: pendingImmediateTransfer.origin,
+            destination: pendingImmediateTransfer.destination,
+            shipmentType: 'Immediate',
+            items: pendingImmediateTransfer.items,
+          }),
+        });
 
-      const inventoryResult = await inventoryResponse.json();
+        const inventoryResult = await inventoryResponse.json();
 
-      if (!inventoryResponse.ok) {
-        showProdNotification('error', 'Shopify Update Failed', inventoryResult.error || 'Failed to update Shopify inventory');
-        // Still update UI with the created transfer
-        setTransfers(prev => [newTransfer, ...prev]);
-        return;
+        if (!inventoryResponse.ok) {
+          showProdNotification('error', 'Shopify Update Failed', inventoryResult.error || 'Failed to update Shopify inventory');
+          // Still update UI with the created transfer
+          setTransfers(prev => [newTransfer, ...prev]);
+          return;
+        }
       }
 
       // Step 3: Update transfer status to 'delivered'
@@ -1047,7 +1060,13 @@ export default function Dashboard({ session }: DashboardProps) {
 
       if (statusResponse.ok) {
         setTransfers(prev => [statusData.transfer, ...prev]);
-        showProdNotification('success', 'Transfer Complete', `Stock moved from ${pendingImmediateTransfer.origin} to ${pendingImmediateTransfer.destination}`);
+        showProdNotification(
+          'success',
+          'Transfer Complete',
+          pendingImmediateTransfer.isNonSku
+            ? `Non-SKU transfer recorded from ${pendingImmediateTransfer.origin} to ${pendingImmediateTransfer.destination}`
+            : `Stock moved from ${pendingImmediateTransfer.origin} to ${pendingImmediateTransfer.destination}`
+        );
       } else {
         setTransfers(prev => [newTransfer, ...prev]);
         showProdNotification('error', 'Status Update Failed', statusData.error || 'Transfer created but status update failed');
@@ -1058,6 +1077,7 @@ export default function Dashboard({ session }: DashboardProps) {
       setNewTransferOrigin('');
       setNewTransferDestination('');
       setNewTransferType('');
+      setNewTransferIsNonSku(false);
       setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
       setNewTransferCarrier('');
       setNewTransferTracking('');
@@ -1118,61 +1138,66 @@ export default function Dashboard({ session }: DashboardProps) {
     if (!transferToMarkInTransit || isMarkingInTransit) return;
     
     const isImmediate = transferToMarkInTransit.transferType === 'Immediate';
+    const isNonSkuTransfer = transferToMarkInTransit.isNonSku === true;
     
-    // Check stock availability at origin before proceeding
-    const originDetails = inventoryData?.locationDetails?.[transferToMarkInTransit.origin];
-    if (originDetails) {
-      const insufficientStock: { sku: string; requested: number; available: number }[] = [];
-      
-      for (const item of transferToMarkInTransit.items) {
-        const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
-        const availableAtOrigin = detail?.onHand || 0;
+    // Check stock availability at origin before proceeding (skip for non-SKU)
+    if (!isNonSkuTransfer) {
+      const originDetails = inventoryData?.locationDetails?.[transferToMarkInTransit.origin];
+      if (originDetails) {
+        const insufficientStock: { sku: string; requested: number; available: number }[] = [];
         
-        if (availableAtOrigin < item.quantity) {
-          insufficientStock.push({
-            sku: item.sku,
-            requested: item.quantity,
-            available: availableAtOrigin,
-          });
+        for (const item of transferToMarkInTransit.items) {
+          const detail = originDetails.find((d: { sku: string; onHand: number }) => d.sku.toUpperCase() === item.sku.toUpperCase());
+          const availableAtOrigin = detail?.onHand || 0;
+          
+          if (availableAtOrigin < item.quantity) {
+            insufficientStock.push({
+              sku: item.sku,
+              requested: item.quantity,
+              available: availableAtOrigin,
+            });
+          }
         }
-      }
-      
-      if (insufficientStock.length > 0) {
-        const stockDetails = insufficientStock
-          .map(s => `${s.sku}: need ${s.requested.toLocaleString()}, only ${s.available.toLocaleString()} at ${transferToMarkInTransit.origin}`)
-          .join('\n');
-        showProdNotification('error', 'Insufficient Stock', stockDetails);
-        return;
+
+        if (insufficientStock.length > 0) {
+          const stockDetails = insufficientStock
+            .map(s => `${s.sku}: need ${s.requested.toLocaleString()}, only ${s.available.toLocaleString()} at ${transferToMarkInTransit.origin}`)
+            .join('\n');
+          showProdNotification('error', 'Insufficient Stock', stockDetails);
+          return;
+        }
       }
     }
     
     setIsMarkingInTransit(true);
     setGlobalStatus({ 
-      message: isImmediate ? 'Processing Immediate Transfer...' : 'Marking Transfer In Transit...', 
-      subMessage: 'Updating Shopify inventory' 
+      message: isImmediate ? 'Processing Immediate Transfer...' : 'Marking Transfer In Transit...',
+      subMessage: isNonSkuTransfer ? 'Updating transfer status only' : 'Updating Shopify inventory'
     });
     try {
-      // Step 1: Update Shopify inventory
-      const inventoryResponse = await fetch('/api/transfers/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'mark_in_transit',
-          transferId: transferToMarkInTransit.id,
-          origin: transferToMarkInTransit.origin,
-          destination: transferToMarkInTransit.destination,
-          shipmentType: transferToMarkInTransit.transferType,
-          items: transferToMarkInTransit.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
-          note: transferToMarkInTransit.notes || null,
-          expectedArrivalAt: transferToMarkInTransit.eta || null,
-        }),
-      });
+      // Step 1: Update Shopify inventory (skip for non-SKU transfers)
+      if (!isNonSkuTransfer) {
+        const inventoryResponse = await fetch('/api/transfers/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'mark_in_transit',
+            transferId: transferToMarkInTransit.id,
+            origin: transferToMarkInTransit.origin,
+            destination: transferToMarkInTransit.destination,
+            shipmentType: transferToMarkInTransit.transferType,
+            items: transferToMarkInTransit.items.map(i => ({ sku: i.sku, quantity: i.quantity })),
+            note: transferToMarkInTransit.notes || null,
+            expectedArrivalAt: transferToMarkInTransit.eta || null,
+          }),
+        });
 
-      const inventoryResult = await inventoryResponse.json();
+        const inventoryResult = await inventoryResponse.json();
 
-      if (!inventoryResponse.ok) {
-        showProdNotification('error', 'Shopify Update Failed', inventoryResult.details || inventoryResult.error || 'Failed to update Shopify inventory');
-        return;
+        if (!inventoryResponse.ok) {
+          showProdNotification('error', 'Shopify Update Failed', inventoryResult.details || inventoryResult.error || 'Failed to update Shopify inventory');
+          return;
+        }
       }
 
       // Step 2: Update transfer status
@@ -1201,11 +1226,25 @@ export default function Dashboard({ session }: DashboardProps) {
         setTransferToMarkInTransit(null);
         
         if (isImmediate) {
-          showProdNotification('success', 'Transfer Complete', `Transfer ${transferToMarkInTransit.id} completed. Stock moved from ${transferToMarkInTransit.origin} to ${transferToMarkInTransit.destination}.`);
+          showProdNotification(
+            'success',
+            'Transfer Complete',
+            isNonSkuTransfer
+              ? `Transfer ${transferToMarkInTransit.id} completed. Non-SKU movement recorded from ${transferToMarkInTransit.origin} to ${transferToMarkInTransit.destination}.`
+              : `Transfer ${transferToMarkInTransit.id} completed. Stock moved from ${transferToMarkInTransit.origin} to ${transferToMarkInTransit.destination}.`
+          );
         } else {
-          // Reload incoming cache since we added new incoming items
-          await loadIncomingFromCache();
-          showProdNotification('success', 'In Transit', `Transfer ${transferToMarkInTransit.id} marked in transit. Shopify inventory updated.`);
+          if (!isNonSkuTransfer) {
+            // Reload incoming cache since we added new incoming items
+            await loadIncomingFromCache();
+          }
+          showProdNotification(
+            'success',
+            'In Transit',
+            isNonSkuTransfer
+              ? `Transfer ${transferToMarkInTransit.id} marked in transit (non-SKU, no Shopify update).`
+              : `Transfer ${transferToMarkInTransit.id} marked in transit. Shopify inventory updated.`
+          );
         }
       } else {
         showProdNotification('error', 'Status Update Failed', statusData.error || 'Shopify updated but failed to update transfer status');
@@ -1225,20 +1264,22 @@ export default function Dashboard({ session }: DashboardProps) {
     
     const validDeliveries = transferDeliveryItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
-      .map(item => ({ sku: item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
+      .map(item => ({ sku: selectedTransfer.isNonSku ? item.sku.trim() : item.sku.trim().toUpperCase(), quantity: parseInt(item.quantity) }));
 
     if (validDeliveries.length === 0) {
       showProdNotification('error', 'Missing Deliveries', 'Please enter at least one delivery quantity');
       return;
     }
 
-    // Validate all SKUs exist in inventory
-    const invalidSkus = validDeliveries.filter(item => 
-      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
-    );
-    if (invalidSkus.length > 0) {
-      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
-      return;
+    // Validate all SKUs exist in inventory (skip for non-SKU transfers)
+    if (!selectedTransfer.isNonSku) {
+      const invalidSkus = validDeliveries.filter(item => 
+        !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+      );
+      if (invalidSkus.length > 0) {
+        showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+        return;
+      }
     }
 
     // Close delivery form and show confirmation
@@ -1254,7 +1295,7 @@ export default function Dashboard({ session }: DashboardProps) {
       .map((item, index) => ({ ...item, originalIndex: index }))
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ 
-        sku: item.sku.trim().toUpperCase(), 
+        sku: selectedTransfer.isNonSku ? item.sku.trim() : item.sku.trim().toUpperCase(),
         quantity: parseInt(item.quantity),
         masterCartons: item.masterCartons && parseInt(item.masterCartons) > 0 ? parseInt(item.masterCartons) : undefined,
         originalIndex: item.originalIndex,
@@ -1266,7 +1307,10 @@ export default function Dashboard({ session }: DashboardProps) {
     }
 
     setIsLoggingDelivery(true);
-    setGlobalStatus({ message: 'Logging Transfer Delivery...', subMessage: 'Updating Shopify inventory' });
+    setGlobalStatus({
+      message: 'Logging Transfer Delivery...',
+      subMessage: selectedTransfer.isNonSku ? 'Updating transfer status only' : 'Updating Shopify inventory'
+    });
     try {
       // Aggregate by SKU for Shopify/incoming cache (same SKU on multiple pallets = sum quantities)
       const aggregatedForInventory = Object.entries(
@@ -1276,24 +1320,26 @@ export default function Dashboard({ session }: DashboardProps) {
         }, {})
       ).map(([sku, quantity]) => ({ sku, quantity }));
 
-      // Step 1: Update Shopify inventory (add to destination on_hand) and update incoming cache
-      const inventoryResponse = await fetch('/api/transfers/inventory', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'log_delivery',
-          transferId: selectedTransfer.id,
-          destination: selectedTransfer.destination,
-          shipmentType: selectedTransfer.transferType,
-          items: aggregatedForInventory,
-        }),
-      });
+      // Step 1: Update Shopify inventory and incoming cache (skip for non-SKU transfers)
+      if (!selectedTransfer.isNonSku) {
+        const inventoryResponse = await fetch('/api/transfers/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'log_delivery',
+            transferId: selectedTransfer.id,
+            destination: selectedTransfer.destination,
+            shipmentType: selectedTransfer.transferType,
+            items: aggregatedForInventory,
+          }),
+        });
 
-      const inventoryData = await inventoryResponse.json();
+        const inventoryData = await inventoryResponse.json();
 
-      if (!inventoryResponse.ok) {
-        showProdNotification('error', 'Shopify Update Failed', inventoryData.details || inventoryData.error || 'Failed to update Shopify inventory');
-        return;
+        if (!inventoryResponse.ok) {
+          showProdNotification('error', 'Shopify Update Failed', inventoryData.details || inventoryData.error || 'Failed to update Shopify inventory');
+          return;
+        }
       }
 
       // Step 2: Update transfer items with received quantities (match by index for per-pallet)
@@ -1330,19 +1376,29 @@ export default function Dashboard({ session }: DashboardProps) {
         setShowLogDeliveryConfirm(false);
         setTransferDeliveryItems([]);
         setSelectedTransfer(data.transfer);
-        // Reload incoming cache since we subtracted delivered items
-        await loadIncomingFromCache();
+        if (!selectedTransfer.isNonSku) {
+          // Reload incoming cache since we subtracted delivered items
+          await loadIncomingFromCache();
+        }
         const statusLabel = allDelivered ? 'Delivered' : 'Partial Delivery';
-        showProdNotification('success', statusLabel, `Transfer ${selectedTransfer.id} delivery logged. Refreshing data...`);
+        showProdNotification(
+          'success',
+          statusLabel,
+          selectedTransfer.isNonSku
+            ? `Transfer ${selectedTransfer.id} delivery logged (non-SKU, no Shopify update).`
+            : `Transfer ${selectedTransfer.id} delivery logged. Refreshing data...`
+        );
         
-        // Refresh all data from Shopify to ensure accurate dashboard
-        try {
-          await fetch('/api/refresh');
-          await Promise.all([loadInventoryFromCache(), loadForecastingFromCache()]);
-          showProdNotification('success', 'Data Refreshed', 'Dashboard updated with latest Shopify data');
-        } catch (refreshErr) {
-          console.error('Failed to refresh after delivery:', refreshErr);
-          // Don't show error - delivery was successful, refresh is just a bonus
+        // Refresh all data from Shopify to ensure accurate dashboard for SKU transfers
+        if (!selectedTransfer.isNonSku) {
+          try {
+            await fetch('/api/refresh');
+            await Promise.all([loadInventoryFromCache(), loadForecastingFromCache()]);
+            showProdNotification('success', 'Data Refreshed', 'Dashboard updated with latest Shopify data');
+          } catch (refreshErr) {
+            console.error('Failed to refresh after delivery:', refreshErr);
+            // Don't show error - delivery was successful, refresh is just a bonus
+          }
         }
       } else {
         showProdNotification('error', 'Log Failed', data.error || 'Shopify updated but failed to update transfer');
@@ -1359,11 +1415,12 @@ export default function Dashboard({ session }: DashboardProps) {
   // Save transfer edits
   const saveTransferEdits = async () => {
     if (!selectedTransfer || isSavingTransfer) return;
+    const isNonSkuTransfer = selectedTransfer.isNonSku === true;
     
     const validItems = editTransferItems
       .filter(item => item.sku.trim() && parseInt(item.quantity) > 0)
       .map(item => ({ 
-        sku: item.sku.trim().toUpperCase(), 
+        sku: isNonSkuTransfer ? item.sku.trim() : item.sku.trim().toUpperCase(),
         quantity: parseInt(item.quantity),
         ...(editTransferType === 'Sea' && item.pallet ? { pallet: item.pallet } : {}),
         ...(item.masterCartons && parseInt(item.masterCartons) > 0 ? { masterCartons: parseInt(item.masterCartons) } : {}),
@@ -1374,13 +1431,15 @@ export default function Dashboard({ session }: DashboardProps) {
       return;
     }
 
-    // Validate all SKUs exist in inventory
-    const invalidSkus = validItems.filter(item => 
-      !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
-    );
-    if (invalidSkus.length > 0) {
-      showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
-      return;
+    // Validate all SKUs exist in inventory (skip for non-SKU transfers)
+    if (!isNonSkuTransfer) {
+      const invalidSkus = validItems.filter(item => 
+        !inventoryData?.inventory.some(inv => inv.sku.toUpperCase() === item.sku.toUpperCase())
+      );
+      if (invalidSkus.length > 0) {
+        showProdNotification('error', 'Invalid SKU', `SKU${invalidSkus.length > 1 ? 's' : ''} not found: ${invalidSkus.map(i => i.sku).join(', ')}`);
+        return;
+      }
     }
 
     if (!editTransferType) {
@@ -1422,7 +1481,7 @@ export default function Dashboard({ session }: DashboardProps) {
         
         // If transfer is in_transit or partial, rebuild incoming cache so other tabs reflect changes
         // Do this after showing notification to avoid delay
-        if (['in_transit', 'partial'].includes(selectedTransfer.status)) {
+        if (!selectedTransfer.isNonSku && ['in_transit', 'partial'].includes(selectedTransfer.status)) {
           try {
             await fetch('/api/transfers/inventory', {
               method: 'POST',
@@ -1466,26 +1525,27 @@ export default function Dashboard({ session }: DashboardProps) {
           .filter(item => item.quantity > 0);
         
         if (undeliveredItems.length > 0) {
-          // Restock undelivered items to origin location in Shopify
-          const inventoryResponse = await fetch('/api/transfers/inventory', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'restock_cancelled',
-              transferId: selectedTransfer.id,
-              origin: selectedTransfer.origin,
-              items: undeliveredItems,
-            }),
-          });
-          
-          if (!inventoryResponse.ok) {
-            const inventoryData = await inventoryResponse.json();
-            showProdNotification('error', 'Restock Failed', inventoryData.error || 'Failed to restock items to origin');
-            setIsCancellingTransfer(false);
-            return;
+          if (!selectedTransfer.isNonSku) {
+            // Restock undelivered items to origin location in Shopify
+            const inventoryResponse = await fetch('/api/transfers/inventory', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'restock_cancelled',
+                transferId: selectedTransfer.id,
+                origin: selectedTransfer.origin,
+                items: undeliveredItems,
+              }),
+            });
+            
+            if (!inventoryResponse.ok) {
+              const inventoryData = await inventoryResponse.json();
+              showProdNotification('error', 'Restock Failed', inventoryData.error || 'Failed to restock items to origin');
+              setIsCancellingTransfer(false);
+              return;
+            }
+            restockedItems = undeliveredItems;
           }
-          
-          restockedItems = undeliveredItems;
         }
       }
 
@@ -1507,7 +1567,7 @@ export default function Dashboard({ session }: DashboardProps) {
         setSelectedTransfer(null);
         
         // Rebuild incoming cache since transfer was removed
-        if (['in_transit', 'partial'].includes(selectedTransfer.status)) {
+        if (!selectedTransfer.isNonSku && ['in_transit', 'partial'].includes(selectedTransfer.status)) {
           try {
             await fetch('/api/transfers/inventory', {
               method: 'POST',
@@ -7616,7 +7676,10 @@ export default function Dashboard({ session }: DashboardProps) {
                   {!isReadOnly && (
                     <button
                       type="button"
-                      onClick={() => setShowNewTransferForm(true)}
+                      onClick={() => {
+                        setNewTransferIsNonSku(false);
+                        setShowNewTransferForm(true);
+                      }}
                       className="h-[38px] w-[160px] px-4 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:bg-blue-800"
                     >
                       + New Transfer
@@ -8660,7 +8723,10 @@ export default function Dashboard({ session }: DashboardProps) {
                       <div className="bg-white shadow rounded-lg p-8 text-center">
                         <p className="text-gray-500">No transfers found</p>
                         <button
-                          onClick={() => setShowNewTransferForm(true)}
+                          onClick={() => {
+                            setNewTransferIsNonSku(false);
+                            setShowNewTransferForm(true);
+                          }}
                           className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
                         >
                           Create your first transfer
@@ -8735,7 +8801,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <td className="px-4 py-3 text-sm text-gray-600">{transfer.destination}</td>
                                   <td className="px-4 py-3 text-sm text-gray-500">{transfer.transferType || '—'}</td>
                                   <td className="px-4 py-3 text-sm text-gray-500" title={skuPreview}>
-                                    {transfer.items.length} SKU{transfer.items.length !== 1 ? 's' : ''} ({totalItems.toLocaleString()})
+                                    <span className="inline-flex items-center gap-2">
+                                      <span>{transfer.items.length} SKU{transfer.items.length !== 1 ? 's' : ''} ({totalItems.toLocaleString()})</span>
+                                      {transfer.isNonSku && (
+                                        <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Items not in SKU list">Non SKU</span>
+                                      )}
+                                    </span>
                                   </td>
                                   <td className="px-4 py-3 text-sm text-gray-500">
                                     {transfer.carrier ? (
@@ -9034,6 +9105,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                                   e.stopPropagation();
                                                   setNewTransferOrigin(transfer.origin);
                                                   setNewTransferDestination(transfer.destination);
+                                                  setNewTransferIsNonSku(transfer.isNonSku || false);
                                                   setNewTransferItems(transfer.items.map(i => ({ 
                                                     sku: i.sku, 
                                                     quantity: String(i.quantity),
@@ -9071,8 +9143,24 @@ export default function Dashboard({ session }: DashboardProps) {
                 {showNewTransferForm && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                      <div className="px-6 py-4 border-b border-gray-200">
+                      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                         <h3 className="text-lg font-semibold text-gray-900">Create New Transfer</h3>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <span className="text-sm text-gray-600">Non SKUs</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={newTransferIsNonSku}
+                            onClick={() => setNewTransferIsNonSku(!newTransferIsNonSku)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                              newTransferIsNonSku ? 'bg-blue-600' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition ${
+                              newTransferIsNonSku ? 'translate-x-4' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </label>
                       </div>
                       <div className="px-6 py-4 space-y-4">
                         {/* Origin, Destination & Shipment Type */}
@@ -9130,10 +9218,12 @@ export default function Dashboard({ session }: DashboardProps) {
                         
                         {/* Items */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Items <span className="text-red-500">*</span></label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Items <span className="text-red-500">*</span> {newTransferIsNonSku && <span className="text-gray-500 font-normal">(free form)</span>}
+                          </label>
                           {newTransferItems.map((item, index) => {
                             const inputValue = item.sku.toUpperCase();
-                            const skuSuggestions = inputValue.length >= 2 && inventoryData
+                            const skuSuggestions = !newTransferIsNonSku && inputValue.length >= 2 && inventoryData
                               ? inventoryData.inventory
                                   .filter(inv => inv.sku.toUpperCase().includes(inputValue))
                                   .slice(0, 8)
@@ -9145,11 +9235,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <div className="relative flex-1">
                                   <input
                                     type="text"
-                                    placeholder="SKU"
+                                    placeholder={newTransferIsNonSku ? 'Item / SKU (any)' : 'SKU'}
                                     value={item.sku}
                                     onChange={(e) => {
                                       const updated = [...newTransferItems];
-                                      updated[index].sku = e.target.value.toUpperCase();
+                                      updated[index].sku = newTransferIsNonSku ? e.target.value : e.target.value.toUpperCase();
                                       setNewTransferItems(updated);
                                       setTransferSkuSuggestionIndex(index);
                                     }}
@@ -9157,7 +9247,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     onBlur={() => setTimeout(() => setTransferSkuSuggestionIndex(null), 150)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                   />
-                                  {transferSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                                  {!newTransferIsNonSku && transferSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
                                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                                       {skuSuggestions.map((sku) => (
                                         <button
@@ -9300,6 +9390,8 @@ export default function Dashboard({ session }: DashboardProps) {
                             setShowNewTransferForm(false);
                             setNewTransferOrigin('');
                             setNewTransferDestination('');
+                            setNewTransferType('');
+                            setNewTransferIsNonSku(false);
                             setNewTransferItems([{ sku: '', quantity: '', pallet: 'Pallet 1', masterCartons: '' }]);
                             setNewTransferCarrier('');
                             setNewTransferTracking('');
@@ -9388,10 +9480,12 @@ export default function Dashboard({ session }: DashboardProps) {
                         
                         {/* Items */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Items <span className="text-red-500">*</span></label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Items <span className="text-red-500">*</span> {selectedTransfer.isNonSku && <span className="text-gray-500 font-normal">(free form)</span>}
+                          </label>
                           {editTransferItems.map((item, index) => {
                             const inputValue = item.sku.toUpperCase();
-                            const skuSuggestions = inputValue.length >= 2 && inventoryData
+                            const skuSuggestions = !selectedTransfer.isNonSku && inputValue.length >= 2 && inventoryData
                               ? inventoryData.inventory
                                   .filter(inv => inv.sku.toUpperCase().includes(inputValue))
                                   .slice(0, 8)
@@ -9403,11 +9497,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <div className="relative flex-1">
                                   <input
                                     type="text"
-                                    placeholder="SKU"
+                                    placeholder={selectedTransfer.isNonSku ? 'Item / SKU (any)' : 'SKU'}
                                     value={item.sku}
                                     onChange={(e) => {
                                       const updated = [...editTransferItems];
-                                      updated[index].sku = e.target.value.toUpperCase();
+                                      updated[index].sku = selectedTransfer.isNonSku ? e.target.value : e.target.value.toUpperCase();
                                       setEditTransferItems(updated);
                                       setEditTransferSkuSuggestionIndex(index);
                                     }}
@@ -9415,7 +9509,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     onBlur={() => setTimeout(() => setEditTransferSkuSuggestionIndex(null), 150)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                                   />
-                                  {editTransferSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
+                                  {!selectedTransfer.isNonSku && editTransferSkuSuggestionIndex === index && skuSuggestions.length > 0 && (
                                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-48 overflow-y-auto">
                                       {skuSuggestions.map((sku) => (
                                         <button
@@ -9630,12 +9724,18 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                             <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer</p>
                             <p className="text-sm text-blue-700 mt-1">
-                              • Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong>
-                              {transferToMarkInTransit.destination === 'ShipBob' && (
-                                <><br/>• ShipBob manages its own inventory</>
-                              )}
-                              {transferToMarkInTransit.destination !== 'ShipBob' && transferToMarkInTransit.destination !== 'Distributor' && (
-                                <><br/>• Stock will be added to <strong>{transferToMarkInTransit.destination}</strong></>
+                              {transferToMarkInTransit.isNonSku ? (
+                                <>• Non-SKU transfer: status/activity only (no Shopify inventory update)</>
+                              ) : (
+                                <>
+                                  • Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong>
+                                  {transferToMarkInTransit.destination === 'ShipBob' && (
+                                    <><br/>• ShipBob manages its own inventory</>
+                                  )}
+                                  {transferToMarkInTransit.destination !== 'ShipBob' && transferToMarkInTransit.destination !== 'Distributor' && (
+                                    <><br/>• Stock will be added to <strong>{transferToMarkInTransit.destination}</strong></>
+                                  )}
+                                </>
                               )}
                             </p>
                           </div>
@@ -9643,7 +9743,10 @@ export default function Dashboard({ session }: DashboardProps) {
                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                             <p className="text-sm text-yellow-800 font-medium">⚠️ Mark In Transit</p>
                             <p className="text-sm text-yellow-700 mt-1">
-                              Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong> and put In Transit.
+                              {transferToMarkInTransit.isNonSku
+                                ? 'Non-SKU transfer: only status will change to In Transit (no Shopify/incoming update).'
+                                : <>Stock will be subtracted from <strong>{transferToMarkInTransit.origin}</strong> and put In Transit.</>
+                              }
                             </p>
                           </div>
                         )}
@@ -9708,10 +9811,12 @@ export default function Dashboard({ session }: DashboardProps) {
                           }`}
                         >
                           {isMarkingInTransit 
-                            ? 'Updating Shopify...' 
+                            ? (transferToMarkInTransit.isNonSku ? 'Updating Status...' : 'Updating Shopify...')
                             : transferToMarkInTransit.transferType === 'Immediate'
                               ? 'Confirm Immediate Transfer'
-                              : 'Confirm & Update Shopify'}
+                              : transferToMarkInTransit.isNonSku
+                                ? 'Confirm Mark In Transit'
+                                : 'Confirm & Update Shopify'}
                         </button>
                       </div>
                     </div>
@@ -9729,12 +9834,18 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                           <p className="text-sm text-blue-800 font-medium">⚡ Immediate Transfer</p>
                           <p className="text-sm text-blue-700 mt-1">
-                            • Stock will be subtracted from <strong>{pendingImmediateTransfer.origin}</strong>
-                            {pendingImmediateTransfer.destination === 'ShipBob' && (
-                              <><br/>• ShipBob manages its own inventory</>
-                            )}
-                            {pendingImmediateTransfer.destination !== 'ShipBob' && pendingImmediateTransfer.destination !== 'Distributor' && (
-                              <><br/>• Stock will be added to <strong>{pendingImmediateTransfer.destination}</strong></>
+                            {pendingImmediateTransfer.isNonSku ? (
+                              <>• Non-SKU transfer: status/activity only (no Shopify inventory update)</>
+                            ) : (
+                              <>
+                                • Stock will be subtracted from <strong>{pendingImmediateTransfer.origin}</strong>
+                                {pendingImmediateTransfer.destination === 'ShipBob' && (
+                                  <><br/>• ShipBob manages its own inventory</>
+                                )}
+                                {pendingImmediateTransfer.destination !== 'ShipBob' && pendingImmediateTransfer.destination !== 'Distributor' && (
+                                  <><br/>• Stock will be added to <strong>{pendingImmediateTransfer.destination}</strong></>
+                                )}
+                              </>
                             )}
                           </p>
                         </div>
@@ -9793,7 +9904,9 @@ export default function Dashboard({ session }: DashboardProps) {
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                           <p className="text-sm text-yellow-800 font-medium">⚠️ Confirm Delivery</p>
                           <p className="text-sm text-yellow-700 mt-1">
-                            {selectedTransfer.destination === 'ShipBob' 
+                            {selectedTransfer.isNonSku
+                              ? 'Non-SKU transfer: this will update transfer status only (no Shopify inventory update).'
+                              : selectedTransfer.destination === 'ShipBob' 
                               ? 'ShipBob manages its own inventory'
                               : <>Stock will be added to <strong>{selectedTransfer.destination}</strong></>
                             }
@@ -9860,7 +9973,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
                           }`}
                         >
-                          {isLoggingDelivery ? 'Updating...' : 'Confirm Delivery'}
+                          {isLoggingDelivery ? (selectedTransfer.isNonSku ? 'Saving...' : 'Updating...') : selectedTransfer.isNonSku ? 'Confirm Delivery (No Shopify)' : 'Confirm Delivery'}
                         </button>
                       </div>
                     </div>
@@ -9875,6 +9988,7 @@ export default function Dashboard({ session }: DashboardProps) {
                         <h3 className="text-lg font-semibold text-gray-900">Log Delivery - {selectedTransfer.id}</h3>
                         <p className="text-sm text-gray-500 mt-1">
                           {selectedTransfer.origin} → {selectedTransfer.destination}
+                          {selectedTransfer.isNonSku && ' (non-SKU, no Shopify update)'}
                         </p>
                       </div>
                       <div className="px-6 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
