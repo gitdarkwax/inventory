@@ -52,7 +52,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
   },
   {
     name: 'Tesla Charger',
-    match: /(^MBT|^ADT|^CTC-BKC)/
+    match: /(^MBT|^ADT|^Q2T|^CTC-BKC)/
   },
   {
     name: 'MultiCharger',

@@ -2622,8 +2622,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'KeyTag';
     }
 
-    // Tesla Charger (MBT prefix, ADT prefix, CTC-BKC)
-    if (/^MBT/i.test(skuUpper) || /^ADT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
+    // Tesla Charger (MBT/Q2T/ADT prefix, CTC-BKC)
+    if (/^MBT/i.test(skuUpper) || /^Q2T/i.test(skuUpper) || /^ADT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
       return 'Tesla Charger';
     }
 
