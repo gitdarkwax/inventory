@@ -391,6 +391,15 @@ export default function Dashboard({ session }: DashboardProps) {
 
   // Available locations for transfers
   const transferLocations = ['LA Office', 'DTLA WH', 'ShipBob', 'China WH'];
+  const nonSkuOnlyDestinations = ['Ronny Office', 'Fernando Office', 'Alex Office'];
+
+  const getTransferDestinationOptions = (origin: string, includeNonSkuOnly: boolean): string[] => {
+    const standardDestinations = transferLocations.filter(loc => loc !== origin);
+    if (!includeNonSkuOnly) {
+      return standardDestinations;
+    }
+    return [...standardDestinations, ...nonSkuOnlyDestinations];
+  };
 
   // Get incoming quantities from cache (tracked from app transfers, not Shopify)
   // Returns a map of destination -> SKU -> { inboundAir, inboundSea, airTransfers, seaTransfers }
@@ -9193,7 +9202,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             >
                               <option value="">Select destination...</option>
-                              {transferLocations.filter(loc => loc !== newTransferOrigin).map(loc => (
+                              {getTransferDestinationOptions(newTransferOrigin, newTransferIsNonSku).map(loc => (
                                 <option key={loc} value={loc}>{loc}</option>
                               ))}
                               <option value="Distributor">Distributor</option>
@@ -9455,7 +9464,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             >
-                              {transferLocations.filter(loc => loc !== editTransferOrigin).map(loc => (
+                              {getTransferDestinationOptions(editTransferOrigin, selectedTransfer.isNonSku === true).map(loc => (
                                 <option key={loc} value={loc}>{loc}</option>
                               ))}
                               <option value="Distributor">Distributor</option>
