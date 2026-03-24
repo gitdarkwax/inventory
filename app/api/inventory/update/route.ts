@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, canWrite } from '@/lib/auth';
+import { InventoryCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for batch updates
@@ -19,6 +20,10 @@ interface InventoryUpdate {
 interface UpdateRequest {
   updates: InventoryUpdate[];
   reason?: string;
+}
+
+function normalizeShopifyId(id: string): string {
+  return id.replace(/^gid:\/\/shopify\/(?:InventoryItem|Location)\//, '').trim();
 }
 
 // GraphQL mutation for setting inventory quantities
@@ -68,6 +73,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
     }
 
+    const normalizedUpdates = updates.map(update => ({
+      ...update,
+      sku: update.sku.trim(),
+      inventoryItemId: normalizeShopifyId(String(update.inventoryItemId)),
+      locationId: normalizeShopifyId(String(update.locationId)),
+    }));
+
+    // Server-side safety guard: only allow writes for inventoried-tagged products.
+    // The cache is built from products tagged "inventoried", so validating against it
+    // prevents accidental writes to duplicate SKUs on non-inventoried products.
+    const cacheService = new InventoryCacheService();
+    const cache = await cacheService.loadCache();
+    if (!cache?.inventory?.locationDetails || !cache.inventory.locationIds) {
+      return NextResponse.json(
+        {
+          error: 'Inventory cache not available for validation. Please refresh inventory and try again.',
+        },
+        { status: 400 }
+      );
+    }
+
+    const allowedWriteTargets = new Set<string>();
+    const { locationDetails, locationIds } = cache.inventory;
+    for (const [locationName, details] of Object.entries(locationDetails)) {
+      const locationId = locationIds[locationName];
+      if (!locationId) continue;
+
+      const normalizedLocationId = normalizeShopifyId(String(locationId));
+      for (const detail of details) {
+        allowedWriteTargets.add(
+          `${detail.sku.toUpperCase()}|${normalizeShopifyId(String(detail.inventoryItemId))}|${normalizedLocationId}`
+        );
+      }
+    }
+
+    const invalidUpdates = normalizedUpdates.filter(update => {
+      const key = `${update.sku.toUpperCase()}|${update.inventoryItemId}|${update.locationId}`;
+      return !allowedWriteTargets.has(key);
+    });
+
+    if (invalidUpdates.length > 0) {
+      const invalidSummary = invalidUpdates
+        .slice(0, 10)
+        .map(update => `${update.sku} @ location ${update.locationId}`)
+        .join(', ');
+
+      return NextResponse.json(
+        {
+          error: 'One or more updates do not match inventoried-tagged SKU mappings.',
+          details: invalidSummary,
+          invalidCount: invalidUpdates.length,
+        },
+        { status: 400 }
+      );
+    }
+
     const shop = process.env.SHOPIFY_SHOP_DOMAIN;
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
 
@@ -77,7 +138,7 @@ export async function POST(request: NextRequest) {
 
     const graphqlUrl = `https://${shop}/admin/api/2024-10/graphql.json`;
 
-    console.log(`📦 Updating ${updates.length} inventory items in Shopify...`);
+    console.log(`📦 Updating ${normalizedUpdates.length} inventory items in Shopify...`);
 
     // Shopify's inventorySetQuantities can handle multiple items at once
     // But there's a limit, so we'll batch them (max 100 per request)
@@ -90,13 +151,13 @@ export async function POST(request: NextRequest) {
       error?: string;
     }> = [];
 
-    for (let i = 0; i < updates.length; i += batchSize) {
-      const batch = updates.slice(i, i + batchSize);
+    for (let i = 0; i < normalizedUpdates.length; i += batchSize) {
+      const batch = normalizedUpdates.slice(i, i + batchSize);
       
       // Build the input for this batch
       const quantities = batch.map(update => ({
-        inventoryItemId: `gid://shopify/InventoryItem/${update.inventoryItemId}`,
-        locationId: `gid://shopify/Location/${update.locationId}`,
+        inventoryItemId: `gid://shopify/InventoryItem/${normalizeShopifyId(update.inventoryItemId)}`,
+        locationId: `gid://shopify/Location/${normalizeShopifyId(update.locationId)}`,
         quantity: update.quantity,
       }));
 
@@ -191,7 +252,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Rate limiting between batches
-      if (i + batchSize < updates.length) {
+      if (i + batchSize < normalizedUpdates.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
@@ -205,6 +266,7 @@ export async function POST(request: NextRequest) {
       success: failCount === 0,
       summary: {
         total: updates.length,
+        validated: normalizedUpdates.length,
         success: successCount,
         failed: failCount,
       },
