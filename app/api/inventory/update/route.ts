@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       return !allowedWriteTargets.has(targetKey);
     });
 
-    if (invalidUpdates.length > 0) {
+    if (invalidUpdates.length === normalizedUpdates.length) {
       const invalidSummary = invalidUpdates
         .slice(0, 10)
         .map(update => `${update.sku} (${update.inventoryItemId}) @ location ${update.locationId}`)
@@ -135,7 +135,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const skuMismatchWarnings = normalizedUpdates
+    const validUpdates = normalizedUpdates.filter(update => {
+      const targetKey = `${update.inventoryItemId}|${update.locationId}`;
+      return allowedWriteTargets.has(targetKey);
+    });
+
+    const skuMismatchWarnings = validUpdates
       .filter(update => {
         const targetKey = `${update.inventoryItemId}|${update.locationId}`;
         const allowedSkus = allowedSkuByTarget.get(targetKey);
@@ -161,7 +166,17 @@ export async function POST(request: NextRequest) {
 
     const graphqlUrl = `https://${shop}/admin/api/2024-10/graphql.json`;
 
-    console.log(`📦 Updating ${normalizedUpdates.length} inventory items in Shopify...`);
+    if (invalidUpdates.length > 0) {
+      const skippedSummary = invalidUpdates
+        .slice(0, 10)
+        .map(update => `${update.sku} (${update.inventoryItemId}) @ location ${update.locationId}`)
+        .join(', ');
+      console.warn(
+        `⚠️ Skipping ${invalidUpdates.length} non-inventoried updates during submission: ${skippedSummary}`
+      );
+    }
+
+    console.log(`📦 Updating ${validUpdates.length} inventory items in Shopify...`);
 
     // Shopify's inventorySetQuantities can handle multiple items at once
     // But there's a limit, so we'll batch them (max 100 per request)
@@ -174,8 +189,8 @@ export async function POST(request: NextRequest) {
       error?: string;
     }> = [];
 
-    for (let i = 0; i < normalizedUpdates.length; i += batchSize) {
-      const batch = normalizedUpdates.slice(i, i + batchSize);
+    for (let i = 0; i < validUpdates.length; i += batchSize) {
+      const batch = validUpdates.slice(i, i + batchSize);
       
       // Build the input for this batch
       const quantities = batch.map(update => ({
@@ -275,7 +290,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Rate limiting between batches
-      if (i + batchSize < normalizedUpdates.length) {
+      if (i + batchSize < validUpdates.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
@@ -289,9 +304,19 @@ export async function POST(request: NextRequest) {
       success: failCount === 0,
       summary: {
         total: updates.length,
-        validated: normalizedUpdates.length,
+        validated: validUpdates.length,
         success: successCount,
         failed: failCount,
+      },
+      skipped: {
+        count: invalidUpdates.length,
+        details: invalidUpdates
+          .slice(0, 25)
+          .map(update => ({
+            sku: update.sku,
+            inventoryItemId: update.inventoryItemId,
+            locationId: update.locationId,
+          })),
       },
       results,
       updatedBy: session.user.name,

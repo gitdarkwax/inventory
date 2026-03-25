@@ -6926,7 +6926,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                     result = await response.json();
                                     
                                     if (!response.ok) {
-                                      throw new Error(result.error || 'Failed to update inventory');
+                                      const details = typeof result?.details === 'string' ? result.details : '';
+                                      const invalidCount = typeof result?.invalidCount === 'number' ? result.invalidCount : undefined;
+                                      const errorMessage = [
+                                        result?.error || 'Failed to update inventory',
+                                        invalidCount ? `Invalid rows: ${invalidCount}.` : '',
+                                        details ? `Details: ${details}` : '',
+                                      ].filter(Boolean).join(' ');
+                                      throw new Error(errorMessage);
                                     }
                                     
                                     // Save to submission log in Google Drive
@@ -6992,6 +6999,18 @@ export default function Dashboard({ session }: DashboardProps) {
                                       const firstError = failedResults[0]?.error || 'Unknown error';
                                       showTrackerNotification('warning', 'Update Failed', 
                                         `${result.summary.success} succeeded, ${result.summary.failed} failed. Error: ${firstError}`);
+                                    } else if (result.skipped?.count > 0) {
+                                      const skippedDetails = Array.isArray(result.skipped?.details)
+                                        ? result.skipped.details
+                                            .slice(0, 5)
+                                            .map((item: { sku: string }) => item.sku)
+                                            .join(', ')
+                                        : '';
+                                      showTrackerNotification(
+                                        'warning',
+                                        'Inventory Partially Updated',
+                                        `${result.summary.success} SKU targets updated. ${result.skipped.count} skipped (missing inventoried tag mapping).${skippedDetails ? ` Sample: ${skippedDetails}` : ''}`
+                                      );
                                     } else {
                                       showTrackerNotification('success', 'Inventory Updated', 
                                         `Successfully updated ${result.summary.success} SKUs in Shopify.`);
