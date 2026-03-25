@@ -54,7 +54,7 @@ export const DEFAULT_MULTI_VARIANT_SKU_SPLITS: ReadonlyArray<MultiVariantSkuSpli
  */
 export function buildInventorySubmissionUpdates(params: {
   items: InventoryCountSubmissionItem[];
-  countsBySku: Record<string, number>;
+  countsBySku: Record<string, number | null | undefined>;
   locationId: string;
   splitConfigs?: ReadonlyArray<MultiVariantSkuSplitConfig>;
 }): InventoryUpdatePayload[] {
