@@ -9,6 +9,10 @@ import { useState, useEffect, useRef, Fragment, startTransition } from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
 import { PRODUCT_CATEGORIES, findProductCategory } from '@/lib/constants';
+import {
+  aggregateUpdateQuantitiesBySku,
+  buildInventorySubmissionUpdates,
+} from '@/lib/inventory-submission';
 
 // Discontinued SKUs - grayed out in Overview, Planning, and Forecast tabs
 const DISCONTINUED_SKUS = [
@@ -6903,70 +6907,12 @@ export default function Dashboard({ session }: DashboardProps) {
                                       throw new Error(`${trackerLocation} location ID not found. Please click "Refresh Data" to update the inventory data.`);
                                     }
                                     
-                                    // Build updates array - only counted SKUs
-                                    // Special handling for SKUs that map to multiple Shopify variants
-                                    const MULTI_VARIANT_SKUS = [
-                                      {
-                                        sku: 'MBT3Y-DG',
-                                        // Model 3 / 2017-2023 / Left Hand = 35%, Model Y / 2010-2024 / Left Hand = 65%
-                                        allocations: [
-                                          { variantMatch: 'Model 3', percentage: 0.35 },
-                                          { variantMatch: 'Model Y', percentage: 0.65 },
-                                        ],
-                                      },
-                                      {
-                                        sku: 'MBT3YRH-DG',
-                                        // Model 3 / 2017-2023 / Right Hand = 35%, Model Y / 2010-2024 / Right Hand = 65%
-                                        allocations: [
-                                          { variantMatch: 'Model 3', percentage: 0.35 },
-                                          { variantMatch: 'Model Y', percentage: 0.65 },
-                                        ],
-                                      },
-                                    ];
-                                    
-                                    const updates: Array<{ sku: string; inventoryItemId: string; quantity: number; locationId: string }> = [];
-                                    
-                                    for (const item of allItemsWithCounts) {
-                                      const quantity = currentCounts[item.sku] ?? 0;
-                                      const locId = locationId || 'test-mode';
-                                      
-                                      // Check if this SKU needs to be split between multiple variants
-                                      const splitConfig = MULTI_VARIANT_SKUS.find(s => s.sku === item.sku);
-                                      
-                                      if (splitConfig && item.variantInventoryItems && item.variantInventoryItems.length > 1) {
-                                        // Split the counted quantity between variants
-                                        let remainingQty = quantity;
-                                        
-                                        for (let i = 0; i < splitConfig.allocations.length; i++) {
-                                          const allocation = splitConfig.allocations[i];
-                                          const variant = item.variantInventoryItems.find(v => v.variantTitle.includes(allocation.variantMatch));
-                                          
-                                          if (variant) {
-                                            // Last allocation gets remainder to ensure total matches
-                                            const allocatedQty = i === splitConfig.allocations.length - 1
-                                              ? remainingQty
-                                              : Math.round(quantity * allocation.percentage);
-                                            
-                                            updates.push({
-                                              sku: `${item.sku} (${allocation.variantMatch})`,
-                                              inventoryItemId: variant.inventoryItemId,
-                                              quantity: allocatedQty,
-                                              locationId: locId,
-                                            });
-                                            
-                                            remainingQty -= allocatedQty;
-                                          }
-                                        }
-                                      } else {
-                                        // Normal SKU - single update
-                                        updates.push({
-                                          sku: item.sku,
-                                          inventoryItemId: item.inventoryItemId,
-                                          quantity,
-                                          locationId: locId,
-                                        });
-                                      }
-                                    }
+                                    // Build updates array - split SKUs fan out by variant inventory item.
+                                    const updates = buildInventorySubmissionUpdates({
+                                      items: allItemsWithCounts,
+                                      countsBySku: currentCounts,
+                                      locationId: locationId || 'test-mode',
+                                    });
                                     
                                     let result;
                                     
@@ -7056,8 +7002,8 @@ export default function Dashboard({ session }: DashboardProps) {
                                       setInventoryData(prev => {
                                         if (!prev) return prev;
                                         
-                                        // Create a map of SKU -> new quantity from updates
-                                        const updateMap = new Map(updates.map(u => [u.sku, u.quantity]));
+                                        // Aggregate split-variant rows back into one total per canonical SKU.
+                                        const updateMap = aggregateUpdateQuantitiesBySku(updates);
                                         
                                         // Update locationDetails for the tracker location
                                         const updatedLocationDetails = { ...prev.locationDetails };
