@@ -36,6 +36,29 @@ describe('buildInventorySubmissionUpdates', () => {
       },
     ]);
   });
+
+  it('uses distinct inventory items when variant titles overlap', () => {
+    const updates = buildInventorySubmissionUpdates({
+      items: [
+        {
+          sku: 'MBT3Y-DG',
+          inventoryItemId: 'fallback',
+          variantInventoryItems: [
+            { inventoryItemId: 'inv-1', variantTitle: 'Left Hand / Model 3 | Model Y' },
+            { inventoryItemId: 'inv-2', variantTitle: 'Left Hand / Model 3 | Model Y' },
+          ],
+        },
+      ],
+      countsBySku: { 'MBT3Y-DG': 10 },
+      locationId: '12345',
+    });
+
+    expect(updates).toHaveLength(2);
+    expect(updates[0]?.inventoryItemId).toBe('inv-1');
+    expect(updates[1]?.inventoryItemId).toBe('inv-2');
+    expect(updates[0]?.quantity).toBe(4);
+    expect(updates[1]?.quantity).toBe(6);
+  });
 });
 
 describe('aggregateUpdateQuantitiesBySku', () => {

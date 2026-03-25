@@ -67,25 +67,58 @@ export function buildInventorySubmissionUpdates(params: {
 
     if (splitConfig && item.variantInventoryItems && item.variantInventoryItems.length > 1) {
       let remainingQuantity = quantity;
+      const usedInventoryItemIds = new Set<string>();
+      const selectedAllocations: Array<{
+        allocation: MultiVariantSkuSplitAllocation;
+        inventoryItemId: string;
+      }> = [];
 
-      for (let index = 0; index < splitConfig.allocations.length; index++) {
-        const allocation = splitConfig.allocations[index];
-        const variant = item.variantInventoryItems.find((candidate) =>
-          candidate.variantTitle.includes(allocation.variantMatch)
+      for (const allocation of splitConfig.allocations) {
+        let variant = item.variantInventoryItems.find(
+          (candidate) =>
+            !usedInventoryItemIds.has(candidate.inventoryItemId) &&
+            candidate.variantTitle.includes(allocation.variantMatch)
         );
+
+        // Fallback to any unused variant so one overlapping title cannot select the same
+        // inventory item twice (which Shopify rejects).
+        if (!variant) {
+          variant = item.variantInventoryItems.find(
+            (candidate) => !usedInventoryItemIds.has(candidate.inventoryItemId)
+          );
+        }
 
         if (!variant) {
           continue;
         }
 
+        usedInventoryItemIds.add(variant.inventoryItemId);
+        selectedAllocations.push({
+          allocation,
+          inventoryItemId: variant.inventoryItemId,
+        });
+      }
+
+      if (selectedAllocations.length === 0) {
+        updates.push({
+          sku: item.sku,
+          inventoryItemId: item.inventoryItemId,
+          quantity,
+          locationId,
+        });
+        continue;
+      }
+
+      for (let index = 0; index < selectedAllocations.length; index++) {
+        const selected = selectedAllocations[index];
         const allocatedQuantity =
-          index === splitConfig.allocations.length - 1
+          index === selectedAllocations.length - 1
             ? remainingQuantity
-            : Math.round(quantity * allocation.percentage);
+            : Math.round(quantity * selected.allocation.percentage);
 
         updates.push({
           sku: item.sku,
-          inventoryItemId: variant.inventoryItemId,
+          inventoryItemId: selected.inventoryItemId,
           quantity: allocatedQuantity,
           locationId,
         });
