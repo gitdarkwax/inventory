@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     const allowedWriteTargets = new Set<string>();
+    const allowedSkuByTarget = new Map<string, Set<string>>();
     const { locationDetails, locationIds } = cache.inventory;
     for (const [locationName, details] of Object.entries(locationDetails)) {
       const locationId = locationIds[locationName];
@@ -102,21 +103,26 @@ export async function POST(request: NextRequest) {
 
       const normalizedLocationId = normalizeShopifyId(String(locationId));
       for (const detail of details) {
-        allowedWriteTargets.add(
-          `${detail.sku.toUpperCase()}|${normalizeShopifyId(String(detail.inventoryItemId))}|${normalizedLocationId}`
-        );
+        const normalizedInventoryItemId = normalizeShopifyId(String(detail.inventoryItemId));
+        const targetKey = `${normalizedInventoryItemId}|${normalizedLocationId}`;
+        allowedWriteTargets.add(targetKey);
+
+        const normalizedSku = detail.sku.trim().toUpperCase();
+        const skuSet = allowedSkuByTarget.get(targetKey) || new Set<string>();
+        skuSet.add(normalizedSku);
+        allowedSkuByTarget.set(targetKey, skuSet);
       }
     }
 
     const invalidUpdates = normalizedUpdates.filter(update => {
-      const key = `${update.sku.toUpperCase()}|${update.inventoryItemId}|${update.locationId}`;
-      return !allowedWriteTargets.has(key);
+      const targetKey = `${update.inventoryItemId}|${update.locationId}`;
+      return !allowedWriteTargets.has(targetKey);
     });
 
     if (invalidUpdates.length > 0) {
       const invalidSummary = invalidUpdates
         .slice(0, 10)
-        .map(update => `${update.sku} @ location ${update.locationId}`)
+        .map(update => `${update.sku} (${update.inventoryItemId}) @ location ${update.locationId}`)
         .join(', ');
 
       return NextResponse.json(
@@ -126,6 +132,23 @@ export async function POST(request: NextRequest) {
           invalidCount: invalidUpdates.length,
         },
         { status: 400 }
+      );
+    }
+
+    const skuMismatchWarnings = normalizedUpdates
+      .filter(update => {
+        const targetKey = `${update.inventoryItemId}|${update.locationId}`;
+        const allowedSkus = allowedSkuByTarget.get(targetKey);
+        if (!allowedSkus) return false;
+        return !allowedSkus.has(update.sku.toUpperCase());
+      })
+      .slice(0, 10)
+      .map(update => `${update.sku} (${update.inventoryItemId}) @ location ${update.locationId}`);
+
+    if (skuMismatchWarnings.length > 0) {
+      console.warn(
+        '⚠️ SKU label mismatch for valid inventory targets:',
+        skuMismatchWarnings.join(', ')
       );
     }
 
