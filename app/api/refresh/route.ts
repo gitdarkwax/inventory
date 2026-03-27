@@ -12,7 +12,11 @@ import { ShopifyQLService, ForecastingData as ForecastingItem } from '@/lib/shop
 import { InventoryCacheService, LowStockAlertCache } from '@/lib/inventory-cache';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 import { PhaseOutService } from '@/lib/phase-out-skus';
-import { isTeslaFixedVariantSku, matchesTeslaFixedVariant } from '@/lib/tesla-fixed-variants';
+import {
+  getTeslaPreferredVariantTitleForSku,
+  isTeslaFixedVariantSku,
+  matchesTeslaFixedVariant,
+} from '@/lib/tesla-fixed-variants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for all queries
@@ -455,10 +459,12 @@ export async function fetchInventoryData() {
           continue;
         }
 
+        const preferredVariantTitle = getTeslaPreferredVariantTitleForSku(variant.sku);
+
         variantMap.set(String(variant.inventory_item_id), {
           sku: variant.sku,
           productTitle: product.title,
-          variantTitle: variant.title,
+          variantTitle: preferredVariantTitle || variant.title,
           inventoryItemId: String(variant.inventory_item_id),
         });
       }

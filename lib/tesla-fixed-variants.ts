@@ -3,9 +3,15 @@
  * These SKUs are duplicated across multiple variants/products in Shopify.
  */
 
-const TESLA_FIXED_VARIANT_IDS: Record<string, string> = {
-  'MBT3Y-DG': '42054672449617',
-  'MBT3YRH-DG': '42054672482385',
+const TESLA_FIXED_VARIANTS: Record<string, { variantId: string; preferredVariantTitle: string }> = {
+  'MBT3Y-DG': {
+    variantId: '42054672449617',
+    preferredVariantTitle: 'Model Y / 2020-2024 / Left Hand',
+  },
+  'MBT3YRH-DG': {
+    variantId: '42054672482385',
+    preferredVariantTitle: 'Model Y / 2020-2024 / Right Hand',
+  },
 };
 
 function normalizeShopifyNumericId(id: string | number): string {
@@ -13,7 +19,11 @@ function normalizeShopifyNumericId(id: string | number): string {
 }
 
 export function getTeslaFixedVariantIdForSku(sku: string): string | undefined {
-  return TESLA_FIXED_VARIANT_IDS[sku.trim().toUpperCase()];
+  return TESLA_FIXED_VARIANTS[sku.trim().toUpperCase()]?.variantId;
+}
+
+export function getTeslaPreferredVariantTitleForSku(sku: string): string | undefined {
+  return TESLA_FIXED_VARIANTS[sku.trim().toUpperCase()]?.preferredVariantTitle;
 }
 
 export function isTeslaFixedVariantSku(sku: string): boolean {
