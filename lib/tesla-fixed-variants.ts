@@ -18,6 +18,10 @@ function normalizeShopifyNumericId(id: string | number): string {
   return String(id).replace(/^gid:\/\/shopify\/ProductVariant\//, '').trim();
 }
 
+export function getTeslaFixedSkus(): string[] {
+  return Object.keys(TESLA_FIXED_VARIANTS);
+}
+
 export function getTeslaFixedVariantIdForSku(sku: string): string | undefined {
   return TESLA_FIXED_VARIANTS[sku.trim().toUpperCase()]?.variantId;
 }

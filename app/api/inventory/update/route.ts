@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, canWrite } from '@/lib/auth';
 import { InventoryCacheService } from '@/lib/inventory-cache';
+import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
+import { fetchTeslaMirrorInventoryItemIds } from '@/lib/tesla-mirror-writes';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for batch updates
@@ -73,12 +75,66 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
     }
 
+    const shop = process.env.SHOPIFY_SHOP_DOMAIN;
+    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
+
+    if (!shop || !accessToken) {
+      return NextResponse.json({ error: 'Shopify credentials not configured' }, { status: 500 });
+    }
+
     const normalizedUpdates = updates.map(update => ({
       ...update,
       sku: update.sku.trim(),
       inventoryItemId: normalizeShopifyId(String(update.inventoryItemId)),
       locationId: normalizeShopifyId(String(update.locationId)),
     }));
+
+    const requestedTeslaSkus = Array.from(
+      new Set(
+        normalizedUpdates
+          .map(update => update.sku.trim().toUpperCase())
+          .filter(isTeslaFixedVariantSku)
+      )
+    );
+
+    let teslaMirrorInventoryItemsBySku = new Map<string, string[]>();
+    if (requestedTeslaSkus.length > 0) {
+      teslaMirrorInventoryItemsBySku = await fetchTeslaMirrorInventoryItemIds({
+        shop,
+        accessToken,
+      });
+
+      const unresolvedSkus = requestedTeslaSkus.filter(
+        sku => (teslaMirrorInventoryItemsBySku.get(sku)?.length || 0) < 2
+      );
+      if (unresolvedSkus.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Unable to resolve mirrored variants for SKU(s): ${unresolvedSkus.join(', ')}`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    const expandedUpdatesMap = new Map<string, InventoryUpdate>();
+    for (const update of normalizedUpdates) {
+      const skuUpper = update.sku.trim().toUpperCase();
+      const mirrorInventoryItemIds = isTeslaFixedVariantSku(skuUpper)
+        ? teslaMirrorInventoryItemsBySku.get(skuUpper) || [update.inventoryItemId]
+        : [update.inventoryItemId];
+
+      for (const inventoryItemId of mirrorInventoryItemIds) {
+        const normalizedInventoryItemId = normalizeShopifyId(String(inventoryItemId));
+        const uniqueKey = `${skuUpper}|${normalizedInventoryItemId}|${update.locationId}`;
+        expandedUpdatesMap.set(uniqueKey, {
+          ...update,
+          inventoryItemId: normalizedInventoryItemId,
+        });
+      }
+    }
+
+    const updatesForValidation = Array.from(expandedUpdatesMap.values());
 
     // Server-side safety guard: only allow writes for inventoried-tagged products.
     // The cache is built from products tagged "inventoried", so validating against it
@@ -114,12 +170,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const invalidUpdates = normalizedUpdates.filter(update => {
+    if (teslaMirrorInventoryItemsBySku.size > 0) {
+      const normalizedLocationIds = Array.from(
+        new Set(Object.values(locationIds).map(locationId => normalizeShopifyId(String(locationId))))
+      );
+
+      for (const [sku, inventoryItemIds] of teslaMirrorInventoryItemsBySku) {
+        for (const normalizedLocationId of normalizedLocationIds) {
+          for (const inventoryItemId of inventoryItemIds) {
+            const normalizedInventoryItemId = normalizeShopifyId(String(inventoryItemId));
+            const targetKey = `${normalizedInventoryItemId}|${normalizedLocationId}`;
+            allowedWriteTargets.add(targetKey);
+
+            const skuSet = allowedSkuByTarget.get(targetKey) || new Set<string>();
+            skuSet.add(sku);
+            allowedSkuByTarget.set(targetKey, skuSet);
+          }
+        }
+      }
+    }
+
+    const invalidUpdates = updatesForValidation.filter(update => {
       const targetKey = `${update.inventoryItemId}|${update.locationId}`;
       return !allowedWriteTargets.has(targetKey);
     });
 
-    if (invalidUpdates.length === normalizedUpdates.length) {
+    if (invalidUpdates.length === updatesForValidation.length) {
       const invalidSummary = invalidUpdates
         .slice(0, 10)
         .map(update => `${update.sku} (${update.inventoryItemId}) @ location ${update.locationId}`)
@@ -135,7 +211,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validUpdates = normalizedUpdates.filter(update => {
+    const validUpdates = updatesForValidation.filter(update => {
       const targetKey = `${update.inventoryItemId}|${update.locationId}`;
       return allowedWriteTargets.has(targetKey);
     });
@@ -155,13 +231,6 @@ export async function POST(request: NextRequest) {
         '⚠️ SKU label mismatch for valid inventory targets:',
         skuMismatchWarnings.join(', ')
       );
-    }
-
-    const shop = process.env.SHOPIFY_SHOP_DOMAIN;
-    const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
-
-    if (!shop || !accessToken) {
-      return NextResponse.json({ error: 'Shopify credentials not configured' }, { status: 500 });
     }
 
     const graphqlUrl = `https://${shop}/admin/api/2024-10/graphql.json`;

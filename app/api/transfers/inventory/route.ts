@@ -15,6 +15,7 @@ import { auth } from '@/lib/auth';
 import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
 import { TransfersService } from '@/lib/transfers';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
+import { fetchTeslaMirrorInventoryItemIds } from '@/lib/tesla-mirror-writes';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -98,16 +99,29 @@ function createAdjustmentsForItem(
   defaultInventoryItemId: string,
   variantInventoryItems: VariantInventoryItem[] | undefined,
   destination: string,
-  delta: 1 | -1 = 1 // 1 for adding, -1 for subtracting
+  delta: 1 | -1 = 1, // 1 for adding, -1 for subtracting
+  teslaMirrorInventoryItemIds?: string[]
 ): Array<{ inventoryItemId: string; locationId: string; delta: number }> {
   const adjustments: Array<{ inventoryItemId: string; locationId: string; delta: number }> = [];
 
   if (isTeslaFixedVariantSku(sku)) {
-    adjustments.push({
-      inventoryItemId: `gid://shopify/InventoryItem/${defaultInventoryItemId}`,
-      locationId: `gid://shopify/Location/${locationId}`,
-      delta: quantity * delta,
-    });
+    const mirrorInventoryItemIds = Array.from(
+      new Set(
+        (teslaMirrorInventoryItemIds && teslaMirrorInventoryItemIds.length > 0
+          ? teslaMirrorInventoryItemIds
+          : [defaultInventoryItemId]
+        ).map(String)
+      )
+    );
+
+    for (const inventoryItemId of mirrorInventoryItemIds) {
+      adjustments.push({
+        inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`,
+        locationId: `gid://shopify/Location/${locationId}`,
+        delta: quantity * delta,
+      });
+    }
+
     return adjustments;
   }
   
@@ -248,6 +262,34 @@ export async function POST(request: NextRequest) {
 
     const graphqlUrl = `https://${shop}/admin/api/2024-10/graphql.json`;
 
+    const actionItems: Array<{ sku: string }> =
+      body.action === 'mark_in_transit' || body.action === 'log_delivery' || body.action === 'restock_cancelled'
+        ? body.items
+        : [];
+    const requestedTeslaSkus = Array.from(
+      new Set(actionItems.map(item => item.sku.trim().toUpperCase()).filter(isTeslaFixedVariantSku))
+    );
+
+    let teslaMirrorInventoryItemsBySku = new Map<string, string[]>();
+    if (requestedTeslaSkus.length > 0) {
+      teslaMirrorInventoryItemsBySku = await fetchTeslaMirrorInventoryItemIds({
+        shop,
+        accessToken,
+      });
+
+      const unresolvedSkus = requestedTeslaSkus.filter(
+        sku => (teslaMirrorInventoryItemsBySku.get(sku)?.length || 0) < 2
+      );
+      if (unresolvedSkus.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Unable to resolve mirrored variants for SKU(s): ${unresolvedSkus.join(', ')}`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Load inventory cache to get inventoryItemIds and locationIds
     const cacheService = new InventoryCacheService();
     const inventoryCache = await cacheService.loadCache();
@@ -320,6 +362,18 @@ export async function POST(request: NextRequest) {
           delta: -item.quantity,
         });
 
+        if (isTeslaFixedVariantSku(item.sku)) {
+          const teslaMirrorIds = teslaMirrorInventoryItemsBySku.get(item.sku.trim().toUpperCase()) || [];
+          for (const inventoryItemId of teslaMirrorIds) {
+            if (String(inventoryItemId) === String(detail.inventoryItemId)) continue;
+            originAdjustments.push({
+              inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`,
+              locationId: `gid://shopify/Location/${originLocationId}`,
+              delta: -item.quantity,
+            });
+          }
+        }
+
         // For Immediate transfers: add to destination's On Hand (skip ShipBob/Distributor)
         // Special handling for MBT3Y-DG: split between variants when going to LA locations
         if (isImmediate && !skipDestinationUpdate) {
@@ -330,7 +384,8 @@ export async function POST(request: NextRequest) {
             detail.inventoryItemId,
             detail.variantInventoryItems,
             destination,
-            1 // positive delta for adding
+            1, // positive delta for adding
+            teslaMirrorInventoryItemsBySku.get(item.sku.trim().toUpperCase())
           );
           destAdjustments.push(...splitAdjustments);
         }
@@ -443,7 +498,8 @@ export async function POST(request: NextRequest) {
               detail.inventoryItemId,
               detail.variantInventoryItems,
               destination,
-              1 // positive delta for adding
+              1, // positive delta for adding
+              teslaMirrorInventoryItemsBySku.get(item.sku.trim().toUpperCase())
             );
             availableAdjustments.push(...splitAdjustments);
           }
@@ -524,11 +580,22 @@ export async function POST(request: NextRequest) {
           }
 
           // Add back to origin's On Hand
-          availableAdjustments.push({
-            inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
-            locationId: `gid://shopify/Location/${originLocationId}`,
-            delta: item.quantity,
-          });
+          if (isTeslaFixedVariantSku(item.sku)) {
+            const teslaMirrorIds = teslaMirrorInventoryItemsBySku.get(item.sku.trim().toUpperCase()) || [detail.inventoryItemId];
+            for (const inventoryItemId of Array.from(new Set(teslaMirrorIds.map(String)))) {
+              availableAdjustments.push({
+                inventoryItemId: `gid://shopify/InventoryItem/${inventoryItemId}`,
+                locationId: `gid://shopify/Location/${originLocationId}`,
+                delta: item.quantity,
+              });
+            }
+          } else {
+            availableAdjustments.push({
+              inventoryItemId: `gid://shopify/InventoryItem/${detail.inventoryItemId}`,
+              locationId: `gid://shopify/Location/${originLocationId}`,
+              delta: item.quantity,
+            });
+          }
         }
 
         if (errors.length > 0 && availableAdjustments.length === 0) {
