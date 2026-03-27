@@ -1,3 +1,5 @@
+import { isTeslaFixedVariantSku } from './tesla-fixed-variants';
+
 /**
  * Helpers for preparing inventory count submission payloads.
  * Keeps canonical SKU mapping stable for Shopify validation.
@@ -65,7 +67,12 @@ export function buildInventorySubmissionUpdates(params: {
     const quantity = countsBySku[item.sku] ?? 0;
     const splitConfig = splitConfigs.find((config) => config.sku === item.sku);
 
-    if (splitConfig && item.variantInventoryItems && item.variantInventoryItems.length > 1) {
+    if (
+      !isTeslaFixedVariantSku(item.sku) &&
+      splitConfig &&
+      item.variantInventoryItems &&
+      item.variantInventoryItems.length > 1
+    ) {
       let remainingQuantity = quantity;
       const usedInventoryItemIds = new Set<string>();
       const selectedAllocations: Array<{

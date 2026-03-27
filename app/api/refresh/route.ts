@@ -12,6 +12,7 @@ import { ShopifyQLService, ForecastingData as ForecastingItem } from '@/lib/shop
 import { InventoryCacheService, LowStockAlertCache } from '@/lib/inventory-cache';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 import { PhaseOutService } from '@/lib/phase-out-skus';
+import { isTeslaFixedVariantSku, matchesTeslaFixedVariant } from '@/lib/tesla-fixed-variants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for all queries
@@ -171,6 +172,11 @@ async function rebalanceMultiVariantSkus(): Promise<boolean> {
 
     // For each multi-variant SKU, check and rebalance if needed
     for (const [sku, variants] of multiVariantData) {
+      if (isTeslaFixedVariantSku(sku)) {
+        console.log(`ℹ️ ${sku}: skipping rebalance because SKU is pinned to a fixed variant`);
+        continue;
+      }
+
       if (variants.length < 2) {
         console.log(`⚠️ ${sku}: Only ${variants.length} variant(s) found, skipping`);
         continue;
@@ -445,6 +451,10 @@ export async function fetchInventoryData() {
     
     for (const variant of product.variants) {
       if (variant.sku && variant.inventory_item_id) {
+        if (!matchesTeslaFixedVariant(variant.sku, variant.id)) {
+          continue;
+        }
+
         variantMap.set(String(variant.inventory_item_id), {
           sku: variant.sku,
           productTitle: product.title,

@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
 import { TransfersService } from '@/lib/transfers';
+import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -100,6 +101,15 @@ function createAdjustmentsForItem(
   delta: 1 | -1 = 1 // 1 for adding, -1 for subtracting
 ): Array<{ inventoryItemId: string; locationId: string; delta: number }> {
   const adjustments: Array<{ inventoryItemId: string; locationId: string; delta: number }> = [];
+
+  if (isTeslaFixedVariantSku(sku)) {
+    adjustments.push({
+      inventoryItemId: `gid://shopify/InventoryItem/${defaultInventoryItemId}`,
+      locationId: `gid://shopify/Location/${locationId}`,
+      delta: quantity * delta,
+    });
+    return adjustments;
+  }
   
   // Check if this SKU needs to be split between multiple variants
   const splitConfig = MULTI_VARIANT_SKUS.find(s => s.sku === sku);
