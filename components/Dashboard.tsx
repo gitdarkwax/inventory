@@ -13,6 +13,8 @@ import {
   aggregateUpdateQuantitiesBySku,
   buildInventorySubmissionUpdates,
 } from '@/lib/inventory-submission';
+import SkuLogModal from './SkuLogModal';
+import type { InventoryCountSubmission } from '@/lib/sku-log';
 
 // Discontinued SKUs - grayed out in Overview, Planning, and Forecast tabs
 const DISCONTINUED_SKUS = [
@@ -199,11 +201,43 @@ export default function Dashboard({ session }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('inventory');
   const [isTabInitialized, setIsTabInitialized] = useState(false);
   
-  // Load saved tab from localStorage on mount
+  // Load saved tab from localStorage on mount.
+  //
+  // ALSO handles deep-link URLs like `/?ref=T-0018` or `/?ref=PO-0042` from
+  // the SKU Log modal. The ref takes precedence over the saved tab so that
+  // opening a deep-link in a new tab always lands on the right record.
   useEffect(() => {
-    const saved = localStorage.getItem('activeTab');
-    if (saved && ['inventory', 'forecasting', 'planning', 'production', 'warehouse'].includes(saved)) {
-      setActiveTab(saved as TabType);
+    let handledDeepLink = false;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref');
+      if (ref) {
+        handledDeepLink = true;
+        // Remove the param so a refresh doesn't re-trigger.
+        window.history.replaceState({}, '', window.location.pathname);
+
+        const refUpper = ref.trim().toUpperCase();
+        setActiveTab('production');
+        if (refUpper.startsWith('PO-') || refUpper.startsWith('PO')) {
+          setProductionViewType('orders');
+          setProductionFilterStatus('all');
+          setSkuSearchSelected(refUpper);
+          setSkuSearchQuery(refUpper);
+        } else {
+          // Default to transfers for T-* and any other prefix.
+          setProductionViewType('transfers');
+          setTransferFilterStatus('all');
+          setTransferSkuSearchSelected(refUpper);
+          setTransferSkuSearchQuery(refUpper);
+        }
+      }
+    }
+
+    if (!handledDeepLink) {
+      const saved = localStorage.getItem('activeTab');
+      if (saved && ['inventory', 'forecasting', 'planning', 'production', 'warehouse'].includes(saved)) {
+        setActiveTab(saved as TabType);
+      }
     }
     setIsTabInitialized(true);
   }, []);
@@ -467,6 +501,12 @@ export default function Dashboard({ session }: DashboardProps) {
   const [newHiddenSku, setNewHiddenSku] = useState('');
   const [isAddingHiddenSku, setIsAddingHiddenSku] = useState(false);
   const [isRemovingHiddenSku, setIsRemovingHiddenSku] = useState<string | null>(null);
+
+  // SKU activity log modal (opened from Planning tab SKU clicks)
+  const [selectedSkuForLog, setSelectedSkuForLog] = useState<{ sku: string; productTitle?: string } | null>(null);
+  const [inventoryLogsCache, setInventoryLogsCache] = useState<InventoryCountSubmission[] | null>(null);
+  const [inventoryLogsLoading, setInventoryLogsLoading] = useState(false);
+  const [inventoryLogsError, setInventoryLogsError] = useState<string | null>(null);
 
   // SKU Comments state
   const [showSkuCommentForm, setShowSkuCommentForm] = useState(false);
@@ -852,6 +892,54 @@ export default function Dashboard({ session }: DashboardProps) {
       console.error('Failed to load transfers:', err);
     } finally {
       setTransfersLoading(false);
+    }
+  };
+
+  /**
+   * Open the SKU activity log modal for a SKU. Lazy-loads the data the modal
+   * needs but isn't always loaded by the Planning tab (transfers + count logs
+   * across all 3 tracker locations). Counts cached for the session so subsequent
+   * modal opens are instant.
+   */
+  const openSkuLog = (sku: string, productTitle?: string) => {
+    setSelectedSkuForLog({ sku, productTitle });
+
+    // Planning tab doesn't fetch transfers; pull them now if we don't have them.
+    if (transfers.length === 0 && !transfersLoading) {
+      loadTransfers();
+    }
+
+    // Lazy-load count submissions across all tracker locations on first open.
+    if (!inventoryLogsCache && !inventoryLogsLoading) {
+      setInventoryLogsLoading(true);
+      setInventoryLogsError(null);
+      const locations: TrackerLocation[] = ['LA Office', 'DTLA WH', 'China WH'];
+      Promise.all(
+        locations.map(async (loc) => {
+          try {
+            const res = await fetch(`/api/warehouse/logs?location=${encodeURIComponent(loc)}`);
+            if (!res.ok) return [] as InventoryCountSubmission[];
+            const data = await res.json();
+            const raw = (data.logs || []) as Array<Record<string, unknown>>;
+            return raw.map((log) => ({
+              timestamp: String(log.timestamp || ''),
+              submittedBy: String(log.submittedBy || 'Unknown'),
+              location: typeof log.location === 'string' ? log.location : loc,
+              updates: Array.isArray(log.updates)
+                ? (log.updates as InventoryCountSubmission['updates'])
+                : [],
+            }));
+          } catch (err) {
+            console.warn(`Failed to load logs for ${loc}:`, err);
+            return [] as InventoryCountSubmission[];
+          }
+        })
+      )
+        .then((results) => setInventoryLogsCache(results.flat()))
+        .catch((err) => {
+          setInventoryLogsError(err instanceof Error ? err.message : 'Failed to load count logs');
+        })
+        .finally(() => setInventoryLogsLoading(false));
     }
   };
 
@@ -2116,6 +2204,8 @@ export default function Dashboard({ session }: DashboardProps) {
           setShowSkuCommentForm(false);
         } else if (showTrackerLogs) {
           setShowTrackerLogs(false);
+        } else if (selectedSkuForLog) {
+          setSelectedSkuForLog(null);
         }
       }
     };
@@ -2127,7 +2217,8 @@ export default function Dashboard({ session }: DashboardProps) {
     showDeliveryConfirm, showCancelConfirm, showCancelTransferConfirm,
     showTrackerConfirm, showTrackerClearConfirm, showTransferDeliveryForm,
     showDeliveryForm, showEditTransferForm, showEditForm, showNewTransferForm,
-    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showHiddenSkusModal, showSkuCommentForm, showTrackerLogs
+    showNewOrderForm, showColumnDefinitions, showOverviewColumnDefinitions, showPhaseOutModal, showHiddenSkusModal, showSkuCommentForm, showTrackerLogs,
+    selectedSkuForLog
   ]);
 
   // Load tracker drafts and last submission info from Google Drive on mount
@@ -5563,7 +5654,14 @@ export default function Dashboard({ session }: DashboardProps) {
                           return (
                           <tr key={item.sku} className={isGrayedOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
                             <td className={`w-28 px-2 py-3 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isGrayedOut ? 'text-gray-500' : 'text-gray-900'}`} title={commentTooltip}>
-                              {item.sku}
+                              <button
+                                type="button"
+                                onClick={() => openSkuLog(item.sku, item.productTitle)}
+                                className="text-left hover:bg-blue-50 -mx-1 px-1 rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                aria-label={`View activity for ${item.sku}`}
+                              >
+                                {item.sku}
+                              </button>
                               {skuComment && <span className="ml-1">💬</span>}
                             </td>
                             <td className={`w-16 px-2 py-3 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900')}`}>{item.la.toLocaleString()}</td>
@@ -5994,7 +6092,14 @@ export default function Dashboard({ session }: DashboardProps) {
                                         return (
                                         <tr key={item.sku} className={isGrayedOut ? 'bg-gray-100' : (index % 2 === 0 ? 'bg-white' : 'bg-gray-50')}>
                                           <td className={`w-28 px-2 py-2 text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis ${isGrayedOut ? 'text-gray-500' : 'text-gray-900'}`} title={commentTooltip}>
-                                            {item.sku}
+                                            <button
+                                              type="button"
+                                              onClick={() => openSkuLog(item.sku, item.productTitle)}
+                                              className="text-left hover:bg-blue-50 -mx-1 px-1 rounded cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                              aria-label={`View activity for ${item.sku}`}
+                                            >
+                                              {item.sku}
+                                            </button>
                                             {skuComment && <span className="ml-1">💬</span>}
                                           </td>
                                           <td className={`w-16 px-2 py-2 text-sm text-center ${isGrayedOut ? 'text-gray-500' : (item.la <= 0 ? 'text-red-600 font-medium' : 'text-gray-900')}`}>{item.la.toLocaleString()}</td>
@@ -7680,12 +7785,18 @@ export default function Dashboard({ session }: DashboardProps) {
                 if (productionFilterStatus === 'open' && !['in_production', 'partial'].includes(order.status)) return false;
                 if (productionFilterStatus === 'completed' && !['completed', 'cancelled'].includes(order.status)) return false;
                 
-                // SKU search filter (only filter when a SKU is selected)
+                // SKU search filter (only filter when a SKU is selected).
+                // Also matches by PO id / poNumber so SKU-Log deep links
+                // (`?ref=PO-0042`) can land on the right record.
                 if (skuSearchSelected) {
-                  const hasMatchingSku = order.items.some(item => 
-                    item.sku.toUpperCase() === skuSearchSelected.toUpperCase()
+                  const term = skuSearchSelected.toUpperCase();
+                  const hasMatchingSku = order.items.some(item =>
+                    item.sku.toUpperCase() === term
                   );
-                  if (!hasMatchingSku) return false;
+                  const idMatch =
+                    order.id.toUpperCase() === term ||
+                    (order.poNumber ? order.poNumber.toUpperCase() === term : false);
+                  if (!hasMatchingSku && !idMatch) return false;
                 }
                 
                 // Date filter (based on createdAt)
@@ -10424,6 +10535,18 @@ export default function Dashboard({ session }: DashboardProps) {
       </div>
     </div>
 
+    {selectedSkuForLog && (
+      <SkuLogModal
+        sku={selectedSkuForLog.sku}
+        productTitle={selectedSkuForLog.productTitle}
+        productionOrders={productionOrders}
+        transfers={transfers}
+        inventoryLogs={inventoryLogsCache || []}
+        isLoading={inventoryLogsLoading || transfersLoading}
+        loadError={inventoryLogsError}
+        onClose={() => setSelectedSkuForLog(null)}
+      />
+    )}
     </>
   );
 }
