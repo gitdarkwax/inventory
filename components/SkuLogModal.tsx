@@ -323,7 +323,7 @@ export default function SkuLogModal({
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-500 flex justify-between">
           <span>
-            Sorted oldest first · POs and Transfers excluded if marked “Non-SKU”
+            Sorted newest first · POs and Transfers excluded if marked “Non-SKU”
           </span>
           <button
             type="button"

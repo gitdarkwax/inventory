@@ -435,7 +435,7 @@ describe('buildSkuLogEntries — Counts', () => {
 });
 
 describe('buildSkuLogEntries — merging & sorting', () => {
-  it('returns chronological order with mixed sources', () => {
+  it('returns reverse-chronological order (newest first) with mixed sources', () => {
     const order = makeOrder({
       activityLog: [
         {
@@ -481,10 +481,11 @@ describe('buildSkuLogEntries — merging & sorting', () => {
       inventoryLogs: subs,
       ...allTime,
     });
-    expect(entries.map(e => e.type)).toEqual(['transfer', 'po', 'count', 'transfer']);
-    // Ascending order check
+    // Reverse chronological: 2025-04-20 transfer delivery, 2025-04-15 count,
+    // 2025-04-10 PO delivery, 2025-04-05 transfer mark-in-transit.
+    expect(entries.map(e => e.type)).toEqual(['transfer', 'count', 'po', 'transfer']);
     const dates = entries.map(e => Date.parse(e.date));
-    expect([...dates].sort((a, b) => a - b)).toEqual(dates);
+    expect([...dates].sort((a, b) => b - a)).toEqual(dates);
   });
 
   it('drops entries outside the period window', () => {

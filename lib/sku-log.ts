@@ -356,8 +356,9 @@ export function buildSkuLogEntries({
     return t >= startMs && t <= endMs;
   });
 
+  // Reverse-chronological: newest first.
   filtered.sort((a, b) => {
-    const diff = Date.parse(a.date) - Date.parse(b.date);
+    const diff = Date.parse(b.date) - Date.parse(a.date);
     if (diff !== 0) return diff;
     // Stable secondary sort by event key for deterministic output.
     return a.eventKey.localeCompare(b.eventKey);
