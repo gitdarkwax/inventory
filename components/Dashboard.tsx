@@ -9378,7 +9378,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       }
                                       setNewTransferItems(updated);
                                     }}
-                                    className="flex-1 sm:flex-none sm:w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                    className="flex-1 min-w-0 sm:flex-none sm:w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
                                   />
                                   <input
                                     type="number"
@@ -9390,7 +9390,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       updated[index].masterCartons = e.target.value;
                                       setNewTransferItems(updated);
                                     }}
-                                    className="flex-1 sm:flex-none sm:w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                    className="flex-1 min-w-0 sm:flex-none sm:w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
                                   />
                                   {newTransferType === 'Sea' && (
                                     <select
@@ -9400,7 +9400,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                         updated[index].pallet = e.target.value;
                                         setNewTransferItems(updated);
                                       }}
-                                      className="flex-1 sm:flex-none sm:w-28 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                                      className="flex-1 min-w-0 sm:flex-none sm:w-28 px-2 py-2 border border-gray-300 rounded-md text-sm"
                                     >
                                       {Array.from({ length: 20 }, (_, i) => (
                                         <option key={i + 1} value={`Pallet ${i + 1}`}>Pallet {i + 1}</option>
