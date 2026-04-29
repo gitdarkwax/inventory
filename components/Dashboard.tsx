@@ -9319,7 +9319,12 @@ export default function Dashboard({ session }: DashboardProps) {
                               : [];
                             
                             return (
-                              <div key={index} className="flex gap-2 mb-2">
+                              // Mobile (<sm): SKU on its own line, then Qty/MCs/Pallet/× on a second line.
+                              // Desktop (sm+): single row, identical to the previous layout.
+                              // The inner wrapper uses `sm:contents` so on desktop it disappears from
+                              // layout and its children become direct children of the outer flex row,
+                              // preserving the existing widths exactly.
+                              <div key={index} className="flex flex-col gap-2 mb-2 sm:flex-row">
                                 <div className="relative flex-1">
                                   <input
                                     type="text"
@@ -9356,59 +9361,61 @@ export default function Dashboard({ session }: DashboardProps) {
                                     </div>
                                   )}
                                 </div>
-                                <input
-                                  type="number"
-                                  placeholder="Qty"
-                                  value={item.quantity}
-                                  onChange={(e) => {
-                                    const updated = [...newTransferItems];
-                                    updated[index].quantity = e.target.value;
-                                    // Auto-calculate MCs if SKU is known
-                                    if (updated[index].sku && e.target.value) {
-                                      const calculatedMc = calculateMC(updated[index].sku, parseInt(e.target.value) || 0);
-                                      if (calculatedMc !== null) {
-                                        updated[index].masterCartons = calculatedMc.toString();
-                                      }
-                                    }
-                                    setNewTransferItems(updated);
-                                  }}
-                                  className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                                <input
-                                  type="number"
-                                  placeholder="MCs"
-                                  title="Master Cartons"
-                                  value={item.masterCartons}
-                                  onChange={(e) => {
-                                    const updated = [...newTransferItems];
-                                    updated[index].masterCartons = e.target.value;
-                                    setNewTransferItems(updated);
-                                  }}
-                                  className="w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                                />
-                                {newTransferType === 'Sea' && (
-                                  <select
-                                    value={item.pallet || 'Pallet 1'}
+                                <div className="flex gap-2 sm:contents">
+                                  <input
+                                    type="number"
+                                    placeholder="Qty"
+                                    value={item.quantity}
                                     onChange={(e) => {
                                       const updated = [...newTransferItems];
-                                      updated[index].pallet = e.target.value;
+                                      updated[index].quantity = e.target.value;
+                                      // Auto-calculate MCs if SKU is known
+                                      if (updated[index].sku && e.target.value) {
+                                        const calculatedMc = calculateMC(updated[index].sku, parseInt(e.target.value) || 0);
+                                        if (calculatedMc !== null) {
+                                          updated[index].masterCartons = calculatedMc.toString();
+                                        }
+                                      }
                                       setNewTransferItems(updated);
                                     }}
-                                    className="w-28 px-2 py-2 border border-gray-300 rounded-md text-sm"
-                                  >
-                                    {Array.from({ length: 20 }, (_, i) => (
-                                      <option key={i + 1} value={`Pallet ${i + 1}`}>Pallet {i + 1}</option>
-                                    ))}
-                                  </select>
-                                )}
-                                {newTransferItems.length > 1 && (
-                                  <button
-                                    onClick={() => setNewTransferItems(newTransferItems.filter((_, i) => i !== index))}
-                                    className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
-                                  >
-                                    ×
-                                  </button>
-                                )}
+                                    className="flex-1 sm:flex-none sm:w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  />
+                                  <input
+                                    type="number"
+                                    placeholder="MCs"
+                                    title="Master Cartons"
+                                    value={item.masterCartons}
+                                    onChange={(e) => {
+                                      const updated = [...newTransferItems];
+                                      updated[index].masterCartons = e.target.value;
+                                      setNewTransferItems(updated);
+                                    }}
+                                    className="flex-1 sm:flex-none sm:w-20 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  />
+                                  {newTransferType === 'Sea' && (
+                                    <select
+                                      value={item.pallet || 'Pallet 1'}
+                                      onChange={(e) => {
+                                        const updated = [...newTransferItems];
+                                        updated[index].pallet = e.target.value;
+                                        setNewTransferItems(updated);
+                                      }}
+                                      className="flex-1 sm:flex-none sm:w-28 px-2 py-2 border border-gray-300 rounded-md text-sm"
+                                    >
+                                      {Array.from({ length: 20 }, (_, i) => (
+                                        <option key={i + 1} value={`Pallet ${i + 1}`}>Pallet {i + 1}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  {newTransferItems.length > 1 && (
+                                    <button
+                                      onClick={() => setNewTransferItems(newTransferItems.filter((_, i) => i !== index))}
+                                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md"
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
