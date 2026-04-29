@@ -5241,11 +5241,14 @@ export default function Dashboard({ session }: DashboardProps) {
                     return inv.locations['China WH'] || 0;
                   };
                   
-                  // Special case: SKUs that combine burn rates from multiple related SKUs
+                  // Special case: SKUs that combine burn rates from multiple related SKUs.
+                  // Tesla MBT lineup (LHD / RHD / full) and Q2T lineup (LHD / RHD).
                   const combinedBurnRateSkus: Record<string, string[]> = {
                     'MBT3Y-DG': ['MBT24-DG', 'MBT25P-DG', 'MBT3Y-DG', 'MBTCT-DG', 'MBTMX-DG'],
                     'MBT3YRH-DG': ['MBT24RH-DG', 'MBT25PRH-DG', 'MBT3YRH-DG', 'MBTCTRH-DG', 'MBTMXRH-DG'],
                     'CTC-BKC': ['MBT24-DG', 'MBT24RH-DG', 'MBT25P-DG', 'MBT25PRH-DG', 'MBTCT-DG', 'MBTCTRH-DG', 'MBTMX-DG', 'MBTMXRH-DG'],
+                    'Q2T16': ['Q2T15', 'Q2T16', 'Q2TCT', 'Q2TOG', 'Q2TMX'],
+                    'Q2T16RH': ['Q2T15RH', 'Q2T16RH', 'Q2TCTRH', 'Q2TOGRH', 'Q2TMXRH'],
                   };
                   
                   // Get units per day based on selected burn period
