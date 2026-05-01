@@ -18,8 +18,6 @@ import type { InventoryCountSubmission } from '@/lib/sku-log';
 
 // Discontinued SKUs - grayed out in Overview, Planning, and Forecast tabs
 const DISCONTINUED_SKUS = [
-  'MBT24-DG',
-  'MBT24RH-DG',
   'MBT25P-DG',
   'MBT25PRH-DG',
   'MBTCT-DG',
