@@ -2724,8 +2724,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'KeyTag';
     }
 
-    // Tesla Charger (MBT/Q2T/ADT prefix, CTC-BKC)
-    if (/^MBT/i.test(skuUpper) || /^Q2T/i.test(skuUpper) || /^ADT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
+    // Tesla Charger (Q2/MBT/ADT prefix, CTC-BKC)
+    if (/^Q2/i.test(skuUpper) || /^MBT/i.test(skuUpper) || /^ADT/i.test(skuUpper) || skuUpper === 'CTC-BKC') {
       return 'Tesla Charger';
     }
 
@@ -2770,6 +2770,14 @@ export default function Dashboard({ session }: DashboardProps) {
         const aIndex = priorityOrder.findIndex(p => p.toUpperCase() === aUpper);
         const bIndex = priorityOrder.findIndex(p => p.toUpperCase() === bUpper);
         
+        const aStartsQ2 = aUpper.startsWith('Q2');
+        const bStartsQ2 = bUpper.startsWith('Q2');
+
+        // Q2 SKUs stay at the top of the Tesla section.
+        if (aStartsQ2 && bStartsQ2) return aUpper.localeCompare(bUpper);
+        if (aStartsQ2) return -1;
+        if (bStartsQ2) return 1;
+
         // Both are priority SKUs - sort by priority order
         if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
         // Only a is priority - a comes first
