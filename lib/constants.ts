@@ -48,7 +48,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
   },
   {
     name: 'Wallets',
-    match: /(^MBWLT-|^LSR-WLT-|^FMWLT-)/
+    match: /(^MBWLT-|^LSR-WLT-|^FMWLT-|^DBWLT)/
   },
   {
     name: 'Tesla Charger',
@@ -61,7 +61,7 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
   },
   {
     name: 'Car Charger',
-    match: /(^MBQI\-)/
+    match: /(^MBQI\-|^QIML)/
   },
   {
     name: 'RimCase',

@@ -2709,8 +2709,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'Wrist Straps';
     }
 
-    // Wallets (FMWLT, MBWLT prefix)
-    if (/^(FMWLT|MBWLT)/i.test(skuUpper)) {
+    // Wallets (FMWLT, MBWLT, DBWLT prefix)
+    if (/^(FMWLT|MBWLT|DBWLT)/i.test(skuUpper)) {
       return 'Wallets';
     }
 
@@ -2729,8 +2729,8 @@ export default function Dashboard({ session }: DashboardProps) {
       return 'Tesla Charger';
     }
 
-    // Chargers (MBQI, TVL, MBPD prefix)
-    if (/^(MBQI|TVL|MBPD)/i.test(skuUpper)) {
+    // Chargers (MBQI, QIML, TVL, MBPD prefix)
+    if (/^(MBQI|QIML|TVL|MBPD)/i.test(skuUpper)) {
       return 'Chargers';
     }
 
