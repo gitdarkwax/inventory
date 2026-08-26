@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { auth, canWrite } from './auth';
 import {
   AGENT_EMAIL,
   DEFAULT_AGENT_NAME,
@@ -9,13 +8,13 @@ import {
   timingSafeStringEqual,
 } from './api-actor';
 
-vi.mock('./auth', () => ({
-  auth: vi.fn(),
-  canWrite: vi.fn(),
-}));
+const authMock = vi.hoisted(() => vi.fn());
+const canWriteMock = vi.hoisted(() => vi.fn());
 
-const mockedAuth = vi.mocked(auth);
-const mockedCanWrite = vi.mocked(canWrite);
+vi.mock('./auth', () => ({
+  auth: authMock,
+  canWrite: canWriteMock,
+}));
 
 const TEST_KEY = 'test-agent-key-abcdefghijklmnopqrstuvwxyz';
 
@@ -101,7 +100,7 @@ describe('requireApiActor', () => {
 
   it('rejects a missing token when there is no session', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue(null);
+    authMock.mockResolvedValue(null);
 
     const result = await requireApiActor(makeRequest());
     expect(result.ok).toBe(false);
@@ -113,7 +112,7 @@ describe('requireApiActor', () => {
 
   it('rejects a wrong token when there is no session', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue(null);
+    authMock.mockResolvedValue(null);
 
     const result = await requireApiActor(
       makeRequest({ authorization: 'Bearer totally-wrong' }),
@@ -126,7 +125,7 @@ describe('requireApiActor', () => {
 
   it('accepts a valid token without a session', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue(null);
+    authMock.mockResolvedValue(null);
 
     const result = await requireApiActor(
       makeRequest({
@@ -143,12 +142,12 @@ describe('requireApiActor', () => {
         source: 'agent',
       },
     });
-    expect(mockedAuth).not.toHaveBeenCalled();
+    expect(authMock).not.toHaveBeenCalled();
   });
 
   it('fails closed when AGENT_API_KEY is unset even if a bearer is sent', async () => {
     delete process.env.AGENT_API_KEY;
-    mockedAuth.mockResolvedValue(null);
+    authMock.mockResolvedValue(null);
 
     const result = await requireApiActor(
       makeRequest({ authorization: `Bearer ${TEST_KEY}` }),
@@ -161,11 +160,11 @@ describe('requireApiActor', () => {
 
   it('keeps Google session behavior when no bearer is sent', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue({
+    authMock.mockResolvedValue({
       user: { name: 'Ada Lovelace', email: 'ada@magbak.com' },
       expires: '2099-01-01',
     });
-    mockedCanWrite.mockReturnValue(true);
+    canWriteMock.mockReturnValue(true);
 
     const result = await requireApiActor(makeRequest());
     expect(result).toEqual({
@@ -181,11 +180,11 @@ describe('requireApiActor', () => {
 
   it('does not block a valid session when bearer is wrong', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue({
+    authMock.mockResolvedValue({
       user: { name: 'Ada Lovelace', email: 'ada@magbak.com' },
       expires: '2099-01-01',
     });
-    mockedCanWrite.mockReturnValue(false);
+    canWriteMock.mockReturnValue(false);
 
     const result = await requireApiActor(
       makeRequest({ authorization: 'Bearer wrong-key' }),
@@ -203,11 +202,11 @@ describe('requireApiActor', () => {
 
   it('rejects readonly sessions when write is required', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue({
+    authMock.mockResolvedValue({
       user: { name: 'Read Only', email: 'ro@magbak.com' },
       expires: '2099-01-01',
     });
-    mockedCanWrite.mockReturnValue(false);
+    canWriteMock.mockReturnValue(false);
 
     const result = await requireApiActor(makeRequest(), {
       write: true,
@@ -224,7 +223,7 @@ describe('requireApiActor', () => {
 
   it('grants write to a valid agent token even when write is required', async () => {
     process.env.AGENT_API_KEY = TEST_KEY;
-    mockedAuth.mockResolvedValue(null);
+    authMock.mockResolvedValue(null);
 
     const result = await requireApiActor(
       makeRequest({ authorization: `Bearer ${TEST_KEY}` }),
