@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireApiActor } from '@/lib/api-actor';
 import { google } from 'googleapis';
 
 const CACHE_FILE_NAME = 'mc-data.json';
@@ -378,12 +378,10 @@ async function findOrCreateFile(drive: ReturnType<typeof google.drive>, driveId:
   return file.data.id!;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const drive = await getGoogleDriveClient();
     const driveId = await findSharedDrive(drive);
@@ -414,12 +412,10 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const mcData = await request.json();
     const drive = await getGoogleDriveClient();

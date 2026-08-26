@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { ShopifyClient } from '@/lib/shopify';
 import { ShopifyQLService, ForecastingData as ForecastingItem } from '@/lib/shopifyql';
 // Note: Shopify transfer data is no longer fetched here
@@ -332,15 +332,17 @@ export async function GET(request: NextRequest) {
     const cronSecret = request.headers.get('x-cron-secret');
     const isValidCron = cronSecret === process.env.CRON_SECRET;
     
-    const session = await auth();
-    if (!session?.user && !isValidCron) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const result = await requireApiActor(request);
+    if (!result.ok && !isValidCron) {
+      return result.response;
     }
 
     // Determine who triggered the refresh
-    const refreshedBy = isAutoRefresh || isValidCron 
-      ? 'hourly auto refresh' 
-      : session?.user?.name || 'unknown';
+    const refreshedBy = isAutoRefresh || isValidCron
+      ? 'hourly auto refresh'
+      : result.ok
+        ? result.actor.name
+        : 'unknown';
 
     const startTime = Date.now();
     console.log(`🔄 Starting inventory refresh (by: ${refreshedBy})...`);

@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { google } from 'googleapis';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 
@@ -126,10 +126,8 @@ async function findFile(
 // GET - Retrieve logs for a location
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location') || 'LA Office';
@@ -170,10 +168,8 @@ export async function GET(request: NextRequest) {
 // POST - Add new log entry for a location
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const { log, location = 'LA Office' } = await request.json();
     if (!log) {

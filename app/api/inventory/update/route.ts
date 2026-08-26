@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, canWrite } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
 import { fetchTeslaMirrorInventoryItemIds } from '@/lib/tesla-mirror-writes';
@@ -52,21 +52,12 @@ const INVENTORY_SET_QUANTITIES_MUTATION = `
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to update inventory.' }, { status: 403 });
-    }
-    
-    // Note: keeping original auth check below for backward compatibility
-    if (false) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to update inventory.',
+    });
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body: UpdateRequest = await request.json();
     const { updates, reason = 'Physical inventory count' } = body;
@@ -388,7 +379,7 @@ export async function POST(request: NextRequest) {
           })),
       },
       results,
-      updatedBy: session.user.name,
+      updatedBy: actor.name,
       timestamp: new Date().toISOString(),
     });
 

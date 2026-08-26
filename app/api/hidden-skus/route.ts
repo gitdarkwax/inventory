@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { HiddenSkusService } from '@/lib/hidden-skus';
 
 export const dynamic = 'force-dynamic';
@@ -7,12 +7,10 @@ export const dynamic = 'force-dynamic';
 /**
  * GET - Get all hidden SKUs for inventory counts
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const cache = await HiddenSkusService.getHiddenSKUs();
     return NextResponse.json(cache);
@@ -30,10 +28,9 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body = await request.json();
     const { sku } = body;
@@ -47,8 +44,8 @@ export async function POST(request: NextRequest) {
 
     const cache = await HiddenSkusService.addSKU(
       sku,
-      session.user.name || 'Unknown',
-      session.user.email || 'unknown@example.com'
+      actor.name,
+      actor.email
     );
 
     return NextResponse.json(cache);
@@ -66,10 +63,8 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);
     const sku = searchParams.get('sku');

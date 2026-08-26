@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, canWrite } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { google } from 'googleapis';
 
 export const dynamic = 'force-dynamic';
@@ -150,14 +150,12 @@ async function loadExistingDraft(
 // GET - Retrieve shared draft for a location (merged counts from all contributors)
 export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location') || 'LA Office';
-    const userName = session.user.name || 'Unknown';
+    const userName = result.actor.name;
 
     const drive = await getDriveClient();
     const sharedDriveId = await findSharedDrive(drive);
@@ -206,22 +204,18 @@ export async function GET(request: NextRequest) {
 // POST - Save and merge draft for a location
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to save drafts.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to save drafts.',
+    });
+    if (!result.ok) return result.response;
 
     const { counts, location = 'LA Office' } = await request.json();
     if (!counts) {
       return NextResponse.json({ error: 'No counts provided' }, { status: 400 });
     }
 
-    const userName = session.user.name || 'Unknown';
+    const userName = result.actor.name;
     const now = new Date().toISOString();
     const draftFileName = getDraftFileName(location);
 
@@ -322,15 +316,11 @@ export async function POST(request: NextRequest) {
 // DELETE - Delete draft for a location (clears for everyone)
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to clear drafts.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to clear drafts.',
+    });
+    if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);
     const location = searchParams.get('location') || 'LA Office';
