@@ -4,6 +4,7 @@
  */
 
 import { WebClient } from '@slack/web-api';
+import { getPaymentStatusLabel, type PaymentStatus } from './production-order-payment';
 
 // Tracking URL patterns for different carriers
 const TRACKING_URLS: Record<string, string> = {
@@ -144,6 +145,46 @@ export class SlackService {
     await this.client.chat.postMessage({
       channel: this.channelId,
       text: `PO Delivery: ${data.poNumber} - ${statusText}`,
+      blocks,
+    });
+  }
+
+  /**
+   * Send notification when a PO payment status changes
+   */
+  async notifyPOPaymentStatusUpdated(data: {
+    poNumber: string;
+    previousPaymentStatus: PaymentStatus | null;
+    paymentStatus: PaymentStatus;
+    vendor: string;
+    updatedBy: string;
+    items: Array<{ sku: string; quantity: number }>;
+  }): Promise<void> {
+    const previousStatusText = data.previousPaymentStatus
+      ? getPaymentStatusLabel(data.previousPaymentStatus)
+      : 'Not Set';
+    const paymentStatusText = getPaymentStatusLabel(data.paymentStatus);
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*💰 PO Payment Status Updated*\n*PO#:* ${data.poNumber}    *Payment:* ${previousStatusText} → ${paymentStatusText}\n*Vendor:* ${data.vendor || 'N/A'}    *Updated By:* ${data.updatedBy}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Items:*\n${this.formatSkuList(data.items)}`,
+        },
+      },
+    ];
+
+    await this.client.chat.postMessage({
+      channel: this.channelId,
+      text: `PO Payment Status Updated: ${data.poNumber} - ${paymentStatusText}`,
       blocks,
     });
   }

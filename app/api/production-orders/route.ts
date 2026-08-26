@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
 import { ProductionOrdersService } from '@/lib/production-orders';
-import { normalizePaymentStatus } from '@/lib/production-order-payment';
+import { getDisplayPaymentStatus, normalizePaymentStatus } from '@/lib/production-order-payment';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
@@ -204,6 +204,9 @@ export async function PATCH(request: NextRequest) {
     const ordersBefore = await ProductionOrdersService.loadOrders();
     const orderBefore = ordersBefore.orders.find(o => o.id === orderId);
     const previousStatus = orderBefore?.status;
+    const previousPaymentStatus = orderBefore
+      ? getDisplayPaymentStatus(orderBefore.status, orderBefore.paymentStatus)
+      : null;
 
     // Otherwise, update order fields
     const updatedOrder = await ProductionOrdersService.updateOrder(
@@ -236,6 +239,23 @@ export async function PATCH(request: NextRequest) {
           poNumber: updatedOrder.id,
           cancelledBy: userName,
           vendor: updatedOrder.vendor || '',
+          items: updatedOrder.items.map(item => ({
+            sku: item.sku,
+            quantity: item.quantity,
+          })),
+        });
+      }, 'SLACK_CHANNEL_PRODUCTION');
+    }
+
+    if (normalizedPaymentStatus !== undefined && previousPaymentStatus !== normalizedPaymentStatus) {
+      sendSlackNotification(async () => {
+        const slack = new SlackService(process.env.SLACK_CHANNEL_PRODUCTION!);
+        await slack.notifyPOPaymentStatusUpdated({
+          poNumber: updatedOrder.id,
+          previousPaymentStatus,
+          paymentStatus: normalizedPaymentStatus,
+          vendor: updatedOrder.vendor || '',
+          updatedBy: userName,
           items: updatedOrder.items.map(item => ({
             sku: item.sku,
             quantity: item.quantity,
