@@ -254,6 +254,7 @@ export async function PATCH(request: NextRequest) {
           poNumber: updatedOrder.id,
           previousPaymentStatus,
           paymentStatus: normalizedPaymentStatus,
+          poStatus: updatedOrder.status,
           vendor: updatedOrder.vendor || '',
           updatedBy: userName,
           items: updatedOrder.items.map(item => ({

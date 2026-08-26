@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getDisplayPaymentStatus,
   getPaymentStatusLabel,
+  getProductionOrderStatusLabel,
   isPaymentStatus,
   normalizePaymentStatus,
 } from './production-order-payment';
@@ -37,5 +38,12 @@ describe('production order payment status helpers', () => {
     expect(getPaymentStatusLabel('payment_pending')).toBe('Payment Pending');
     expect(getPaymentStatusLabel('deposit_paid')).toBe('Deposit Paid');
     expect(getPaymentStatusLabel('balance_paid')).toBe('Balance Paid');
+  });
+
+  it('maps PO lifecycle statuses to Slack-friendly labels', () => {
+    expect(getProductionOrderStatusLabel('in_production')).toBe('In Production');
+    expect(getProductionOrderStatusLabel('partial')).toBe('Partial Delivery');
+    expect(getProductionOrderStatusLabel('completed')).toBe('Fully Delivered');
+    expect(getProductionOrderStatusLabel('cancelled')).toBe('Cancelled');
   });
 });

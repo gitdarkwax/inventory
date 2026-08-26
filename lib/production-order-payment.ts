@@ -4,6 +4,13 @@ export const PAYMENT_STATUS_LABELS = {
   balance_paid: 'Balance Paid',
 } as const;
 
+export const PRODUCTION_ORDER_STATUS_LABELS = {
+  in_production: 'In Production',
+  partial: 'Partial Delivery',
+  completed: 'Fully Delivered',
+  cancelled: 'Cancelled',
+} as const;
+
 export type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
 export type ProductionOrderLifecycleStatus = 'in_production' | 'partial' | 'completed' | 'cancelled';
 
@@ -34,6 +41,10 @@ export function normalizePaymentStatus(value: unknown): PaymentStatus | null {
 
 export function getPaymentStatusLabel(status: PaymentStatus): string {
   return PAYMENT_STATUS_LABELS[status];
+}
+
+export function getProductionOrderStatusLabel(status: ProductionOrderLifecycleStatus): string {
+  return PRODUCTION_ORDER_STATUS_LABELS[status];
 }
 
 export function isOpenProductionOrderStatus(status: ProductionOrderLifecycleStatus): boolean {

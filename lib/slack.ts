@@ -4,7 +4,12 @@
  */
 
 import { WebClient } from '@slack/web-api';
-import { getPaymentStatusLabel, type PaymentStatus } from './production-order-payment';
+import {
+  getPaymentStatusLabel,
+  getProductionOrderStatusLabel,
+  type PaymentStatus,
+  type ProductionOrderLifecycleStatus,
+} from './production-order-payment';
 
 // Tracking URL patterns for different carriers
 const TRACKING_URLS: Record<string, string> = {
@@ -156,6 +161,7 @@ export class SlackService {
     poNumber: string;
     previousPaymentStatus: PaymentStatus | null;
     paymentStatus: PaymentStatus;
+    poStatus: ProductionOrderLifecycleStatus;
     vendor: string;
     updatedBy: string;
     items: Array<{ sku: string; quantity: number }>;
@@ -164,13 +170,14 @@ export class SlackService {
       ? getPaymentStatusLabel(data.previousPaymentStatus)
       : 'Not Set';
     const paymentStatusText = getPaymentStatusLabel(data.paymentStatus);
+    const poStatusText = getProductionOrderStatusLabel(data.poStatus);
 
     const blocks = [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*💰 PO Payment Status Updated*\n*PO#:* ${data.poNumber}    *Payment:* ${previousStatusText} → ${paymentStatusText}\n*Vendor:* ${data.vendor || 'N/A'}    *Updated By:* ${data.updatedBy}`,
+          text: `*💰 PO Payment Status Updated*\n*PO#:* ${data.poNumber}    *Payment:* ${previousStatusText} → ${paymentStatusText}\n*PO Status:* ${poStatusText}    *Vendor:* ${data.vendor || 'N/A'}\n*Updated By:* ${data.updatedBy}`,
         },
       },
       {
@@ -184,7 +191,7 @@ export class SlackService {
 
     await this.client.chat.postMessage({
       channel: this.channelId,
-      text: `PO Payment Status Updated: ${data.poNumber} - ${paymentStatusText}`,
+      text: `PO Payment Status Updated: ${data.poNumber} - ${paymentStatusText} (${poStatusText})`,
       blocks,
     });
   }
