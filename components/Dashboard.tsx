@@ -7974,33 +7974,33 @@ export default function Dashboard({ session }: DashboardProps) {
                                   <div className="space-y-4">
                                     {/* Meta info */}
                                     <div
-                                      className="grid gap-x-8 text-sm"
+                                      className="grid gap-x-6 text-sm"
                                       style={{ gridTemplateColumns: `repeat(${paymentStatus ? 5 : 4}, minmax(0, 1fr))` }}
                                     >
-                                      <div className="min-w-0 flex items-baseline gap-2">
-                                        <span className="text-gray-500">Created by:</span>
+                                      <div className="min-w-0 flex items-baseline gap-2 whitespace-nowrap">
+                                        <span className="shrink-0 text-gray-500">Created by:</span>
                                         <span className="text-gray-900 truncate">{order.createdBy}</span>
                                       </div>
-                                      <div className="min-w-0 flex items-baseline gap-2">
-                                        <span className="text-gray-500">Vendor:</span>
+                                      <div className="min-w-0 flex items-baseline gap-2 whitespace-nowrap">
+                                        <span className="shrink-0 text-gray-500">Vendor:</span>
                                         <span className="text-gray-900 truncate">{order.vendor || '—'}</span>
                                       </div>
-                                      <div className="min-w-0 flex items-baseline gap-2">
-                                        <span className="text-gray-500">Created:</span>
+                                      <div className="min-w-0 flex items-baseline gap-2 whitespace-nowrap">
+                                        <span className="shrink-0 text-gray-500">Created:</span>
                                         <span className="text-gray-900 truncate">
                                           {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
                                       </div>
-                                      <div className="min-w-0 flex items-baseline gap-2">
-                                        <span className="text-gray-500">Last updated:</span>
+                                      <div className="min-w-0 flex items-baseline gap-2 whitespace-nowrap">
+                                        <span className="shrink-0 text-gray-500">Last updated:</span>
                                         <span className="text-gray-900 truncate">
                                           {new Date(order.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
                                       </div>
                                       {paymentStatus && (
-                                        <div className="min-w-0 flex items-center gap-2">
-                                          <span className="text-gray-500">Payment Status:</span>
-                                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusBadgeClasses(paymentStatus)}`}>
+                                        <div className="min-w-0 flex items-center gap-2 whitespace-nowrap">
+                                          <span className="shrink-0 text-gray-500">Payment Status:</span>
+                                          <span className={`inline-flex shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusBadgeClasses(paymentStatus)}`}>
                                             {getPaymentStatusLabel(paymentStatus)}
                                           </span>
                                         </div>
