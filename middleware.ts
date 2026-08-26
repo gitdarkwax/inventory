@@ -22,8 +22,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Never redirect cron - Vercel cron hits vercel.app URL and does NOT follow redirects
-  if (pathname.startsWith('/api/cron')) {
+  // Never redirect API routes. Vercel cron hits the vercel.app URL and does not
+  // follow redirects; agent bearer tokens are also dropped on 301.
+  if (pathname.startsWith('/api')) {
     return NextResponse.next();
   }
 

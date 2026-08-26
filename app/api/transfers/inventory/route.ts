@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
 import { TransfersService } from '@/lib/transfers';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
@@ -246,10 +246,8 @@ async function adjustInventory(
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const body: RequestBody = await request.json();
     

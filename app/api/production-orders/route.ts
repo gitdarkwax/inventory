@@ -4,19 +4,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, canWrite } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { ProductionOrdersService } from '@/lib/production-orders';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
 
 // GET - List all production orders
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -37,15 +35,12 @@ export async function GET() {
 // POST - Create new production order
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to create production orders.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to create production orders.',
+    });
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body = await request.json();
     const { items, notes, vendor, eta, poNumber, isNonSku } = body as { 
@@ -77,8 +72,8 @@ export async function POST(request: NextRequest) {
     const newOrder = await ProductionOrdersService.createOrder(
       items,
       notes || '',
-      session.user.name || 'Unknown',
-      session.user.email || 'unknown@example.com',
+      actor.name,
+      actor.email,
       vendor,
       eta,
       poNumber,
@@ -90,7 +85,7 @@ export async function POST(request: NextRequest) {
       const slack = new SlackService(process.env.SLACK_CHANNEL_PRODUCTION!);
       await slack.notifyPOCreated({
         poNumber: newOrder.id,
-        createdBy: session.user?.name || 'Unknown',
+        createdBy: actor.name,
         vendor: vendor || '',
         eta: eta || null,
         items: items,
@@ -111,15 +106,12 @@ export async function POST(request: NextRequest) {
 // PATCH - Update production order or log delivery
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to update production orders.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to update production orders.',
+    });
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body = await request.json();
     const { orderId, items, notes, poNumber, vendor, eta, status, deliveries } = body as {
@@ -140,8 +132,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const userName = session.user.name || 'Unknown';
-    const userEmail = session.user.email || 'unknown@example.com';
+    const userName = actor.name;
+    const userEmail = actor.email;
 
     // If deliveries are provided, log them
     if (deliveries && deliveries.length > 0) {
@@ -245,13 +237,11 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Permanently remove production orders by ID (e.g. test data cleanup)
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Forbidden. Write access required to delete production orders.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Forbidden. Write access required to delete production orders.',
+    });
+    if (!result.ok) return result.response;
 
     const body = await request.json().catch(() => ({}));
     const { orderIds } = body as { orderIds?: string[] };

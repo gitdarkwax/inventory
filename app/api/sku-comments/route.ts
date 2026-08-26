@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { SkuCommentsService } from '@/lib/sku-comments';
 
 export const dynamic = 'force-dynamic';
@@ -7,12 +7,10 @@ export const dynamic = 'force-dynamic';
 /**
  * GET - Get all SKU comments
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const cache = await SkuCommentsService.getComments();
     return NextResponse.json(cache);
@@ -30,10 +28,9 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body = await request.json();
     const { sku, comment } = body;
@@ -55,8 +52,8 @@ export async function POST(request: NextRequest) {
     const cache = await SkuCommentsService.setComment(
       sku,
       comment,
-      session.user.name || 'Unknown',
-      session.user.email || 'unknown@example.com'
+      actor.name,
+      actor.email
     );
 
     return NextResponse.json(cache);
@@ -74,10 +71,8 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);
     const sku = searchParams.get('sku');

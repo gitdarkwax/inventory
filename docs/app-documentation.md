@@ -443,6 +443,17 @@ Sales velocity can be filtered by location:
 
 # 6. System Features
 
+## Agent / machine authentication
+
+Operational API routes accept either a Google session cookie (humans) or:
+
+```
+Authorization: Bearer <AGENT_API_KEY>
+X-Agent-Name: inventory-bot
+```
+
+`X-Agent-Name` is optional (defaults to `Agent`). Agent writes are attributed as that name with email `agent@inventory.magbak.ai` and have full write access. Do not reuse `CRON_SECRET`. If `AGENT_API_KEY` is unset, bearer auth is rejected.
+
 ## Data Refresh
 
 | Type | Frequency | Trigger |
@@ -581,6 +592,7 @@ SKUs are grouped into product categories based on naming conventions:
 | `SLACK_CHANNEL_ALERTS` | Channel for low stock alerts |
 | `SLACK_CHANNEL_LOW_INV_ALERT` | Channel for transfer-to-LA Office alerts (<7 days runway) |
 | `CRON_SECRET` | Secret for hourly refresh authorization |
+| `AGENT_API_KEY` | Server-only bearer token for AI agents (`Authorization: Bearer <key>`). Optional `X-Agent-Name` header (defaults to `Agent`). Do not reuse `CRON_SECRET`. |
 
 ---
 

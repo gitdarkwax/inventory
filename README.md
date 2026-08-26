@@ -46,7 +46,7 @@ Real-time Shopify inventory tracking, forecasting, and production planning dashb
 
 - **Framework:** Next.js 16 (App Router)
 - **Styling:** Tailwind CSS 4
-- **Auth:** NextAuth.js v5 (Google OAuth)
+- **Auth:** NextAuth.js v5 (Google OAuth) for humans; `AGENT_API_KEY` bearer token for machines/agents
 - **APIs:** 
   - Shopify Admin REST API (2024-10)
   - Shopify Admin GraphQL API (2026-01) for transfers
@@ -88,6 +88,25 @@ Real-time Shopify inventory tracking, forecasting, and production planning dashb
 
 6. Open [http://localhost:3000](http://localhost:3000) in your browser
 
+## Agent API authentication
+
+Humans continue to sign in with Google OAuth and use the dashboard as before.
+
+AI agents and other machines can call the same operational `/api/*` routes **without** a Google session cookie by sending a server-side API key. Do not reuse `CRON_SECRET` for this.
+
+Set `AGENT_API_KEY` in the server environment only (never `NEXT_PUBLIC_`). If the env var is unset or empty, bearer authentication is rejected.
+
+```http
+Authorization: Bearer <AGENT_API_KEY>
+X-Agent-Name: inventory-bot
+```
+
+`X-Agent-Name` is optional and defaults to `Agent`. Writes are attributed as that name with email `agent@inventory.magbak.ai` (Slack, activity logs, `createdBy` / `updatedBy`). A valid agent token has full write access, same as `ALLOWED_EMAILS`.
+
+Call `https://inventory.magbak.ai` (not the `vercel.app` alias) so the `Authorization` header is not dropped by the custom-domain redirect.
+
+`GET /api/inventory` and `GET /api/forecasting` stay unauthenticated cached reads. `/api/cron/refresh` still uses `CRON_SECRET` only.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -103,6 +122,7 @@ Real-time Shopify inventory tracking, forecasting, and production planning dashb
 | `AUTH_SECRET` | NextAuth secret (generate with `openssl rand -base64 32`) |
 | `AUTH_URL` | Application URL (e.g., `http://localhost:3000`) |
 | `CRON_SECRET` | Secret for Vercel cron job authentication |
+| `AGENT_API_KEY` | Server-only bearer token for AI agents / machines (do not reuse `CRON_SECRET`; never `NEXT_PUBLIC_`) |
 
 ## Project Structure
 
@@ -124,6 +144,7 @@ inventory/
 ├── components/
 │   └── Dashboard.tsx      # Main dashboard component
 ├── lib/                   # Shared utilities
+│   ├── api-actor.ts      # Session or AGENT_API_KEY bearer actor
 │   ├── auth.ts           # NextAuth configuration
 │   ├── constants.ts      # App constants and categories
 │   ├── google-drive-cache.ts  # Google Drive caching

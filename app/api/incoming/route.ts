@@ -4,17 +4,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, canWrite } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const cacheService = new InventoryCacheService();
     const incomingInventory = await cacheService.getIncomingInventory();
@@ -35,14 +33,11 @@ export async function GET() {
 // DELETE - Clear a specific SKU from incoming inventory (admin cleanup)
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access',
+    });
+    if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);
     const sku = searchParams.get('sku');

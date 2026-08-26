@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth, canWrite } from '@/lib/auth';
+import { requireApiActor } from '@/lib/api-actor';
 import { TransfersService, CarrierType, TransferType } from '@/lib/transfers';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
@@ -14,12 +14,10 @@ import { SlackService, sendSlackNotification } from '@/lib/slack';
 export const dynamic = 'force-dynamic';
 
 // GET - List all transfers
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
 
     const cache = await TransfersService.loadTransfers();
     
@@ -40,15 +38,12 @@ export async function GET() {
 // POST - Create new transfer
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to create transfers.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to create transfers.',
+    });
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body = await request.json();
     const { origin, destination, transferType, items, carrier, trackingNumber, eta, notes, isNonSku } = body as { 
@@ -125,8 +120,8 @@ export async function POST(request: NextRequest) {
       destination,
       transferType,
       items,
-      session.user.name || 'Unknown',
-      session.user.email || 'unknown@example.com',
+      actor.name,
+      actor.email,
       carrier,
       trackingNumber,
       eta,
@@ -148,15 +143,12 @@ export async function POST(request: NextRequest) {
 // PATCH - Update transfer
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    // Check write access
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Read-only access. You do not have permission to update transfers.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Read-only access. You do not have permission to update transfers.',
+    });
+    if (!result.ok) return result.response;
+    const { actor } = result;
 
     const body = await request.json();
     const { transferId, origin, destination, transferType, items, carrier, trackingNumber, eta, notes, status, restockedItems, receivedItems } = body as {
@@ -189,8 +181,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const userName = session.user.name || 'Unknown';
-    const userEmail = session.user.email || 'unknown@example.com';
+    const userName = actor.name;
+    const userEmail = actor.email;
 
     // Get the transfer before update to detect status changes
     const transfersBefore = await TransfersService.loadTransfers();
@@ -344,13 +336,11 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Permanently remove transfers by ID (e.g. test data cleanup)
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (!canWrite(session.user.email)) {
-      return NextResponse.json({ error: 'Forbidden. Write access required to delete transfers.' }, { status: 403 });
-    }
+    const result = await requireApiActor(request, {
+      write: true,
+      writeError: 'Forbidden. Write access required to delete transfers.',
+    });
+    if (!result.ok) return result.response;
 
     const body = await request.json().catch(() => ({}));
     const { transferIds } = body as { transferIds?: string[] };
