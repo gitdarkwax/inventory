@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { getPaymentStatusLabel, type PaymentStatus } from './production-order-payment';
 
 /**
  * Production Order types and cache service
@@ -27,6 +28,7 @@ export interface ProductionOrder {
   vendor?: string;
   eta?: string; // ISO date string
   status: 'in_production' | 'partial' | 'completed' | 'cancelled';
+  paymentStatus?: PaymentStatus;
   isNonSku?: boolean; // Items not in SKU list; no Shopify update on delivery
   createdBy: string;
   createdByEmail: string;
@@ -261,7 +263,8 @@ export class ProductionOrdersService {
     vendor?: string,
     eta?: string,
     poNumber?: string,
-    isNonSku?: boolean
+    isNonSku?: boolean,
+    paymentStatus?: PaymentStatus
   ): Promise<ProductionOrder> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -295,6 +298,7 @@ export class ProductionOrdersService {
       vendor,
       eta,
       status: 'in_production',
+      paymentStatus: paymentStatus || 'payment_pending',
       isNonSku: isNonSku || false,
       createdBy,
       createdByEmail,
@@ -322,7 +326,7 @@ export class ProductionOrdersService {
    */
   static async updateOrder(
     orderId: string,
-    updates: Partial<Pick<ProductionOrder, 'notes' | 'poNumber' | 'vendor' | 'eta' | 'status'>> & {
+    updates: Partial<Pick<ProductionOrder, 'notes' | 'poNumber' | 'vendor' | 'eta' | 'status' | 'paymentStatus'>> & {
       items?: { sku: string; quantity: number; masterCartons?: number }[];
     },
     changedBy?: string,
@@ -377,6 +381,10 @@ export class ProductionOrdersService {
     if (updates.vendor !== undefined && updates.vendor !== order.vendor) {
       changes.push(`Vendor: ${updates.vendor || 'cleared'}`);
       order.vendor = updates.vendor;
+    }
+    if (updates.paymentStatus !== undefined && updates.paymentStatus !== order.paymentStatus) {
+      changes.push(`Payment Status: ${getPaymentStatusLabel(updates.paymentStatus)}`);
+      order.paymentStatus = updates.paymentStatus;
     }
     
     // Track ETA changes separately for dedicated log entry

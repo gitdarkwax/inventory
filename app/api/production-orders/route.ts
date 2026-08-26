@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
 import { ProductionOrdersService } from '@/lib/production-orders';
+import { normalizePaymentStatus } from '@/lib/production-order-payment';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
@@ -43,13 +44,14 @@ export async function POST(request: NextRequest) {
     const { actor } = result;
 
     const body = await request.json();
-    const { items, notes, vendor, eta, poNumber, isNonSku } = body as { 
-      items: { sku: string; quantity: number; masterCartons?: number }[]; 
+    const { items, notes, vendor, eta, poNumber, isNonSku, paymentStatus } = body as {
+      items: { sku: string; quantity: number; masterCartons?: number }[];
       notes: string;
       vendor?: string;
       eta?: string;
       poNumber?: string;
       isNonSku?: boolean;
+      paymentStatus?: unknown;
     };
 
     if (!items || items.length === 0) {
@@ -69,6 +71,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const normalizedPaymentStatus = paymentStatus === undefined
+      ? undefined
+      : normalizePaymentStatus(paymentStatus) || undefined;
+    if (paymentStatus !== undefined && !normalizedPaymentStatus) {
+      return NextResponse.json(
+        { error: 'Payment status must be Payment Pending, Deposit Paid, or Balance Paid' },
+        { status: 400 }
+      );
+    }
+
     const newOrder = await ProductionOrdersService.createOrder(
       items,
       notes || '',
@@ -77,7 +89,8 @@ export async function POST(request: NextRequest) {
       vendor,
       eta,
       poNumber,
-      isNonSku
+      isNonSku,
+      normalizedPaymentStatus
     );
 
     // Send Slack notification (non-blocking)
@@ -114,7 +127,7 @@ export async function PATCH(request: NextRequest) {
     const { actor } = result;
 
     const body = await request.json();
-    const { orderId, items, notes, poNumber, vendor, eta, status, deliveries } = body as {
+    const { orderId, items, notes, poNumber, vendor, eta, status, paymentStatus, deliveries } = body as {
       orderId: string;
       items?: { sku: string; quantity: number }[];
       notes?: string;
@@ -122,6 +135,7 @@ export async function PATCH(request: NextRequest) {
       vendor?: string;
       eta?: string;
       status?: 'in_production' | 'partial' | 'completed' | 'cancelled';
+      paymentStatus?: unknown;
       deliveries?: { sku: string; quantity: number; masterCartons?: number }[];
     };
 
@@ -132,17 +146,23 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    const normalizedPaymentStatus = paymentStatus === undefined
+      ? undefined
+      : normalizePaymentStatus(paymentStatus) || undefined;
+    if (paymentStatus !== undefined && !normalizedPaymentStatus) {
+      return NextResponse.json(
+        { error: 'Payment status must be Payment Pending, Deposit Paid, or Balance Paid' },
+        { status: 400 }
+      );
+    }
+
     const userName = actor.name;
     const userEmail = actor.email;
 
     // If deliveries are provided, log them
     if (deliveries && deliveries.length > 0) {
-      // Get the order before update to calculate pending items
-      const ordersBefore = await ProductionOrdersService.loadOrders();
-      const orderBefore = ordersBefore.orders.find(o => o.id === orderId);
-      
       const updatedOrder = await ProductionOrdersService.logDelivery(
-        orderId, 
+        orderId,
         deliveries,
         userName,
         userEmail
@@ -187,7 +207,7 @@ export async function PATCH(request: NextRequest) {
 
     // Otherwise, update order fields
     const updatedOrder = await ProductionOrdersService.updateOrder(
-      orderId, 
+      orderId,
       {
         items,
         notes,
@@ -195,6 +215,7 @@ export async function PATCH(request: NextRequest) {
         vendor,
         eta,
         status,
+        paymentStatus: normalizedPaymentStatus,
       },
       userName,
       userEmail

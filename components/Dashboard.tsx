@@ -13,6 +13,11 @@ import {
   aggregateUpdateQuantitiesBySku,
   buildInventorySubmissionUpdates,
 } from '@/lib/inventory-submission';
+import {
+  getDisplayPaymentStatus,
+  getPaymentStatusLabel,
+  type PaymentStatus,
+} from '@/lib/production-order-payment';
 import SkuLogModal from './SkuLogModal';
 import type { InventoryCountSubmission } from '@/lib/sku-log';
 
@@ -144,6 +149,7 @@ interface ProductionOrder {
   vendor?: string;
   eta?: string;
   status: 'in_production' | 'partial' | 'completed' | 'cancelled';
+  paymentStatus?: PaymentStatus;
   isNonSku?: boolean;
   createdBy: string;
   createdByEmail: string;
@@ -3124,6 +3130,16 @@ export default function Dashboard({ session }: DashboardProps) {
     const day = runOutDate.getDate();
     const year = runOutDate.getFullYear().toString().slice(-2);
     return `${month} ${day}, ${year}`;
+  };
+
+  const getPaymentStatusBadgeClasses = (status: PaymentStatus): string => {
+    const classes: Record<PaymentStatus, string> = {
+      payment_pending: 'bg-gray-100 text-gray-700',
+      deposit_paid: 'bg-amber-100 text-amber-800',
+      balance_paid: 'bg-green-100 text-green-800',
+    };
+
+    return classes[status];
   };
 
   // Format activity log text to show SKU items on separate lines and handle notes
@@ -7886,9 +7902,9 @@ export default function Dashboard({ session }: DashboardProps) {
                     <table className="min-w-full divide-y divide-gray-200 table-fixed">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="w-[9%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO#</th>
+                          <th className="w-[11%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">PO#</th>
                           <th className="w-[10%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">PO Date</th>
-                          <th className="w-[16%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
+                          <th className="w-[14%] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">SKUs</th>
                           <th className="w-[9%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ordered</th>
                           <th className="w-[9%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Received</th>
                           <th className="w-[9%] px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase pr-6">Pending</th>
@@ -7901,22 +7917,23 @@ export default function Dashboard({ session }: DashboardProps) {
                         {filteredOrders.map((order) => {
                           const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
                           const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
-                        const isExpanded = selectedOrder?.id === order.id;
-                        // Create SKU preview (up to 20 chars)
-                        const skuList = order.items.map(i => i.sku).join(', ');
-                        const skuPreview = skuList.length > 20 ? skuList.slice(0, 17) + '...' : skuList;
-                        return (
+                          const paymentStatus = getDisplayPaymentStatus(order.status, order.paymentStatus);
+                          const isExpanded = selectedOrder?.id === order.id;
+                          // Create SKU preview (up to 20 chars)
+                          const skuList = order.items.map(i => i.sku).join(', ');
+                          const skuPreview = skuList.length > 20 ? skuList.slice(0, 17) + '...' : skuList;
+                          return (
                           <Fragment key={order.id}>
                             <tr 
                               className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                               onClick={() => setSelectedOrder(isExpanded ? null : order)}
                             >
-                              <td className="w-[9%] px-4 py-3 text-sm font-medium text-gray-900">
+                              <td className="w-[11%] px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
                                 <span className="flex items-center gap-2">
-                                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                   </svg>
-                                  {order.id}
+                                  <span className="whitespace-nowrap">{order.id}</span>
                                   {order.isNonSku && (
                                     <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800" title="Items not in SKU list">Non SKU</span>
                                   )}
@@ -7925,7 +7942,7 @@ export default function Dashboard({ session }: DashboardProps) {
                               <td className="w-[10%] px-4 py-3 text-sm text-gray-600">
                                 {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
                               </td>
-                              <td className="w-[16%] px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
+                              <td className="w-[14%] px-4 py-3 text-sm text-gray-600 font-mono" title={skuList}>{skuPreview}</td>
                               <td className="w-[9%] px-4 py-3 text-sm text-gray-600 text-center">{totalOrdered.toLocaleString()}</td>
                               <td className="w-[9%] px-4 py-3 text-sm text-green-600 text-center">{totalReceived.toLocaleString()}</td>
                               <td className={`w-[9%] px-4 py-3 text-sm text-center pr-6 ${totalOrdered - totalReceived > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
@@ -7956,27 +7973,38 @@ export default function Dashboard({ session }: DashboardProps) {
                                 <td colSpan={9} className="bg-gray-50 px-4 py-4">
                                   <div className="space-y-4">
                                     {/* Meta info */}
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                      <div>
+                                    <div
+                                      className="grid gap-x-8 text-sm"
+                                      style={{ gridTemplateColumns: `repeat(${paymentStatus ? 5 : 4}, minmax(0, 1fr))` }}
+                                    >
+                                      <div className="min-w-0 flex items-baseline gap-2">
                                         <span className="text-gray-500">Created by:</span>
-                                        <span className="ml-2 text-gray-900">{order.createdBy}</span>
+                                        <span className="text-gray-900 truncate">{order.createdBy}</span>
                                       </div>
-                                      <div>
+                                      <div className="min-w-0 flex items-baseline gap-2">
                                         <span className="text-gray-500">Vendor:</span>
-                                        <span className="ml-2 text-gray-900">{order.vendor || '—'}</span>
+                                        <span className="text-gray-900 truncate">{order.vendor || '—'}</span>
                                       </div>
-                                      <div>
+                                      <div className="min-w-0 flex items-baseline gap-2">
                                         <span className="text-gray-500">Created:</span>
-                                        <span className="ml-2 text-gray-900">
+                                        <span className="text-gray-900 truncate">
                                           {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
                                       </div>
-                                      <div>
+                                      <div className="min-w-0 flex items-baseline gap-2">
                                         <span className="text-gray-500">Last updated:</span>
-                                        <span className="ml-2 text-gray-900">
+                                        <span className="text-gray-900 truncate">
                                           {new Date(order.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
                                       </div>
+                                      {paymentStatus && (
+                                        <div className="min-w-0 flex items-center gap-2">
+                                          <span className="text-gray-500">Payment Status:</span>
+                                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusBadgeClasses(paymentStatus)}`}>
+                                            {getPaymentStatusLabel(paymentStatus)}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
                                     {/* Items Table */}
                                     <div>
