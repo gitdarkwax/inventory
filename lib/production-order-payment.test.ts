@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatPaymentPercentPaid,
+  getDisplayPaymentPercentPaid,
   getDisplayPaymentStatus,
   getPaymentStatusLabel,
   getProductionOrderStatusLabel,
   isPaymentStatus,
+  normalizePaymentPercentPaid,
   normalizePaymentStatus,
 } from './production-order-payment';
 
@@ -22,6 +25,16 @@ describe('production order payment status helpers', () => {
     expect(normalizePaymentStatus('paid')).toBeNull();
   });
 
+  it('normalizes percent paid inputs for agent updates', () => {
+    expect(normalizePaymentPercentPaid(0)).toBe(0);
+    expect(normalizePaymentPercentPaid(30)).toBe(30);
+    expect(normalizePaymentPercentPaid('30% paid')).toBe(30);
+    expect(normalizePaymentPercentPaid('30.555%')).toBe(30.56);
+    expect(normalizePaymentPercentPaid(-1)).toBeNull();
+    expect(normalizePaymentPercentPaid(101)).toBeNull();
+    expect(normalizePaymentPercentPaid('Deposit Paid')).toBeNull();
+  });
+
   it('shows Payment Pending only as a fallback for open orders', () => {
     expect(getDisplayPaymentStatus('in_production')).toBe('payment_pending');
     expect(getDisplayPaymentStatus('partial')).toBe('payment_pending');
@@ -38,6 +51,22 @@ describe('production order payment status helpers', () => {
     expect(getPaymentStatusLabel('payment_pending')).toBe('Payment Pending');
     expect(getPaymentStatusLabel('deposit_paid')).toBe('Deposit Paid');
     expect(getPaymentStatusLabel('balance_paid')).toBe('Balance Paid');
+  });
+
+  it('formats numeric payment status values', () => {
+    expect(formatPaymentPercentPaid(0)).toBe('0% paid');
+    expect(formatPaymentPercentPaid(30)).toBe('30% paid');
+    expect(formatPaymentPercentPaid(30.5)).toBe('30.5% paid');
+    expect(formatPaymentPercentPaid(100)).toBe('100% paid');
+  });
+
+  it('shows numeric payment status, with legacy fallback for existing records', () => {
+    expect(getDisplayPaymentPercentPaid('in_production')).toBe(0);
+    expect(getDisplayPaymentPercentPaid('completed')).toBeNull();
+    expect(getDisplayPaymentPercentPaid('completed', 0)).toBe(0);
+    expect(getDisplayPaymentPercentPaid('partial', undefined, 'payment_pending')).toBe(0);
+    expect(getDisplayPaymentPercentPaid('completed', undefined, 'payment_pending')).toBeNull();
+    expect(getDisplayPaymentPercentPaid('completed', undefined, 'balance_paid')).toBe(100);
   });
 
   it('maps PO lifecycle statuses to Slack-friendly labels', () => {

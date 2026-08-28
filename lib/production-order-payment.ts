@@ -43,6 +43,31 @@ export function getPaymentStatusLabel(status: PaymentStatus): string {
   return PAYMENT_STATUS_LABELS[status];
 }
 
+export function normalizePaymentPercentPaid(value: unknown): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0 || value > 100) return null;
+    return Math.round(value * 100) / 100;
+  }
+
+  if (typeof value !== 'string') return null;
+
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*%?\s*(?:paid)?$/i);
+  if (!match) return null;
+
+  const percentPaid = Number(match[1]);
+  if (!Number.isFinite(percentPaid) || percentPaid < 0 || percentPaid > 100) return null;
+
+  return Math.round(percentPaid * 100) / 100;
+}
+
+export function formatPaymentPercentPaid(percentPaid: number): string {
+  const displayPercent = Number.isInteger(percentPaid)
+    ? String(percentPaid)
+    : percentPaid.toFixed(2).replace(/\.?0+$/, '');
+
+  return `${displayPercent}% paid`;
+}
+
 export function getProductionOrderStatusLabel(status: ProductionOrderLifecycleStatus): string {
   return PRODUCTION_ORDER_STATUS_LABELS[status];
 }
@@ -65,4 +90,33 @@ export function getDisplayPaymentStatus(
   }
 
   return isOpenProductionOrderStatus(orderStatus) ? 'payment_pending' : null;
+}
+
+function legacyPaymentStatusToPercentPaid(paymentStatus?: unknown): number | null {
+  const normalizedPaymentStatus = normalizePaymentStatus(paymentStatus);
+  if (!normalizedPaymentStatus) return null;
+
+  if (normalizedPaymentStatus === 'payment_pending') return 0;
+  if (normalizedPaymentStatus === 'balance_paid') return 100;
+
+  return null;
+}
+
+export function getDisplayPaymentPercentPaid(
+  orderStatus: ProductionOrderLifecycleStatus,
+  paymentPercentPaid?: unknown,
+  legacyPaymentStatus?: unknown
+): number | null {
+  const normalizedPaymentPercentPaid = normalizePaymentPercentPaid(paymentPercentPaid);
+  if (normalizedPaymentPercentPaid !== null) return normalizedPaymentPercentPaid;
+
+  const legacyPercentPaid = legacyPaymentStatusToPercentPaid(legacyPaymentStatus);
+  if (legacyPercentPaid !== null) {
+    if (legacyPercentPaid === 0 && !isOpenProductionOrderStatus(orderStatus)) {
+      return null;
+    }
+    return legacyPercentPaid;
+  }
+
+  return isOpenProductionOrderStatus(orderStatus) ? 0 : null;
 }

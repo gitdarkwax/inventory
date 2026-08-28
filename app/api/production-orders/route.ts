@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
 import { ProductionOrdersService } from '@/lib/production-orders';
-import { getDisplayPaymentStatus, normalizePaymentStatus } from '@/lib/production-order-payment';
+import { getDisplayPaymentPercentPaid, normalizePaymentPercentPaid } from '@/lib/production-order-payment';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
 
 export const dynamic = 'force-dynamic';
@@ -44,13 +44,14 @@ export async function POST(request: NextRequest) {
     const { actor } = result;
 
     const body = await request.json();
-    const { items, notes, vendor, eta, poNumber, isNonSku, paymentStatus } = body as {
+    const { items, notes, vendor, eta, poNumber, isNonSku, paymentPercentPaid, paymentStatus } = body as {
       items: { sku: string; quantity: number; masterCartons?: number }[];
       notes: string;
       vendor?: string;
       eta?: string;
       poNumber?: string;
       isNonSku?: boolean;
+      paymentPercentPaid?: unknown;
       paymentStatus?: unknown;
     };
 
@@ -71,12 +72,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const normalizedPaymentStatus = paymentStatus === undefined
+    const paymentStatusInput = paymentPercentPaid !== undefined ? paymentPercentPaid : paymentStatus;
+    const normalizedPaymentPercentPaid = paymentStatusInput === undefined
       ? undefined
-      : normalizePaymentStatus(paymentStatus) || undefined;
-    if (paymentStatus !== undefined && !normalizedPaymentStatus) {
+      : normalizePaymentPercentPaid(paymentStatusInput) ?? undefined;
+    if (paymentStatusInput !== undefined && normalizedPaymentPercentPaid === undefined) {
       return NextResponse.json(
-        { error: 'Payment status must be Payment Pending, Deposit Paid, or Balance Paid' },
+        { error: 'Payment status must be a percent paid from 0 to 100' },
         { status: 400 }
       );
     }
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
       eta,
       poNumber,
       isNonSku,
-      normalizedPaymentStatus
+      normalizedPaymentPercentPaid
     );
 
     // Send Slack notification (non-blocking)
@@ -127,7 +129,7 @@ export async function PATCH(request: NextRequest) {
     const { actor } = result;
 
     const body = await request.json();
-    const { orderId, items, notes, poNumber, vendor, eta, status, paymentStatus, deliveries } = body as {
+    const { orderId, items, notes, poNumber, vendor, eta, status, paymentPercentPaid, paymentStatus, deliveries } = body as {
       orderId: string;
       items?: { sku: string; quantity: number }[];
       notes?: string;
@@ -135,6 +137,7 @@ export async function PATCH(request: NextRequest) {
       vendor?: string;
       eta?: string;
       status?: 'in_production' | 'partial' | 'completed' | 'cancelled';
+      paymentPercentPaid?: unknown;
       paymentStatus?: unknown;
       deliveries?: { sku: string; quantity: number; masterCartons?: number }[];
     };
@@ -146,12 +149,13 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const normalizedPaymentStatus = paymentStatus === undefined
+    const paymentStatusInput = paymentPercentPaid !== undefined ? paymentPercentPaid : paymentStatus;
+    const normalizedPaymentPercentPaid = paymentStatusInput === undefined
       ? undefined
-      : normalizePaymentStatus(paymentStatus) || undefined;
-    if (paymentStatus !== undefined && !normalizedPaymentStatus) {
+      : normalizePaymentPercentPaid(paymentStatusInput) ?? undefined;
+    if (paymentStatusInput !== undefined && normalizedPaymentPercentPaid === undefined) {
       return NextResponse.json(
-        { error: 'Payment status must be Payment Pending, Deposit Paid, or Balance Paid' },
+        { error: 'Payment status must be a percent paid from 0 to 100' },
         { status: 400 }
       );
     }
@@ -204,8 +208,8 @@ export async function PATCH(request: NextRequest) {
     const ordersBefore = await ProductionOrdersService.loadOrders();
     const orderBefore = ordersBefore.orders.find(o => o.id === orderId);
     const previousStatus = orderBefore?.status;
-    const previousPaymentStatus = orderBefore
-      ? getDisplayPaymentStatus(orderBefore.status, orderBefore.paymentStatus)
+    const previousPaymentPercentPaid = orderBefore
+      ? getDisplayPaymentPercentPaid(orderBefore.status, orderBefore.paymentPercentPaid, orderBefore.paymentStatus)
       : null;
 
     // Otherwise, update order fields
@@ -218,7 +222,7 @@ export async function PATCH(request: NextRequest) {
         vendor,
         eta,
         status,
-        paymentStatus: normalizedPaymentStatus,
+        paymentPercentPaid: normalizedPaymentPercentPaid,
       },
       userName,
       userEmail
@@ -247,13 +251,12 @@ export async function PATCH(request: NextRequest) {
       }, 'SLACK_CHANNEL_PRODUCTION');
     }
 
-    if (normalizedPaymentStatus !== undefined && previousPaymentStatus !== normalizedPaymentStatus) {
+    if (normalizedPaymentPercentPaid !== undefined && previousPaymentPercentPaid !== normalizedPaymentPercentPaid) {
       sendSlackNotification(async () => {
         const slack = new SlackService(process.env.SLACK_CHANNEL_PRODUCTION!);
         await slack.notifyPOPaymentStatusUpdated({
           poNumber: updatedOrder.id,
-          previousPaymentStatus,
-          paymentStatus: normalizedPaymentStatus,
+          paymentPercentPaid: normalizedPaymentPercentPaid,
           poStatus: updatedOrder.status,
           vendor: updatedOrder.vendor || '',
           updatedBy: userName,

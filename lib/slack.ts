@@ -5,11 +5,18 @@
 
 import { WebClient } from '@slack/web-api';
 import {
-  getPaymentStatusLabel,
+  formatPaymentPercentPaid,
   getProductionOrderStatusLabel,
-  type PaymentStatus,
   type ProductionOrderLifecycleStatus,
 } from './production-order-payment';
+
+type SlackMrkdwnSectionBlock = {
+  type: 'section';
+  text: {
+    type: 'mrkdwn';
+    text: string;
+  };
+};
 
 // Tracking URL patterns for different carriers
 const TRACKING_URLS: Record<string, string> = {
@@ -119,7 +126,7 @@ export class SlackService {
     const statusEmoji = data.status === 'delivered' ? '✅' : '📬';
     const statusText = data.status === 'delivered' ? 'Fully Delivered' : 'Partial Delivery';
 
-    const blocks: any[] = [
+    const blocks: SlackMrkdwnSectionBlock[] = [
       {
         type: 'section',
         text: {
@@ -159,17 +166,13 @@ export class SlackService {
    */
   async notifyPOPaymentStatusUpdated(data: {
     poNumber: string;
-    previousPaymentStatus: PaymentStatus | null;
-    paymentStatus: PaymentStatus;
+    paymentPercentPaid: number;
     poStatus: ProductionOrderLifecycleStatus;
     vendor: string;
     updatedBy: string;
     items: Array<{ sku: string; quantity: number }>;
   }): Promise<void> {
-    const previousStatusText = data.previousPaymentStatus
-      ? getPaymentStatusLabel(data.previousPaymentStatus)
-      : 'Not Set';
-    const paymentStatusText = getPaymentStatusLabel(data.paymentStatus);
+    const paymentStatusText = formatPaymentPercentPaid(data.paymentPercentPaid);
     const poStatusText = getProductionOrderStatusLabel(data.poStatus);
 
     const blocks = [
@@ -177,7 +180,7 @@ export class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*💰 PO Payment Status Updated*\n*PO#:* ${data.poNumber}    *Payment:* ${previousStatusText} → ${paymentStatusText}\n*PO Status:* ${poStatusText}    *Vendor:* ${data.vendor || 'N/A'}\n*Updated By:* ${data.updatedBy}`,
+          text: `*💰 PO Payment Status Updated*\n*PO#:* ${data.poNumber}    *Payment Status:* ${paymentStatusText}\n*PO Status:* ${poStatusText}    *Vendor:* ${data.vendor || 'N/A'}\n*Updated By:* ${data.updatedBy}`,
         },
       },
       {
@@ -270,7 +273,7 @@ export class SlackService {
       })
       .join('\n');
 
-    const blocks: any[] = [
+    const blocks: SlackMrkdwnSectionBlock[] = [
       {
         type: 'section',
         text: {
@@ -339,9 +342,9 @@ export class SlackService {
     items: Array<{ sku: string; quantity: number }>;
     restockedItems?: Array<{ sku: string; quantity: number }>;
   }): Promise<void> {
-    let headerText = `*❌ Transfer Cancelled*\n*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}`;
+    const headerText = `*❌ Transfer Cancelled*\n*Transfer#:* ${data.transferId}    *Cancelled By:* ${data.cancelledBy}\n*Origin:* ${data.origin}    *Destination:* ${data.destination}\n*Shipment Type:* ${data.shipmentType}`;
     
-    const blocks: any[] = [
+    const blocks: SlackMrkdwnSectionBlock[] = [
       {
         type: 'section',
         text: {
@@ -566,12 +569,13 @@ export async function sendSlackNotification(
   try {
     await notifyFn();
     console.log('✅ Slack notification sent successfully');
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const slackError = error as { message?: unknown; code?: unknown; data?: unknown };
     // Log detailed error info for debugging
     console.error('⚠️ Failed to send Slack notification:', {
-      message: error?.message,
-      code: error?.code,
-      data: error?.data,
+      message: slackError.message,
+      code: slackError.code,
+      data: slackError.data,
     });
   }
 }

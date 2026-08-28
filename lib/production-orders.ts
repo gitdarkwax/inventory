@@ -1,5 +1,10 @@
 import { google } from 'googleapis';
-import { getPaymentStatusLabel, type PaymentStatus } from './production-order-payment';
+import { Readable } from 'stream';
+import {
+  formatPaymentPercentPaid,
+  getDisplayPaymentPercentPaid,
+  type PaymentStatus,
+} from './production-order-payment';
 
 /**
  * Production Order types and cache service
@@ -28,6 +33,8 @@ export interface ProductionOrder {
   vendor?: string;
   eta?: string; // ISO date string
   status: 'in_production' | 'partial' | 'completed' | 'cancelled';
+  paymentPercentPaid?: number;
+  /** Legacy field. New writes use paymentPercentPaid. */
   paymentStatus?: PaymentStatus;
   isNonSku?: boolean; // Items not in SKU list; no Shopify update on delivery
   createdBy: string;
@@ -226,7 +233,7 @@ export class ProductionOrdersService {
           fileId: existingFileId,
           media: {
             mimeType: 'application/json',
-            body: require('stream').Readable.from([fileContent]),
+            body: Readable.from([fileContent]),
           },
           supportsAllDrives: true,
         });
@@ -239,7 +246,7 @@ export class ProductionOrdersService {
           },
           media: {
             mimeType: 'application/json',
-            body: require('stream').Readable.from([fileContent]),
+            body: Readable.from([fileContent]),
           },
           supportsAllDrives: true,
         });
@@ -264,7 +271,7 @@ export class ProductionOrdersService {
     eta?: string,
     poNumber?: string,
     isNonSku?: boolean,
-    paymentStatus?: PaymentStatus
+    paymentPercentPaid?: number
   ): Promise<ProductionOrder> {
     const cache = await ProductionOrdersService.loadOrders();
     
@@ -298,7 +305,7 @@ export class ProductionOrdersService {
       vendor,
       eta,
       status: 'in_production',
-      paymentStatus: paymentStatus || 'payment_pending',
+      ...(paymentPercentPaid !== undefined ? { paymentPercentPaid } : {}),
       isNonSku: isNonSku || false,
       createdBy,
       createdByEmail,
@@ -326,7 +333,7 @@ export class ProductionOrdersService {
    */
   static async updateOrder(
     orderId: string,
-    updates: Partial<Pick<ProductionOrder, 'notes' | 'poNumber' | 'vendor' | 'eta' | 'status' | 'paymentStatus'>> & {
+    updates: Partial<Pick<ProductionOrder, 'notes' | 'poNumber' | 'vendor' | 'eta' | 'status' | 'paymentPercentPaid'>> & {
       items?: { sku: string; quantity: number; masterCartons?: number }[];
     },
     changedBy?: string,
@@ -382,9 +389,20 @@ export class ProductionOrdersService {
       changes.push(`Vendor: ${updates.vendor || 'cleared'}`);
       order.vendor = updates.vendor;
     }
-    if (updates.paymentStatus !== undefined && updates.paymentStatus !== order.paymentStatus) {
-      changes.push(`Payment Status: ${getPaymentStatusLabel(updates.paymentStatus)}`);
-      order.paymentStatus = updates.paymentStatus;
+    if (updates.paymentPercentPaid !== undefined) {
+      const currentPaymentPercentPaid = getDisplayPaymentPercentPaid(
+        order.status,
+        order.paymentPercentPaid,
+        order.paymentStatus
+      );
+      const paymentPercentPaidChanged = updates.paymentPercentPaid !== currentPaymentPercentPaid;
+
+      if (paymentPercentPaidChanged) {
+        changes.push(`Payment Status: ${formatPaymentPercentPaid(updates.paymentPercentPaid)}`);
+      }
+
+      order.paymentPercentPaid = updates.paymentPercentPaid;
+      delete order.paymentStatus;
     }
     
     // Track ETA changes separately for dedicated log entry

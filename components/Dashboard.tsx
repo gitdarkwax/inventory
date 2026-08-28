@@ -14,8 +14,8 @@ import {
   buildInventorySubmissionUpdates,
 } from '@/lib/inventory-submission';
 import {
-  getDisplayPaymentStatus,
-  getPaymentStatusLabel,
+  formatPaymentPercentPaid,
+  getDisplayPaymentPercentPaid,
   type PaymentStatus,
 } from '@/lib/production-order-payment';
 import SkuLogModal from './SkuLogModal';
@@ -149,6 +149,7 @@ interface ProductionOrder {
   vendor?: string;
   eta?: string;
   status: 'in_production' | 'partial' | 'completed' | 'cancelled';
+  paymentPercentPaid?: number;
   paymentStatus?: PaymentStatus;
   isNonSku?: boolean;
   createdBy: string;
@@ -3132,14 +3133,10 @@ export default function Dashboard({ session }: DashboardProps) {
     return `${month} ${day}, ${year}`;
   };
 
-  const getPaymentStatusBadgeClasses = (status: PaymentStatus): string => {
-    const classes: Record<PaymentStatus, string> = {
-      payment_pending: 'bg-gray-100 text-gray-700',
-      deposit_paid: 'bg-amber-100 text-amber-800',
-      balance_paid: 'bg-green-100 text-green-800',
-    };
-
-    return classes[status];
+  const getPaymentStatusBadgeClasses = (percentPaid: number): string => {
+    if (percentPaid >= 100) return 'bg-green-100 text-green-800';
+    if (percentPaid > 0) return 'bg-amber-100 text-amber-800';
+    return 'bg-gray-100 text-gray-700';
   };
 
   // Format activity log text to show SKU items on separate lines and handle notes
@@ -7044,8 +7041,6 @@ export default function Dashboard({ session }: DashboardProps) {
                                       locationId: locationId || 'test-mode',
                                     });
                                     
-                                    let result;
-                                    
                                     // Submit to Shopify
                                     const response = await fetch('/api/inventory/update', {
                                       method: 'POST',
@@ -7053,7 +7048,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                       body: JSON.stringify({ updates }),
                                     });
                                     
-                                    result = await response.json();
+                                    const result = await response.json();
                                     
                                     if (!response.ok) {
                                       const details = typeof result?.details === 'string' ? result.details : '';
@@ -7828,7 +7823,7 @@ export default function Dashboard({ session }: DashboardProps) {
                 if (poDateFilter !== 'all') {
                   const orderDate = new Date(order.createdAt);
                   const now = new Date();
-                  let cutoffDate = new Date();
+                  const cutoffDate = new Date();
                   
                   switch (poDateFilter) {
                     case '1m': cutoffDate.setMonth(now.getMonth() - 1); break;
@@ -7917,7 +7912,11 @@ export default function Dashboard({ session }: DashboardProps) {
                         {filteredOrders.map((order) => {
                           const totalOrdered = order.items.reduce((sum, i) => sum + i.quantity, 0);
                           const totalReceived = order.items.reduce((sum, i) => sum + (i.receivedQuantity || 0), 0);
-                          const paymentStatus = getDisplayPaymentStatus(order.status, order.paymentStatus);
+                          const paymentPercentPaid = getDisplayPaymentPercentPaid(
+                            order.status,
+                            order.paymentPercentPaid,
+                            order.paymentStatus
+                          );
                           const isExpanded = selectedOrder?.id === order.id;
                           // Create SKU preview (up to 20 chars)
                           const skuList = order.items.map(i => i.sku).join(', ');
@@ -7975,7 +7974,7 @@ export default function Dashboard({ session }: DashboardProps) {
                                     {/* Meta info */}
                                     <div
                                       className="grid gap-x-6 text-sm"
-                                      style={{ gridTemplateColumns: `repeat(${paymentStatus ? 5 : 4}, minmax(0, 1fr))` }}
+                                      style={{ gridTemplateColumns: `repeat(${paymentPercentPaid !== null ? 5 : 4}, minmax(0, 1fr))` }}
                                     >
                                       <div className="min-w-0 flex items-baseline gap-2 whitespace-nowrap">
                                         <span className="shrink-0 text-gray-500">Created by:</span>
@@ -7997,11 +7996,11 @@ export default function Dashboard({ session }: DashboardProps) {
                                           {new Date(order.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
                                       </div>
-                                      {paymentStatus && (
+                                      {paymentPercentPaid !== null && (
                                         <div className="min-w-0 flex items-center gap-2 whitespace-nowrap">
                                           <span className="shrink-0 text-gray-500">Payment Status:</span>
-                                          <span className={`inline-flex shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusBadgeClasses(paymentStatus)}`}>
-                                            {getPaymentStatusLabel(paymentStatus)}
+                                          <span className={`inline-flex shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusBadgeClasses(paymentPercentPaid)}`}>
+                                            {formatPaymentPercentPaid(paymentPercentPaid)}
                                           </span>
                                         </div>
                                       )}
@@ -8824,7 +8823,7 @@ export default function Dashboard({ session }: DashboardProps) {
                     if (transferDateFilter !== 'all') {
                       const transferDate = new Date(transfer.createdAt);
                       const now = new Date();
-                      let cutoffDate = new Date();
+                      const cutoffDate = new Date();
                       
                       switch (transferDateFilter) {
                         case '1m': cutoffDate.setMonth(now.getMonth() - 1); break;
