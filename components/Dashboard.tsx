@@ -2551,6 +2551,105 @@ export default function Dashboard({ session }: DashboardProps) {
     setTimeout(() => setProdNotification(null), type === 'error' ? 8000 : 5000);
   };
 
+  const exportProductionViewToExcel = async () => {
+    try {
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const isOrdersView = productionViewType === 'orders';
+      const worksheet = workbook.addWorksheet(isOrdersView ? 'Production Orders' : 'Transfers');
+      const now = new Date();
+      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+
+      if (isOrdersView) {
+        const filteredOrders = productionOrders.filter(order => {
+          if (productionFilterStatus === 'open' && !['in_production', 'partial'].includes(order.status)) return false;
+          if (productionFilterStatus === 'completed' && !['completed', 'cancelled'].includes(order.status)) return false;
+          if (skuSearchSelected) {
+            const term = skuSearchSelected.toUpperCase();
+            const hasMatchingSku = order.items.some(item => item.sku.toUpperCase() === term);
+            const idMatch = order.id.toUpperCase() === term || (order.poNumber ? order.poNumber.toUpperCase() === term : false);
+            if (!hasMatchingSku && !idMatch) return false;
+          }
+          if (poDateFilter !== 'all') {
+            const cutoffDate = new Date();
+            if (poDateFilter === '1m') cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+            if (poDateFilter === '3m') cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+            if (poDateFilter === '6m') cutoffDate.setMonth(cutoffDate.getMonth() - 6);
+            if (poDateFilter === '1y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+            if (poDateFilter === '2y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 2);
+            if (new Date(order.createdAt) < cutoffDate) return false;
+          }
+          return true;
+        });
+
+        worksheet.columns = [
+          { header: 'PO #', key: 'poNumber', width: 16 },
+          { header: 'PO Date', key: 'orderDate', width: 14 },
+          { header: 'Vendor', key: 'vendor', width: 24 },
+          { header: 'SKU', key: 'sku', width: 22 },
+          { header: 'Master Cartons', key: 'masterCartons', width: 16 },
+          { header: 'Ordered', key: 'ordered', width: 14 },
+          { header: 'Received', key: 'received', width: 14 },
+          { header: 'Pending', key: 'pending', width: 14 },
+          { header: 'ETA', key: 'eta', width: 14 },
+          { header: 'Status', key: 'status', width: 18 },
+          { header: 'Notes', key: 'notes', width: 44 },
+        ];
+        filteredOrders.forEach(order => order.items.forEach(item => {
+          const received = item.receivedQuantity || 0;
+          worksheet.addRow({ poNumber: order.poNumber || order.id, orderDate: order.createdAt ? new Date(order.createdAt) : '', vendor: order.vendor || '', sku: item.sku, masterCartons: item.masterCartons ?? '', ordered: item.quantity, received, pending: item.quantity - received, eta: order.eta ? parseLocalDate(order.eta) : '', status: order.status, notes: order.notes || '' });
+        }));
+      } else {
+        const filteredTransfers = transfers.filter(transfer => {
+          if (transferFilterStatus === 'active' && ['delivered', 'cancelled'].includes(transfer.status)) return false;
+          if (transferFilterStatus === 'completed' && !['delivered', 'cancelled'].includes(transfer.status)) return false;
+          if (transferSkuSearchSelected) {
+            const term = transferSkuSearchSelected.toUpperCase();
+            const hasMatchingSku = transfer.items.some(item => item.sku.toUpperCase().includes(term));
+            const trackingMatch = transfer.trackingNumber && (transfer.trackingNumber.toUpperCase().includes(term) || transfer.trackingNumber.toUpperCase().endsWith(term));
+            const idMatch = transfer.id.toUpperCase().includes(term);
+            const locationMatch = transfer.origin.toUpperCase().includes(term) || transfer.destination.toUpperCase().includes(term);
+            if (!hasMatchingSku && !trackingMatch && !idMatch && !locationMatch) return false;
+          }
+          if (transferDateFilter !== 'all') {
+            const cutoffDate = new Date();
+            if (transferDateFilter === '1m') cutoffDate.setMonth(cutoffDate.getMonth() - 1);
+            if (transferDateFilter === '3m') cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+            if (transferDateFilter === '6m') cutoffDate.setMonth(cutoffDate.getMonth() - 6);
+            if (transferDateFilter === '1y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+            if (transferDateFilter === '2y') cutoffDate.setFullYear(cutoffDate.getFullYear() - 2);
+            if (new Date(transfer.createdAt) < cutoffDate) return false;
+          }
+          return true;
+        });
+
+        worksheet.columns = [
+          { header: 'Transfer #', key: 'transferId', width: 16 }, { header: 'Created Date', key: 'createdDate', width: 16 }, { header: 'Origin', key: 'origin', width: 18 }, { header: 'Destination', key: 'destination', width: 18 }, { header: 'Shipment Type', key: 'transferType', width: 16 }, { header: 'Carrier', key: 'carrier', width: 14 }, { header: 'Tracking Number', key: 'trackingNumber', width: 24 }, { header: 'SKU', key: 'sku', width: 22 }, { header: 'Pallet', key: 'pallet', width: 14 }, { header: 'Master Cartons', key: 'masterCartons', width: 16 }, { header: 'Shipped', key: 'shipped', width: 14 }, { header: 'Received', key: 'received', width: 14 }, { header: 'Pending', key: 'pending', width: 14 }, { header: 'ETA', key: 'eta', width: 14 }, { header: 'Status', key: 'status', width: 16 }, { header: 'Notes', key: 'notes', width: 44 },
+        ];
+        filteredTransfers.forEach(transfer => transfer.items.forEach(item => {
+          const received = item.receivedQuantity || 0;
+          worksheet.addRow({ transferId: transfer.id, createdDate: transfer.createdAt ? new Date(transfer.createdAt) : '', origin: transfer.origin, destination: transfer.destination, transferType: transfer.transferType, carrier: transfer.carrier || '', trackingNumber: transfer.trackingNumber || '', sku: item.sku, pallet: item.pallet || '', masterCartons: item.masterCartons ?? '', shipped: item.quantity, received, pending: item.quantity - received, eta: transfer.eta ? parseLocalDate(transfer.eta) : '', status: transfer.status, notes: transfer.notes || '' });
+        }));
+      }
+
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+      worksheet.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + worksheet.columns.length)}1` };
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${isOrdersView ? 'production-orders' : 'transfers'}-${stamp}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showProdNotification('success', 'Export Ready', `${isOrdersView ? 'Production orders' : 'Transfers'} exported to Excel.`);
+    } catch (error) {
+      console.error('Failed to export production view:', error);
+      showProdNotification('error', 'Export Failed', 'Could not create the Excel file. Please try again.');
+    }
+  };
+
   // Clear tracker counts for current location (clears for everyone)
   const clearTrackerCounts = async (location: TrackerLocation) => {
     // Use startTransition to prevent blocking the UI
@@ -7610,6 +7709,7 @@ export default function Dashboard({ session }: DashboardProps) {
                       Clear
                     </button>
                   )}
+                  <button type="button" onClick={() => void exportProductionViewToExcel()} className="h-[38px] px-4 border border-green-600 text-green-700 rounded-md text-sm font-medium hover:bg-green-50 active:bg-green-100 whitespace-nowrap">Export to Excel</button>
                   
                   {/* Action Button - hidden for read-only users */}
                   {!isReadOnly && (
@@ -7771,6 +7871,8 @@ export default function Dashboard({ session }: DashboardProps) {
                     </div>
                   </div>
                   
+                  <button type="button" onClick={() => void exportProductionViewToExcel()} className="h-[38px] px-4 border border-green-600 text-green-700 rounded-md text-sm font-medium hover:bg-green-50 active:bg-green-100 whitespace-nowrap">Export to Excel</button>
+
                   {/* Action Button - hidden for read-only users */}
                   {!isReadOnly && (
                     <button
