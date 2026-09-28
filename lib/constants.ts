@@ -52,16 +52,17 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
   },
   {
     name: 'Tesla Charger',
-    match: /(^Q2|^MBT|^ADT|^CTC-BKC)/
+    // ^Q2 with negative lookahead so Q2TY* SKUs fall through to Car Charger below.
+    match: /(^Q2(?!TY)|^MBT|^ADT|^CTC-BKC)/
   },
   {
     name: 'MultiCharger',
-    match: /(^MBQIML|^MBQISS)/,
+    match: /(^MBQIML|^MBQISS|^QIML)/,
     titleMatch: /multicharger/i
   },
   {
     name: 'Car Charger',
-    match: /(^MBQI\-|^QIML)/
+    match: /(^MBQI\-|^Q2TY)/
   },
   {
     name: 'RimCase',
@@ -78,14 +79,19 @@ export const PRODUCT_CATEGORIES: ProductCategory[] = [
  */
 export function findProductCategory(sku: string, productName?: string): ProductCategory | null {
   for (const category of PRODUCT_CATEGORIES) {
-    // For MultiCharger: ONLY match by product title, ignore SKU
+    // MultiCharger: match by product title OR by SKU regex.
+    // Historically title-only; SKU regex added so QIML* / MBQIML* / MBQISS*
+    // SKUs classify correctly even when the product title lacks "multicharger".
     if (category.name === 'MultiCharger') {
       if (category.titleMatch && productName && productName.match(category.titleMatch)) {
         return category;
       }
+      if (sku && sku.match(category.match)) {
+        return category;
+      }
       continue;
     }
-    
+
     // For all other categories: ONLY match by SKU pattern
     if (sku && sku.match(category.match)) {
       return category;
