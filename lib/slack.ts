@@ -4,6 +4,7 @@
  */
 
 import { WebClient } from '@slack/web-api';
+import { after } from 'next/server';
 import {
   formatPaymentPercentPaid,
   getProductionOrderStatusLabel,
@@ -550,9 +551,27 @@ export class SlackService {
 }
 
 /**
- * Helper to safely send Slack notification (doesn't throw on failure)
+ * Helper to safely send Slack notification (doesn't throw on failure).
+ *
+ * Routes call this without awaiting it so the response is not delayed.
+ * On Vercel the function can be frozen once the response is sent, which can
+ * drop an unfinished Slack post, so the send is registered with `after()` to
+ * keep the function alive until it finishes.
  */
-export async function sendSlackNotification(
+export function sendSlackNotification(
+  notifyFn: () => Promise<void>,
+  channelEnvVar: string
+): Promise<void> {
+  const task = deliverSlackNotification(notifyFn, channelEnvVar);
+  try {
+    after(() => task);
+  } catch {
+    // Not inside a request (e.g. scripts or tests): nothing to keep alive.
+  }
+  return task;
+}
+
+async function deliverSlackNotification(
   notifyFn: () => Promise<void>,
   channelEnvVar: string
 ): Promise<void> {

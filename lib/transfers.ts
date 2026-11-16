@@ -208,8 +208,11 @@ export class TransfersService {
       return cached as TransfersCache;
 
     } catch (error) {
+      // Never return an empty list here: callers save what they load, so an
+      // empty result after a failed read would overwrite every saved record.
+      // A missing file is handled above and still returns an empty list.
       console.error('❌ Failed to load transfers:', error);
-      return { transfers: [], lastUpdated: new Date().toISOString() };
+      throw new Error(`Could not load transfers from Google Drive. Please try again.`);
     }
   }
 

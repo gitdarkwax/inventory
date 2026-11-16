@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
 import { google } from 'googleapis';
+import { escapeDriveQueryValue } from '@/lib/drive-query';
 
 export const dynamic = 'force-dynamic';
 
@@ -108,7 +109,7 @@ async function findFile(
   fileName: string
 ): Promise<string | null> {
   const response = await drive.files.list({
-    q: `parents='${folderId}' and name='${fileName}'`,
+    q: `parents='${folderId}' and name='${escapeDriveQueryValue(fileName)}'`,
     driveId: sharedDriveId,
     corpora: 'drive',
     includeItemsFromAllDrives: true,
@@ -346,7 +347,7 @@ export async function DELETE(request: NextRequest) {
     // Also clean up any old per-user draft files from previous implementation
     const oldDraftPattern = `warehouse-draft-${sanitizedLocation}-`;
     const oldDraftsResponse = await drive.files.list({
-      q: `parents='${folderId}' and name contains '${oldDraftPattern}' and mimeType='application/json'`,
+      q: `parents='${folderId}' and name contains '${escapeDriveQueryValue(oldDraftPattern)}' and mimeType='application/json'`,
       driveId: sharedDriveId,
       corpora: 'drive',
       includeItemsFromAllDrives: true,

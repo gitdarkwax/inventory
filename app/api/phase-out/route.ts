@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const result = await requireApiActor(request);
+    const result = await requireApiActor(request, { write: true });
     if (!result.ok) return result.response;
     const { actor } = result;
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const result = await requireApiActor(request);
+    const result = await requireApiActor(request, { write: true });
     if (!result.ok) return result.response;
 
     const { searchParams } = new URL(request.url);

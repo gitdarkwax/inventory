@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { fetchInventoryData, fetchForecastingData, checkLowStockAlerts } from '@/app/api/refresh/route';
 import { PhaseOutService } from '@/lib/phase-out-skus';
+import { timingSafeStringEqual } from '@/lib/api-actor';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Cron not configured' }, { status: 500 });
     }
     
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    if (!authHeader || !timingSafeStringEqual(authHeader, `Bearer ${cronSecret}`)) {
       console.error('❌ Invalid cron authorization');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

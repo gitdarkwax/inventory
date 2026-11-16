@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
+import { validateMovedItems } from '@/lib/request-validation';
 import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
 import { TransfersService } from '@/lib/transfers';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
@@ -246,10 +247,19 @@ async function adjustInventory(
 
 export async function POST(request: NextRequest) {
   try {
-    const result = await requireApiActor(request);
+    // Moves Shopify stock: write role only (the UI already hides these actions from read-only users).
+    const result = await requireApiActor(request, { write: true });
     if (!result.ok) return result.response;
 
     const body: RequestBody = await request.json();
+
+    if (body.action === 'mark_in_transit' || body.action === 'log_delivery' || body.action === 'restock_cancelled') {
+      const checked = validateMovedItems(body.items);
+      if (!checked.ok) {
+        return NextResponse.json({ error: checked.error }, { status: 400 });
+      }
+      body.items = checked.value;
+    }
     
     const shop = process.env.SHOPIFY_SHOP_DOMAIN;
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;

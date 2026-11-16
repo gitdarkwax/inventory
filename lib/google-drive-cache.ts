@@ -129,6 +129,18 @@ export class GoogleDriveCacheService {
   }
 
   /**
+   * Whether the cache file exists. Unlike loadCache, Drive errors are thrown
+   * (not turned into null), so callers can tell "no file yet" from "read failed".
+   */
+  static async cacheFileExists(): Promise<boolean> {
+    const drive = await GoogleDriveCacheService.getDriveClient();
+    const sharedDriveId = await GoogleDriveCacheService.findSharedDrive(drive);
+    const folderId = await GoogleDriveCacheService.findOrCreateFolder(drive, sharedDriveId);
+    const fileId = await GoogleDriveCacheService.findCacheFile(drive, folderId, sharedDriveId);
+    return fileId !== null;
+  }
+
+  /**
    * Store inventory data to Google Drive
    */
   static async saveCache(cacheData: unknown): Promise<void> {

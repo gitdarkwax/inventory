@@ -5,11 +5,16 @@
 
 import { NextResponse } from 'next/server';
 import { InventoryCacheService } from '@/lib/inventory-cache';
+import { requireApiActor } from '@/lib/api-actor';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Signed-in users (any role) or the agent bearer key only.
+    const result = await requireApiActor(request);
+    if (!result.ok) return result.response;
+
     const cache = new InventoryCacheService();
     const cachedData = await cache.loadCache();
 

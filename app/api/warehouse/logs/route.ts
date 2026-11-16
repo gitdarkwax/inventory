@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
 import { google } from 'googleapis';
 import { SlackService, sendSlackNotification } from '@/lib/slack';
+import { escapeDriveQueryValue } from '@/lib/drive-query';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,7 +110,7 @@ async function findFile(
   fileName: string
 ): Promise<string | null> {
   const response = await drive.files.list({
-    q: `parents='${folderId}' and name='${fileName}'`,
+    q: `parents='${folderId}' and name='${escapeDriveQueryValue(fileName)}'`,
     driveId: sharedDriveId,
     corpora: 'drive',
     includeItemsFromAllDrives: true,
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest) {
 // POST - Add new log entry for a location
 export async function POST(request: NextRequest) {
   try {
-    const result = await requireApiActor(request);
+    const result = await requireApiActor(request, { write: true });
     if (!result.ok) return result.response;
 
     const { log, location = 'LA Office' } = await request.json();

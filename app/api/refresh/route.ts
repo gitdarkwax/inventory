@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiActor } from '@/lib/api-actor';
+import { requireApiActor, timingSafeStringEqual } from '@/lib/api-actor';
 import { ShopifyClient } from '@/lib/shopify';
 import { ShopifyQLService, ForecastingData as ForecastingItem } from '@/lib/shopifyql';
 // Note: Shopify transfer data is no longer fetched here
@@ -330,9 +330,13 @@ export async function GET(request: NextRequest) {
     
     // Verify authorization (skip for auto-refresh with valid cron secret)
     const cronSecret = request.headers.get('x-cron-secret');
-    const isValidCron = cronSecret === process.env.CRON_SECRET;
+    const expectedCronSecret = process.env.CRON_SECRET ?? '';
+    const isValidCron =
+      !!cronSecret && !!expectedCronSecret && timingSafeStringEqual(cronSecret, expectedCronSecret);
     
-    const result = await requireApiActor(request);
+    // Refresh can rebalance Shopify stock, so it needs the write role
+    // (the Refresh button is already disabled for read-only users).
+    const result = await requireApiActor(request, { write: true });
     if (!result.ok && !isValidCron) {
       return result.response;
     }
