@@ -412,12 +412,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
+function isMcDataMap(value: unknown): value is Record<string, number | string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return Object.values(value as Record<string, unknown>).every(
+    (v) => (typeof v === 'number' && Number.isFinite(v)) || typeof v === 'string',
+  );
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const result = await requireApiActor(request);
+    const result = await requireApiActor(request, { write: true });
     if (!result.ok) return result.response;
 
     const mcData = await request.json();
+    // The whole file is replaced with this body, so it must be a SKU -> value map.
+    if (!isMcDataMap(mcData)) {
+      return NextResponse.json({ error: 'MC data must be an object of SKU to quantity' }, { status: 400 });
+    }
     const drive = await getGoogleDriveClient();
     const driveId = await findSharedDrive(drive);
     const fileId = await findOrCreateFile(drive, driveId, CACHE_FILE_NAME);

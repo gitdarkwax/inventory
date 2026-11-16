@@ -174,6 +174,18 @@ export class InventoryCacheService {
     } else {
       console.log(`📭 No existing incomingInventory to preserve`);
     }
+
+    // If the existing cache could not be read but a cache file is there,
+    // saving now would replace the in-transit (incoming) inventory with an
+    // empty list. Refuse instead; the next refresh will try again.
+    if (!existingCache && data.incomingInventory === undefined) {
+      const fileExists = await this.cacheFileExists();
+      if (fileExists) {
+        throw new Error(
+          'Could not read the existing inventory cache, so it was not overwritten. Please try again.'
+        );
+      }
+    }
     
     const cacheData: CachedInventoryData = {
       ...data,
@@ -225,6 +237,17 @@ export class InventoryCacheService {
         return null;
       }
     }
+  }
+
+  /**
+   * Whether a cache file exists. Throws if Drive cannot be checked, so a
+   * failed check is never mistaken for "no cache yet".
+   */
+  private async cacheFileExists(): Promise<boolean> {
+    if (process.env.NODE_ENV === 'production') {
+      return GoogleDriveCacheService.cacheFileExists();
+    }
+    return fs.existsSync(this.cacheFile);
   }
 
   /**

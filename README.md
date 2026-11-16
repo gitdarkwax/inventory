@@ -105,7 +105,7 @@ X-Agent-Name: inventory-bot
 
 Call `https://inventory.magbak.ai` (not the `vercel.app` alias) so the `Authorization` header is not dropped by the custom-domain redirect.
 
-`GET /api/inventory` and `GET /api/forecasting` stay unauthenticated cached reads. `/api/cron/refresh` still uses `CRON_SECRET` only.
+`GET /api/inventory` and `GET /api/forecasting` require a Google session or the agent bearer token, like every other route. `/api/cron/refresh` still uses `CRON_SECRET` only.
 
 ## Environment Variables
 

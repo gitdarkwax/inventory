@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiActor } from '@/lib/api-actor';
+import { validateInventoryUpdates } from '@/lib/request-validation';
 import { InventoryCacheService } from '@/lib/inventory-cache';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
 import { fetchTeslaMirrorInventoryItemIds } from '@/lib/tesla-mirror-writes';
@@ -60,11 +61,13 @@ export async function POST(request: NextRequest) {
     const { actor } = result;
 
     const body: UpdateRequest = await request.json();
-    const { updates, reason = 'Physical inventory count' } = body;
+    const { reason = 'Physical inventory count' } = body;
 
-    if (!updates || updates.length === 0) {
-      return NextResponse.json({ error: 'No updates provided' }, { status: 400 });
+    const checkedUpdates = validateInventoryUpdates<UpdateRequest['updates'][number]>(body.updates);
+    if (!checkedUpdates.ok) {
+      return NextResponse.json({ error: checkedUpdates.error }, { status: 400 });
     }
+    const updates = checkedUpdates.value;
 
     const shop = process.env.SHOPIFY_SHOP_DOMAIN;
     const accessToken = process.env.SHOPIFY_ACCESS_TOKEN;
