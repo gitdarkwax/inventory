@@ -114,6 +114,49 @@ export interface CachedInventoryData {
   refreshedBy?: string; // User name or "hourly auto refresh"
 }
 
+/**
+ * Take a delivered quantity off a transfer's incoming entries, oldest first,
+ * dropping entries that reach zero. A transfer can hold the same SKU on
+ * several lines (for example 250 on one pallet and 50 on another), while
+ * deliveries arrive summed per SKU, so the quantity may span several entries.
+ * Entries for other transfers are left untouched.
+ */
+export function consumeTransferEntries(
+  entries: IncomingTransferDetail[],
+  transferId: string,
+  quantity: number
+): IncomingTransferDetail[] {
+  let remaining = quantity;
+  const result: IncomingTransferDetail[] = [];
+  for (const entry of entries) {
+    if (entry.transferId !== transferId || remaining <= 0) {
+      result.push(entry);
+      continue;
+    }
+    const taken = Math.min(entry.quantity, remaining);
+    remaining -= taken;
+    const left = entry.quantity - taken;
+    if (left > 0) {
+      result.push({ ...entry, quantity: left });
+    }
+  }
+  return result;
+}
+
+/** Remove every incoming entry for a transfer and report the total removed. */
+export function removeTransferEntries(
+  entries: IncomingTransferDetail[],
+  transferId: string
+): { remaining: IncomingTransferDetail[]; removedQuantity: number } {
+  let removedQuantity = 0;
+  const remaining = entries.filter((entry) => {
+    if (entry.transferId !== transferId) return true;
+    removedQuantity += entry.quantity;
+    return false;
+  });
+  return { remaining, removedQuantity };
+}
+
 export class InventoryCacheService {
   private cacheDir: string;
   private cacheFile: string;
@@ -374,24 +417,14 @@ export class InventoryCacheService {
 
       if (isAir) {
         skuData.inboundAir = Math.max(0, skuData.inboundAir - item.quantity);
-        // Update the transfer detail quantity or remove if fully delivered
-        const transferIdx = skuData.airTransfers.findIndex(t => t.transferId === transferId);
-        if (transferIdx >= 0) {
-          skuData.airTransfers[transferIdx].quantity -= item.quantity;
-          if (skuData.airTransfers[transferIdx].quantity <= 0) {
-            skuData.airTransfers.splice(transferIdx, 1);
-          }
-        }
+        // Update the transfer detail quantities, removing any fully delivered.
+        // A transfer can list the same SKU on several lines (e.g. two pallets).
+        skuData.airTransfers = consumeTransferEntries(skuData.airTransfers, transferId, item.quantity);
       } else if (isSea) {
         skuData.inboundSea = Math.max(0, skuData.inboundSea - item.quantity);
-        // Update the transfer detail quantity or remove if fully delivered
-        const transferIdx = skuData.seaTransfers.findIndex(t => t.transferId === transferId);
-        if (transferIdx >= 0) {
-          skuData.seaTransfers[transferIdx].quantity -= item.quantity;
-          if (skuData.seaTransfers[transferIdx].quantity <= 0) {
-            skuData.seaTransfers.splice(transferIdx, 1);
-          }
-        }
+        // Update the transfer detail quantities, removing any fully delivered.
+        // A transfer can list the same SKU on several lines (e.g. two pallets).
+        skuData.seaTransfers = consumeTransferEntries(skuData.seaTransfers, transferId, item.quantity);
       }
 
       // Clean up empty SKU entries
@@ -427,19 +460,14 @@ export class InventoryCacheService {
     for (const sku of Object.keys(cache.incomingInventory[destination])) {
       const skuData = cache.incomingInventory[destination][sku];
       
-      // Remove from air transfers
-      const airIdx = skuData.airTransfers.findIndex(t => t.transferId === transferId);
-      if (airIdx >= 0) {
-        skuData.inboundAir -= skuData.airTransfers[airIdx].quantity;
-        skuData.airTransfers.splice(airIdx, 1);
-      }
+      // Remove every entry for this transfer (it may list the SKU on several lines)
+      const air = removeTransferEntries(skuData.airTransfers, transferId);
+      skuData.inboundAir -= air.removedQuantity;
+      skuData.airTransfers = air.remaining;
 
-      // Remove from sea transfers
-      const seaIdx = skuData.seaTransfers.findIndex(t => t.transferId === transferId);
-      if (seaIdx >= 0) {
-        skuData.inboundSea -= skuData.seaTransfers[seaIdx].quantity;
-        skuData.seaTransfers.splice(seaIdx, 1);
-      }
+      const sea = removeTransferEntries(skuData.seaTransfers, transferId);
+      skuData.inboundSea -= sea.removedQuantity;
+      skuData.seaTransfers = sea.remaining;
 
       // Clean up empty SKU entries
       if (skuData.inboundAir <= 0 && skuData.inboundSea <= 0) {
