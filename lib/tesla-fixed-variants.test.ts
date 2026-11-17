@@ -16,6 +16,8 @@ describe('tesla-fixed-variants', () => {
     expect(getTeslaFixedVariantIdForSku('Q2T15RH')).toBe('59208702656593');
     expect(getTeslaFixedVariantIdForSku('Q2TOG')).toBe('59208702296145');
     expect(getTeslaFixedVariantIdForSku('Q2TOGRH')).toBe('59208702328913');
+    expect(getTeslaFixedVariantIdForSku('Q2T16')).toBe('59208702689361');
+    expect(getTeslaFixedVariantIdForSku('Q2T16RH')).toBe('59208702722129');
   });
 
   it('returns preferred Model Y variant titles', () => {
@@ -23,6 +25,8 @@ describe('tesla-fixed-variants', () => {
     expect(getTeslaPreferredVariantTitleForSku('MBT3YRH-DG')).toBe('Model Y / 2020-2024 / Right Hand');
     expect(getTeslaPreferredVariantTitleForSku('Q2T15')).toBe('Model Y / 2025+ 15.4" Screen / Left');
     expect(getTeslaPreferredVariantTitleForSku('Q2TOGRH')).toBe('Model Y / 2020-2024 / Right');
+    expect(getTeslaPreferredVariantTitleForSku('Q2T16')).toBe('Model Y / 2025+ 16" Screen / Left');
+    expect(getTeslaPreferredVariantTitleForSku('Q2T16RH')).toBe('Model Y / 2025+ 16" Screen / Right');
   });
 
   it('matches only the pinned variant ID for each SKU', () => {
@@ -35,5 +39,9 @@ describe('tesla-fixed-variants', () => {
     expect(matchesTeslaFixedVariant('Q2T15', '59208702885969')).toBe(false); // Model 3 sibling
     expect(matchesTeslaFixedVariant('Q2TOG', '59208702296145')).toBe(true);
     expect(matchesTeslaFixedVariant('Q2TOG', '59208702820433')).toBe(false); // Model 3 sibling
+    expect(matchesTeslaFixedVariant('Q2T16', '59208702689361')).toBe(true);
+    expect(matchesTeslaFixedVariant('Q2T16', '63582075060305')).toBe(false); // Model 3 sibling
+    expect(matchesTeslaFixedVariant('Q2T16RH', '59208702722129')).toBe(true);
+    expect(matchesTeslaFixedVariant('Q2T16RH', '63582075093073')).toBe(false); // Model 3 sibling
   });
 });

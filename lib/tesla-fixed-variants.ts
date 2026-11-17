@@ -37,6 +37,14 @@ const TESLA_FIXED_VARIANTS: Record<string, { variantId: string; preferredVariant
     variantId: '59208702328913',
     preferredVariantTitle: 'Model Y / 2020-2024 / Right',
   },
+  'Q2T16': {
+    variantId: '59208702689361',
+    preferredVariantTitle: 'Model Y / 2025+ 16" Screen / Left',
+  },
+  'Q2T16RH': {
+    variantId: '59208702722129',
+    preferredVariantTitle: 'Model Y / 2025+ 16" Screen / Right',
+  },
 };
 
 function normalizeShopifyNumericId(id: string | number): string {
