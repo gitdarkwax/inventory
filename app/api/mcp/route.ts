@@ -27,9 +27,11 @@ const mcpHandler = createMcpHandler(
   },
 );
 
+// withMcpAuth builds the sign-in metadata address as `${resourceUrl}/.well-known/...`,
+// so it takes the site origin, not the full /api/mcp address.
 const handler = withMcpAuth(mcpHandler, verifyConnectorToken, {
   required: true,
-  resourceUrl: getResourceUrl(),
+  resourceUrl: new URL(getResourceUrl()).origin,
 });
 
 export { handler as GET, handler as POST, handler as DELETE };
