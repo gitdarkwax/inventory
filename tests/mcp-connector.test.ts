@@ -184,8 +184,9 @@ describe('sign-in gate', () => {
   it('answers 401 with a pointer to the sign-in metadata when there is no token', async () => {
     const { response } = await rpc('tools/list', {});
     expect(response.status).toBe(401);
-    expect(response.headers.get('www-authenticate')).toContain('resource_metadata=');
-    expect(response.headers.get('www-authenticate')).toContain('/.well-known/oauth-protected-resource');
+    expect(response.headers.get('www-authenticate')).toContain(
+      'resource_metadata="https://inventory.magbak.ai/.well-known/oauth-protected-resource"',
+    );
   });
 
   it('rejects a token from a different issuer', async () => {
