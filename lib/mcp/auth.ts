@@ -15,8 +15,9 @@
  *   WORKOS_AUTHKIT_DOMAIN  https://<your-subdomain>.authkit.app (the AuthKit issuer)
  *   MCP_RESOURCE_URL       https://inventory.magbak.ai/api/mcp (must match the
  *                          Resource Indicator configured in WorkOS)
- *   WORKOS_API_KEY         optional; used to look up the email when the token
- *                          carries no email claim
+ *   WORKOS_API_KEY         optional; not needed while the WorkOS JWT template
+ *                          puts the verified email in the token. When set, the
+ *                          app looks the email up through the WorkOS API instead.
  */
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
@@ -95,8 +96,18 @@ export async function fetchWorkosUser(
   return user;
 }
 
+/**
+ * Email from the WorkOS JWT template. The template in the WorkOS dashboard is:
+ *   {"urn:magbak:email": {{ user.email }},
+ *    "urn:magbak:email_verified": {{ user.email_verified }},
+ *    "urn:magbak:name": {{ user.name }}}
+ * An email is only used when the token also says it has been verified.
+ */
 function emailFromClaims(payload: JWTPayload): string | null {
-  for (const key of ['email', 'urn:magbak:email']) {
+  const verified =
+    payload['urn:magbak:email_verified'] === true || payload.email_verified === true;
+  if (!verified) return null;
+  for (const key of ['urn:magbak:email', 'email']) {
     const value = payload[key];
     if (typeof value === 'string' && value.includes('@')) return value;
   }
@@ -104,7 +115,7 @@ function emailFromClaims(payload: JWTPayload): string | null {
 }
 
 function nameFromClaims(payload: JWTPayload): string | null {
-  for (const key of ['name', 'urn:magbak:name']) {
+  for (const key of ['urn:magbak:name', 'name']) {
     const value = payload[key];
     if (typeof value === 'string' && value.trim()) return value.trim();
   }

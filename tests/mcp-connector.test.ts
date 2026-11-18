@@ -130,8 +130,18 @@ beforeEach(() => {
   ];
 });
 
-async function token(claims: Record<string, unknown>, opts: { issuer?: string; audience?: string; expiresIn?: string } = {}) {
-  return new SignJWT(claims)
+/**
+ * A token shaped like WorkOS issues it with the MagBak JWT template:
+ * `email` here becomes the template's urn:magbak:email claim, verified.
+ */
+async function token(
+  { email, ...claims }: Record<string, unknown>,
+  opts: { issuer?: string; audience?: string; expiresIn?: string; verified?: boolean } = {},
+) {
+  return new SignJWT({
+    ...claims,
+    ...(email ? { 'urn:magbak:email': email, 'urn:magbak:email_verified': opts.verified ?? true } : {}),
+  })
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
     .setIssuer(opts.issuer ?? ISSUER)
     .setAudience(opts.audience ?? RESOURCE)
@@ -217,6 +227,12 @@ describe('tools', () => {
     const r = await callTool('get_sku_stock', { sku: 'MBC16-BK' }, t);
     expect(r.isError).toBe(true);
     expect(r.text).toContain("not on the inventory app's access list");
+  });
+
+  it('refuses data when the email in the token is not verified', async () => {
+    const t = await token({ email: 'writer@magbak.com' }, { verified: false });
+    const r = await callTool('get_sku_stock', { sku: 'MBC16-BK' }, t);
+    expect(r.isError).toBe(true);
   });
 
   it('shows stock by location with incoming, pending POs and runway', async () => {

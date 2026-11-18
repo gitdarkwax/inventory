@@ -25,10 +25,17 @@ Stock comes from the hourly Shopify snapshot, and every stock answer says when t
 
 ### WorkOS (once, shared with the Production Tracker connector)
 
-1. Turn on **Google** under Authentication → Social login.
-2. Turn on **Client ID Metadata Document** under Connect → Configuration. Also turn on **Dynamic Client Registration** there, for older clients.
-3. Add the Resource Indicator `https://inventory.magbak.ai/api/mcp`.
-4. Optional: a JWT template that adds `"urn:magbak:email": {{ user.email }}`. Without it, set `WORKOS_API_KEY` and the app looks the email up itself. The API lookup is preferred because it also confirms the email is verified.
+These were done on 2026-11-18 in the **Staging** environment (AuthKit domain `https://humorous-comic-97-staging.authkit.app`). Staging uses WorkOS's demo Google app, so the Google screen names WorkOS. Production needs MagBak's own Google credentials and its own AuthKit domain.
+
+1. Authentication → Providers: **Google** on. Microsoft, GitHub and Apple off.
+2. Authentication → Methods: **Email + Password** off, so Google is the only way in.
+3. Connect → Configuration: **Client ID Metadata Document** and **Dynamic Client Registration** on.
+4. Connect → Configuration → MCP resource indicators: `https://inventory.magbak.ai/api/mcp`.
+5. Authentication → Features → JWT template:
+   ```
+   {"urn:magbak:email": {{ user.email }}, "urn:magbak:email_verified": {{ user.email_verified }}, "urn:magbak:name": {{ user.name }}}
+   ```
+   The app only accepts an email when `urn:magbak:email_verified` is `true`. With this template in place, no WorkOS API key is needed.
 
 ### Vercel environment variables (Production)
 
@@ -36,7 +43,7 @@ Stock comes from the hourly Shopify snapshot, and every stock answer says when t
 |---|---|
 | `WORKOS_AUTHKIT_DOMAIN` | `https://<subdomain>.authkit.app`, the `issuer` from `https://<subdomain>.authkit.app/.well-known/oauth-authorization-server` |
 | `MCP_RESOURCE_URL` | `https://inventory.magbak.ai/api/mcp` (this is also the default) |
-| `WORKOS_API_KEY` | WorkOS secret key (`sk_…`), for the email lookup |
+| `WORKOS_API_KEY` | Not needed while the JWT template is set. If set, the app looks up the email through the WorkOS API instead |
 
 Until `WORKOS_AUTHKIT_DOMAIN` is set, `/api/mcp` rejects every request. Nothing else in the app changes either way.
 

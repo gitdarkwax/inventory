@@ -30,17 +30,33 @@ describe('resolveConnectorUser', () => {
     expect(user.role).toBeNull();
   });
 
-  it('falls back to an email claim from the JWT template when there is no API lookup', async () => {
+  it('uses the verified email and name from the JWT template when there is no API lookup', async () => {
     const user = await resolveConnectorUser(
-      { sub: 'user_2', 'urn:magbak:email': 'reader@magbak.com' },
+      {
+        sub: 'user_2',
+        'urn:magbak:email': 'reader@magbak.com',
+        'urn:magbak:email_verified': true,
+        'urn:magbak:name': 'Rea Der',
+      },
       { lookupUser: async () => null, roleFor: roles({ 'reader@magbak.com': 'readonly' }) },
     );
-    expect(user.role).toBe('readonly');
+    expect(user).toEqual({ userId: 'user_2', email: 'reader@magbak.com', name: 'Rea Der', role: 'readonly' });
+  });
+
+  it('ignores a template email that is not marked verified', async () => {
+    for (const verified of [false, undefined, 'true']) {
+      const user = await resolveConnectorUser(
+        { sub: 'user_2', 'urn:magbak:email': 'writer@magbak.com', 'urn:magbak:email_verified': verified },
+        { lookupUser: async () => null, roleFor: roles({ 'writer@magbak.com': 'write' }) },
+      );
+      expect(user.email).toBeNull();
+      expect(user.role).toBeNull();
+    }
   });
 
   it('gives no role to someone who is not on either list', async () => {
     const user = await resolveConnectorUser(
-      { sub: 'user_3', email: 'stranger@gmail.com' },
+      { sub: 'user_3', 'urn:magbak:email': 'stranger@gmail.com', 'urn:magbak:email_verified': true },
       { lookupUser: async () => null, roleFor: roles({}) },
     );
     expect(user.email).toBe('stranger@gmail.com');
