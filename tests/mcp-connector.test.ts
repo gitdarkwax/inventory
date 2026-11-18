@@ -19,11 +19,15 @@ const data = vi.hoisted(() => ({
   transfers: [] as unknown[],
   orders: [] as unknown[],
   writes: [] as string[],
+  driveReads: [] as string[],
 }));
 
 vi.mock('@/lib/inventory-cache', () => ({
   InventoryCacheService: class {
-    loadCache = async () => data.cache;
+    loadCache = async () => {
+      data.driveReads.push('inventory-cache');
+      return data.cache;
+    };
     saveCache = async () => data.writes.push('inventory-cache');
   },
 }));
@@ -48,10 +52,15 @@ vi.mock('@/lib/phase-out-skus', () => ({
 }));
 vi.mock('@/lib/sku-comments', () => ({
   SkuCommentsService: {
-    getComment: async (sku: string) =>
-      sku.toUpperCase() === 'MBC16-BK'
-        ? { sku, comment: 'Reorder before Black Friday', updatedAt: '2026-11-01', updatedBy: 'Alex', updatedByEmail: 'a@x' }
-        : null,
+    getComments: async () => {
+      data.driveReads.push('sku-comments');
+      return {
+        lastUpdated: '',
+        comments: {
+          'MBC16-BK': { sku: 'MBC16-BK', comment: 'Reorder before Black Friday', updatedAt: '2026-11-01', updatedBy: 'Alex', updatedByEmail: 'a@x' },
+        },
+      };
+    },
   },
 }));
 
@@ -79,7 +88,11 @@ afterAll(() => {
   vi.stubGlobal('fetch', realFetch);
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  const limits = await import('@/lib/mcp/limits');
+  limits.clearLoadCache();
+  limits.connectorRateLimiter.reset();
+  data.driveReads = [];
   roles.clear();
   roles.set('writer@magbak.com', 'write');
   roles.set('reader@magbak.com', 'readonly');
@@ -293,6 +306,28 @@ describe('tools', () => {
       await callTool(name, args, t);
     }
     expect(data.writes).toEqual([]);
+  });
+});
+
+describe('Drive and rate limits', () => {
+  it('reads the inventory snapshot from Drive once for a burst of calls', async () => {
+    const t = await token({ email: 'reader@magbak.com' });
+    await callTool('get_sku_stock', { sku: 'MBC16-BK' }, t);
+    await callTool('find_skus', { query: 'iphone' }, t);
+    await callTool('low_stock', {}, t);
+    expect(data.driveReads.filter((r) => r === 'inventory-cache')).toHaveLength(1);
+  });
+
+  it('refuses a person after 30 calls in a minute, without blocking others', async () => {
+    const reader = await token({ email: 'reader@magbak.com' });
+    for (let i = 0; i < 30; i++) {
+      expect((await callTool('get_incoming', {}, reader)).isError).toBe(false);
+    }
+    const refused = await callTool('get_incoming', {}, reader);
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain('Too many inventory look-ups');
+    const writer = await token({ email: 'writer@magbak.com' });
+    expect((await callTool('get_incoming', {}, writer)).isError).toBe(false);
   });
 });
 

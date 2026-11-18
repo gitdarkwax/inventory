@@ -16,6 +16,7 @@ import { HiddenSkusService } from '@/lib/hidden-skus';
 import { PhaseOutService } from '@/lib/phase-out-skus';
 import { SkuCommentsService } from '@/lib/sku-comments';
 import { connectorUserFrom, type ConnectorUser } from './auth';
+import { cachedLoad, connectorRateLimiter } from './limits';
 import {
   getProductionOrder,
   getTransfer,
@@ -55,16 +56,25 @@ export function requireAllowedUser(ctx: Pick<ServerContext, 'http'>): ConnectorU
   return user;
 }
 
+// Every Drive read goes through cachedLoad (kept ~60 s, shared between
+// simultaneous calls) so a burst of tool calls doesn't eat the Drive quota
+// the dashboard also uses.
 async function loadCacheOrThrow(): Promise<CachedInventoryData> {
-  const cache = await new InventoryCacheService().loadCache();
+  const cache = await cachedLoad('inventory-cache', () => new InventoryCacheService().loadCache());
   if (!cache) throw new Error('No inventory snapshot is available yet. Someone needs to press Refresh in the app.');
   return cache;
 }
 
+const loadTransfers = () => cachedLoad('transfers', () => TransfersService.loadTransfers());
+const loadOrders = () => cachedLoad('production-orders', () => ProductionOrdersService.loadOrders());
+const loadPending = () =>
+  cachedLoad('production-orders-pending', () => ProductionOrdersService.getPendingQuantitiesBySku());
+const loadComments = () => cachedLoad('sku-comments', () => SkuCommentsService.getComments());
+
 async function loadFlags(): Promise<SkuFlags & { warning?: string }> {
   const [hidden, phaseOut] = await Promise.allSettled([
-    HiddenSkusService.getHiddenSKUs(),
-    PhaseOutService.getPhaseOutSKUs(),
+    cachedLoad('hidden-skus', () => HiddenSkusService.getHiddenSKUs()),
+    cachedLoad('phase-out-skus', () => PhaseOutService.getPhaseOutSKUs()),
   ]);
   const flags: SkuFlags & { warning?: string } = {
     hidden: new Set(hidden.status === 'fulfilled' ? (hidden.value?.skus ?? []).map((s) => s.sku.toLowerCase()) : []),
@@ -90,6 +100,14 @@ function tool<A>(name: string, body: (args: A, user: ConnectorUser) => Promise<T
     } catch (error) {
       console.warn(`[mcp] ${name} refused: ${(error as Error).message}`);
       return fail((error as Error).message);
+    }
+    const slot = connectorRateLimiter.take(user.email ?? user.userId);
+    if (!slot.ok) {
+      console.warn(`[mcp] ${name} by ${user.email} rate-limited (${slot.window})`);
+      return fail(
+        `Too many inventory look-ups in the last ${slot.window}. ` +
+          `Please wait about ${slot.retryAfterSeconds} seconds and ask again.`,
+      );
     }
     console.log(`[mcp] ${name} by ${user.email} (${user.role}) via Claude`, JSON.stringify(args));
     try {
@@ -139,7 +157,7 @@ export function registerInventoryTools(server: McpServer) {
       const [cache, flags, pending] = await Promise.all([
         loadCacheOrThrow(),
         loadFlags(),
-        ProductionOrdersService.getPendingQuantitiesBySku(),
+        loadPending(),
       ]);
       const pendingQty =
         [...pending.entries()].find(([k]) => k.toLowerCase() === sku.toLowerCase())?.[1] ?? 0;
@@ -213,7 +231,7 @@ export function registerInventoryTools(server: McpServer) {
     tool(
       'list_transfers',
       async (args: { status?: z.infer<typeof transferStatus>; sku?: string; destination?: string; limit?: number }) => {
-        const { transfers } = await TransfersService.loadTransfers();
+        const { transfers } = await loadTransfers();
         return json(listTransfers(transfers, args));
       },
     ),
@@ -228,7 +246,7 @@ export function registerInventoryTools(server: McpServer) {
       annotations: READ_ONLY,
     },
     tool('get_transfer', async ({ id }: { id: string }) => {
-      const { transfers } = await TransfersService.loadTransfers();
+      const { transfers } = await loadTransfers();
       const result = getTransfer(transfers, id);
       return result ? json(result) : fail(`No transfer "${id}".`);
     }),
@@ -250,7 +268,7 @@ export function registerInventoryTools(server: McpServer) {
     tool(
       'list_production_orders',
       async (args: { status?: z.infer<typeof orderStatus>; sku?: string; vendor?: string; limit?: number }) => {
-        const { orders } = await ProductionOrdersService.loadOrders();
+        const { orders } = await loadOrders();
         return json(listProductionOrders(orders, args));
       },
     ),
@@ -265,7 +283,7 @@ export function registerInventoryTools(server: McpServer) {
       annotations: READ_ONLY,
     },
     tool('get_production_order', async ({ id }: { id: string }) => {
-      const { orders } = await ProductionOrdersService.loadOrders();
+      const { orders } = await loadOrders();
       const result = getProductionOrder(orders, id);
       return result ? json(result) : fail(`No production order "${id}".`);
     }),
@@ -280,7 +298,8 @@ export function registerInventoryTools(server: McpServer) {
       annotations: READ_ONLY,
     },
     tool('get_sku_notes', async ({ sku }: { sku: string }) => {
-      const [comment, flags] = await Promise.all([SkuCommentsService.getComment(sku), loadFlags()]);
+      const [comments, flags] = await Promise.all([loadComments(), loadFlags()]);
+      const comment = comments?.comments?.[sku.toUpperCase()] ?? null;
       return json({
         sku,
         comment: comment
