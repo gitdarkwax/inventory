@@ -15,6 +15,7 @@ import { requireApiActor } from '@/lib/api-actor';
 import { validateMovedItems } from '@/lib/request-validation';
 import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
 import { TransfersService } from '@/lib/transfers';
+import { checkRestockRequest } from '@/lib/transfer-restock';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
 import { fetchTeslaMirrorInventoryItemIds } from '@/lib/tesla-mirror-writes';
 
@@ -553,7 +554,18 @@ export async function POST(request: NextRequest) {
     } else if (body.action === 'restock_cancelled') {
       // Restock undelivered items to origin when cancelling a partial delivery
       const { transferId, origin, items } = body;
-      
+
+      // Only add stock back that this transfer really took from the origin and has not delivered.
+      const transfersCache = await TransfersService.loadTransfers();
+      const storedTransfer = transfersCache.transfers.find(
+        t => t.id === String(transferId || '').toUpperCase()
+      );
+      const restockError = checkRestockRequest(storedTransfer, origin, items);
+      if (restockError) {
+        console.warn(`⚠️ Restock refused for ${transferId}: ${restockError}`);
+        return NextResponse.json({ error: restockError }, { status: 400 });
+      }
+
       console.log(`📦 Restocking ${items.length} SKUs to ${origin} for cancelled transfer ${transferId}`);
       
       const errors: string[] = [];
