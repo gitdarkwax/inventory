@@ -19,6 +19,7 @@ import {
   type PaymentStatus,
 } from '@/lib/production-order-payment';
 import SkuLogModal from './SkuLogModal';
+import { undeliveredItems } from '@/lib/transfer-restock';
 import type { InventoryCountSubmission } from '@/lib/sku-log';
 
 // Discontinued SKUs - grayed out in Overview, Planning, and Forecast tabs
@@ -1617,42 +1618,30 @@ export default function Dashboard({ session }: DashboardProps) {
     setIsCancellingTransfer(true);
 
     try {
-      // Check if this is a partial delivery - need to restock undelivered items
-      const isPartialDelivery = selectedTransfer.status === 'partial';
+      // In transit or partly delivered: the origin was already subtracted when the
+      // transfer was marked in transit, so put back everything not yet received.
       let restockedItems: Array<{ sku: string; quantity: number }> = [];
-      
-      if (isPartialDelivery) {
-        // Calculate undelivered quantities to restock to origin
-        const undeliveredItems = selectedTransfer.items
-          .map(item => ({
-            sku: item.sku,
-            quantity: item.quantity - (item.receivedQuantity || 0),
-          }))
-          .filter(item => item.quantity > 0);
-        
-        if (undeliveredItems.length > 0) {
-          if (!selectedTransfer.isNonSku) {
-            // Restock undelivered items to origin location in Shopify
-            const inventoryResponse = await fetch('/api/transfers/inventory', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'restock_cancelled',
-                transferId: selectedTransfer.id,
-                origin: selectedTransfer.origin,
-                items: undeliveredItems,
-              }),
-            });
-            
-            if (!inventoryResponse.ok) {
-              const inventoryData = await inventoryResponse.json();
-              showProdNotification('error', 'Restock Failed', inventoryData.error || 'Failed to restock items to origin');
-              setIsCancellingTransfer(false);
-              return;
-            }
-            restockedItems = undeliveredItems;
-          }
+      const itemsToRestock = undeliveredItems(selectedTransfer);
+
+      if (itemsToRestock.length > 0) {
+        const inventoryResponse = await fetch('/api/transfers/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'restock_cancelled',
+            transferId: selectedTransfer.id,
+            origin: selectedTransfer.origin,
+            items: itemsToRestock,
+          }),
+        });
+
+        if (!inventoryResponse.ok) {
+          const inventoryData = await inventoryResponse.json().catch(() => ({}));
+          showProdNotification('error', 'Restock Failed', inventoryData.error || 'Failed to restock items to origin');
+          setIsCancellingTransfer(false);
+          return;
         }
+        restockedItems = itemsToRestock;
       }
 
       const response = await fetch('/api/transfers', {
@@ -9909,9 +9898,14 @@ export default function Dashboard({ session }: DashboardProps) {
                       </div>
                       <div className="px-6 py-4">
                         <p className="text-gray-600">
-                          Are you sure you want to cancel <span className="font-medium">{selectedTransfer.id}</span>? 
+                          Are you sure you want to cancel <span className="font-medium">{selectedTransfer.id}</span>?
                           This action cannot be undone.
                         </p>
+                        {undeliveredItems(selectedTransfer).length > 0 && (
+                          <p className="text-gray-600 mt-2">
+                            Stock not yet received will be added back to {selectedTransfer.origin}.
+                          </p>
+                        )}
                       </div>
                       <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
                         <button
