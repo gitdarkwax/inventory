@@ -19,6 +19,8 @@ const data = vi.hoisted(() => ({
   transfers: [] as unknown[],
   orders: [] as unknown[],
   writes: [] as string[],
+  created: [] as unknown[],
+  slack: [] as unknown[],
   driveReads: [] as string[],
 }));
 
@@ -41,8 +43,19 @@ vi.mock('@/lib/production-orders', () => ({
   ProductionOrdersService: {
     loadOrders: async () => ({ orders: data.orders, lastUpdated: '' }),
     saveOrders: async () => data.writes.push('orders'),
+    createOrder: async (items: { sku: string; quantity: number }[], notes: string, by: string, email: string, vendor?: string, eta?: string) => {
+      data.writes.push('orders');
+      data.created.push({ items, notes, by, email, vendor, eta });
+      return { id: 'PO-0999', vendor, eta, status: 'in_production', items: items.map((i) => ({ ...i, receivedQuantity: 0 })) };
+    },
     getPendingQuantitiesBySku: async () => new Map([['MBC16-BK', 300]]),
   },
+}));
+vi.mock('@/lib/slack', () => ({
+  SlackService: class {
+    notifyPOCreated = async (po: unknown) => data.slack.push(po);
+  },
+  sendSlackNotification: (fn: () => Promise<void>) => fn(),
 }));
 vi.mock('@/lib/hidden-skus', () => ({
   HiddenSkusService: { getHiddenSKUs: async () => ({ skus: [{ sku: 'OLD-1' }], lastUpdated: '' }) },
@@ -97,6 +110,10 @@ beforeEach(async () => {
   roles.set('writer@magbak.com', 'write');
   roles.set('reader@magbak.com', 'readonly');
   data.writes = [];
+  data.created = [];
+  data.slack = [];
+  data.orders = [];
+  vi.stubEnv('CONNECTOR_PO_CREATORS', 'writer@magbak.com');
   data.cache = {
     lastUpdated: new Date(Date.now() - 20 * 60000).toISOString(),
     refreshedBy: 'hourly auto refresh',
@@ -224,16 +241,56 @@ describe('sign-in gate', () => {
 });
 
 describe('tools', () => {
-  it('lists only look-up tools, all marked read-only', async () => {
+  it('lists the look-up tools as read-only and one tool that creates', async () => {
     const t = await token({ email: 'reader@magbak.com' });
     const { response, body } = await rpc('tools/list', {}, t);
     expect(response.status).toBe(200);
     const tools = (body?.result?.tools ?? []) as Array<{ name: string; annotations?: { readOnlyHint?: boolean } }>;
     expect(tools.map((x) => x.name).sort()).toEqual([
-      'find_skus', 'get_incoming', 'get_production_order', 'get_sku_notes', 'get_sku_stock',
-      'get_transfer', 'list_production_orders', 'list_transfers', 'low_stock',
+      'create_production_order', 'find_skus', 'get_incoming', 'get_production_order', 'get_sku_notes',
+      'get_sku_stock', 'get_transfer', 'list_production_orders', 'list_transfers', 'low_stock',
     ]);
-    expect(tools.every((x) => x.annotations?.readOnlyHint === true)).toBe(true);
+    expect(tools.filter((x) => x.annotations?.readOnlyHint !== true).map((x) => x.name)).toEqual([
+      'create_production_order',
+    ]);
+  });
+
+  const newOrder = { vendor: 'KCT', items: [{ sku: 'mbc16-bk', quantity: 3000 }], eta: '2027-01-15', confirmed: true };
+
+  it('creates a production order for a listed writer, as that person, and posts the usual Slack notice', async () => {
+    const t = await token({ email: 'writer@magbak.com' });
+    const { json } = await callTool('create_production_order', newOrder, t);
+    expect(json.created).toBe('PO-0999');
+    expect(data.created).toEqual([
+      { items: [{ sku: 'MBC16-BK', quantity: 3000 }], notes: 'Created through Claude', by: expect.any(String), email: 'writer@magbak.com', vendor: 'KCT', eta: '2027-01-15' },
+    ]);
+    expect(data.slack).toHaveLength(1);
+  });
+
+  it('creates nothing without the confirmed flag', async () => {
+    const t = await token({ email: 'writer@magbak.com' });
+    const r = await callTool('create_production_order', { ...newOrder, confirmed: false }, t);
+    expect(r.isError).toBe(true);
+    expect(data.writes).toEqual([]);
+  });
+
+  it('creates nothing for a reader, or for a writer who is not on CONNECTOR_PO_CREATORS', async () => {
+    const reader = await token({ email: 'reader@magbak.com' });
+    expect((await callTool('create_production_order', newOrder, reader)).isError).toBe(true);
+    vi.stubEnv('CONNECTOR_PO_CREATORS', 'someone-else@magbak.com');
+    const writer = await token({ email: 'writer@magbak.com' });
+    const r = await callTool('create_production_order', newOrder, writer);
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('may not create production orders');
+    expect(data.writes).toEqual([]);
+    expect(data.slack).toEqual([]);
+  });
+
+  it('creates nothing for a SKU the app does not have', async () => {
+    const t = await token({ email: 'writer@magbak.com' });
+    const r = await callTool('create_production_order', { ...newOrder, items: [{ sku: 'NOPE-1', quantity: 5 }] }, t);
+    expect(r.isError).toBe(true);
+    expect(data.writes).toEqual([]);
   });
 
   it('refuses data to a signed-in person who is not on the allowlists', async () => {
@@ -293,7 +350,7 @@ describe('tools', () => {
     expect(json.comment.text).toBe('Reorder before Black Friday');
   });
 
-  it('never writes anything', async () => {
+  it('never writes anything from the look-up tools', async () => {
     const t = await token({ email: 'writer@magbak.com' });
     for (const [name, args] of [
       ['find_skus', { query: 'case' }],

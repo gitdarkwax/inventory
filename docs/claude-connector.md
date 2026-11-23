@@ -1,6 +1,6 @@
 # Claude connector
 
-Teammates can ask Claude about inventory from their own Claude accounts. This release is **look-up only**: no tool writes to Drive, Shopify or Slack.
+Teammates can ask Claude about inventory from their own Claude accounts. Every tool is **look-up only** except `create_production_order` (see below).
 
 - Endpoint: `https://inventory.magbak.ai/api/mcp` (MCP over Streamable HTTP, via `mcp-handler`)
 - Sign-in: WorkOS AuthKit issues the access token. On every request the app checks the person's email against `ALLOWED_EMAILS` / `ALLOWED_EMAILS_READONLY`, the same lists the web app uses. People on neither list get a refusal.
@@ -18,6 +18,11 @@ Teammates can ask Claude about inventory from their own Claude accounts. This re
 | `list_transfers` / `get_transfer` | Transfers by status, SKU or destination; one transfer in full |
 | `list_production_orders` / `get_production_order` | POs by status, SKU or vendor; one PO in full |
 | `get_sku_notes` | Team comment, phase-out and hidden flags |
+| `create_production_order` | **Writes.** Creates a production order for finished goods, the same as the New Production Order form (same service call, same Slack notice), and returns the PO number |
+
+### Who can create production orders through Claude
+
+Only people who are on `ALLOWED_EMAILS` (write access) **and** listed in the `CONNECTOR_PO_CREATORS` environment variable (comma-separated emails). If the variable is unset, nobody can. The tool also refuses SKUs the app does not have, refuses a second identical order (same vendor, SKUs and quantities) within ten minutes, and creates nothing until it is called with `confirmed: true`, which Claude sets only after the person has seen the order and said yes. Orders carry the note "Created through Claude" and the person's own name in the activity log.
 
 Stock comes from the hourly Shopify snapshot, and every stock answer says when that snapshot was taken.
 
