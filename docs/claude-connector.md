@@ -22,7 +22,7 @@ Teammates can ask Claude about inventory from their own Claude accounts. Every t
 
 ### Who can create production orders through Claude
 
-Only people who are on `ALLOWED_EMAILS` (write access) **and** listed in the `CONNECTOR_PO_CREATORS` environment variable (comma-separated emails). If the variable is unset, nobody can. The tool also refuses SKUs the app does not have, refuses a second identical order (same vendor, SKUs and quantities) within ten minutes, and creates nothing until it is called with `confirmed: true`, which Claude sets only after the person has seen the order and said yes. Orders carry the note "Created through Claude" and the person's own name in the activity log.
+The same people who can create them in the web app: anyone on `ALLOWED_EMAILS` (write access). People on `ALLOWED_EMAILS_READONLY` cannot. The tool also refuses SKUs the app does not have, refuses a second identical order (same vendor, SKUs and quantities) within ten minutes, and creates nothing until it is called with `confirmed: true`, which Claude sets only after the person has seen the order and said yes. Orders carry the note "Created through Claude" and the person's own name in the activity log.
 
 Stock comes from the hourly Shopify snapshot, and every stock answer says when that snapshot was taken.
 

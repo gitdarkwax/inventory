@@ -20,16 +20,6 @@ export type CreateOrderPlan =
   | { ok: true; vendor: string; items: { sku: string; quantity: number }[]; eta?: string; notes: string }
   | { ok: false; message: string };
 
-/** Emails allowed to create production orders through Claude (CONNECTOR_PO_CREATORS, comma-separated). */
-export function poCreators(raw: string | undefined = process.env.CONNECTOR_PO_CREATORS): Set<string> {
-  return new Set(
-    (raw ?? '')
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean),
-  );
-}
-
 const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
 function sameItems(a: { sku: string; quantity: number }[], b: { sku: string; quantity: number }[]) {
@@ -45,21 +35,20 @@ export function planCreateOrder(
   input: CreateOrderInput,
   deps: {
     user: ConnectorUser;
-    creators: Set<string>;
     /** SKU as written in the app, keyed by lower-case SKU. */
     knownSkus: Map<string, string>;
     orders: ProductionOrder[];
     now?: number;
   },
 ): CreateOrderPlan {
-  const { user, creators, knownSkus, orders } = deps;
-  const email = (user.email ?? '').toLowerCase();
-  if (user.role !== 'write' || !email || !creators.has(email)) {
+  const { user, knownSkus, orders } = deps;
+  // Same rule as the web form: write access (ALLOWED_EMAILS) may create orders, read-only may not.
+  if (user.role !== 'write' || !user.email) {
     return {
       ok: false,
       message:
-        `${user.email ?? 'This account'} may not create production orders through Claude. ` +
-        'Create the order in the inventory app, or ask an admin to add this email to the list of people who can.',
+        `${user.email ?? 'This account'} has read-only access, so it cannot create production orders. ` +
+        'Ask an admin for write access to the inventory app.',
     };
   }
 

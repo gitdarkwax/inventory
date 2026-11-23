@@ -113,7 +113,6 @@ beforeEach(async () => {
   data.created = [];
   data.slack = [];
   data.orders = [];
-  vi.stubEnv('CONNECTOR_PO_CREATORS', 'writer@magbak.com');
   data.cache = {
     lastUpdated: new Date(Date.now() - 20 * 60000).toISOString(),
     refreshedBy: 'hourly auto refresh',
@@ -257,7 +256,7 @@ describe('tools', () => {
 
   const newOrder = { vendor: 'KCT', items: [{ sku: 'mbc16-bk', quantity: 3000 }], eta: '2027-01-15', confirmed: true };
 
-  it('creates a production order for a listed writer, as that person, and posts the usual Slack notice', async () => {
+  it('creates a production order for someone with write access, as that person, and posts the usual Slack notice', async () => {
     const t = await token({ email: 'writer@magbak.com' });
     const { json } = await callTool('create_production_order', newOrder, t);
     expect(json.created).toBe('PO-0999');
@@ -274,14 +273,11 @@ describe('tools', () => {
     expect(data.writes).toEqual([]);
   });
 
-  it('creates nothing for a reader, or for a writer who is not on CONNECTOR_PO_CREATORS', async () => {
+  it('creates nothing for someone with read-only access', async () => {
     const reader = await token({ email: 'reader@magbak.com' });
-    expect((await callTool('create_production_order', newOrder, reader)).isError).toBe(true);
-    vi.stubEnv('CONNECTOR_PO_CREATORS', 'someone-else@magbak.com');
-    const writer = await token({ email: 'writer@magbak.com' });
-    const r = await callTool('create_production_order', newOrder, writer);
+    const r = await callTool('create_production_order', newOrder, reader);
     expect(r.isError).toBe(true);
-    expect(r.text).toContain('may not create production orders');
+    expect(r.text).toContain('read-only access');
     expect(data.writes).toEqual([]);
     expect(data.slack).toEqual([]);
   });
