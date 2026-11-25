@@ -1145,7 +1145,11 @@ export default function Dashboard({ session }: DashboardProps) {
         const inventoryResult = await inventoryResponse.json();
 
         if (!inventoryResponse.ok) {
-          showProdNotification('error', 'Shopify Update Failed', inventoryResult.error || 'Failed to update Shopify inventory');
+          if (inventoryResponse.status === 409) {
+            showProdNotification('error', 'Insufficient Stock', `${inventoryResult.details || inventoryResult.error}\nTransfer ${newTransfer.id} was saved as a draft; no stock was moved.`);
+          } else {
+            showProdNotification('error', 'Shopify Update Failed', inventoryResult.error || 'Failed to update Shopify inventory');
+          }
           // Still update UI with the created transfer
           setTransfers(prev => [newTransfer, ...prev]);
           return;
@@ -1302,7 +1306,7 @@ export default function Dashboard({ session }: DashboardProps) {
         const inventoryResult = await inventoryResponse.json();
 
         if (!inventoryResponse.ok) {
-          showProdNotification('error', 'Shopify Update Failed', inventoryResult.details || inventoryResult.error || 'Failed to update Shopify inventory');
+          showProdNotification('error', inventoryResponse.status === 409 ? 'Insufficient Stock' : 'Shopify Update Failed', inventoryResult.details || inventoryResult.error || 'Failed to update Shopify inventory');
           return;
         }
       }
@@ -1828,7 +1832,10 @@ export default function Dashboard({ session }: DashboardProps) {
         }
 
         const locationDetails = inventoryData?.locationDetails?.[deliveryLocation] || [];
-        
+
+        // Send only the delivered amounts; the server adds them to Shopify's current
+        // On Hand. (Sending page count + delivery lost units when two POs were logged
+        // without a refresh in between: PO-0116 / PO-0132, 2026-11-24.)
         const shopifyUpdates = validDeliveries.map(delivery => {
           const detailItem = locationDetails.find(d => d.sku === delivery.sku);
           if (!detailItem) {
@@ -1841,19 +1848,17 @@ export default function Dashboard({ session }: DashboardProps) {
             if (!foundItem) {
               throw new Error(`SKU ${delivery.sku} not found in inventory data. Please refresh the data.`);
             }
-            const currentQty = inventoryData?.inventory.find(i => i.sku === delivery.sku)?.locations[deliveryLocation] || 0;
             return {
               sku: delivery.sku,
               inventoryItemId: foundItem.inventoryItemId,
-              quantity: currentQty + delivery.quantity,
+              quantity: delivery.quantity,
               locationId,
             };
           }
-          const currentQty = detailItem.onHand || 0;
           return {
             sku: delivery.sku,
             inventoryItemId: detailItem.inventoryItemId,
-            quantity: currentQty + delivery.quantity,
+            quantity: delivery.quantity,
             locationId,
           };
         });
@@ -1863,6 +1868,7 @@ export default function Dashboard({ session }: DashboardProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             updates: shopifyUpdates,
+            mode: 'add',
             reason: `PO Delivery - ${selectedOrder.id}`,
           }),
         });
