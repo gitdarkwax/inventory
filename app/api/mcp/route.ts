@@ -23,7 +23,7 @@ const mcpHandler = createMcpHandler(
     instructions:
       'MagBak inventory: stock by SKU and location, low stock, incoming shipments, transfers and production orders. ' +
       'Stock comes from an hourly Shopify snapshot; mention the refresh time when it matters. ' +
-      'This connector is look-up only.',
+      'Look-ups, plus create_production_order for finished-goods orders (people with write access only, after they confirm).',
   },
 );
 
