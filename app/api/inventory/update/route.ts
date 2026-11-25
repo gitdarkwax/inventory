@@ -23,11 +23,46 @@ interface InventoryUpdate {
 interface UpdateRequest {
   updates: InventoryUpdate[];
   reason?: string;
+  /**
+   * 'set' (default): quantity is the new On Hand (physical counts).
+   * 'add': quantity is added to the current On Hand in Shopify (deliveries),
+   * so two deliveries logged from the same page both count.
+   */
+  mode?: 'set' | 'add';
 }
 
 function normalizeShopifyId(id: string): string {
   return id.replace(/^gid:\/\/shopify\/(?:InventoryItem|Location)\//, '').trim();
 }
+
+/** 'add' mode: one entry per SKU + item + location with the amounts summed; zeros dropped. */
+function sumAddUpdates<T extends { sku: string; inventoryItemId: string; locationId: string; quantity: number }>(
+  updates: T[]
+): T[] {
+  const summed = new Map<string, T>();
+  for (const update of updates) {
+    const key = `${update.sku.toUpperCase()}|${update.inventoryItemId}|${update.locationId}`;
+    const existing = summed.get(key);
+    summed.set(key, existing ? { ...existing, quantity: existing.quantity + update.quantity } : { ...update });
+  }
+  return Array.from(summed.values()).filter(update => update.quantity > 0);
+}
+
+// GraphQL mutation for adding to inventory quantities (delta, used in 'add' mode)
+const INVENTORY_ADJUST_QUANTITIES_MUTATION = `
+  mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
+    inventoryAdjustQuantities(input: $input) {
+      userErrors {
+        field
+        message
+      }
+      inventoryAdjustmentGroup {
+        id
+        reason
+      }
+    }
+  }
+`;
 
 // GraphQL mutation for setting inventory quantities
 const INVENTORY_SET_QUANTITIES_MUTATION = `
@@ -62,6 +97,10 @@ export async function POST(request: NextRequest) {
 
     const body: UpdateRequest = await request.json();
     const { reason = 'Physical inventory count' } = body;
+    if (body.mode !== undefined && body.mode !== 'set' && body.mode !== 'add') {
+      return NextResponse.json({ error: "mode must be 'set' or 'add'" }, { status: 400 });
+    }
+    const isAddMode = body.mode === 'add';
 
     const checkedUpdates = validateInventoryUpdates<UpdateRequest['updates'][number]>(body.updates);
     if (!checkedUpdates.ok) {
@@ -76,12 +115,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Shopify credentials not configured' }, { status: 500 });
     }
 
-    const normalizedUpdates = updates.map(update => ({
+    const mappedUpdates = updates.map(update => ({
       ...update,
       sku: update.sku.trim(),
       inventoryItemId: normalizeShopifyId(String(update.inventoryItemId)),
       locationId: normalizeShopifyId(String(update.locationId)),
     }));
+
+    if (isAddMode) {
+      const negative = mappedUpdates.find(update => update.quantity < 0);
+      if (negative) {
+        return NextResponse.json(
+          { error: `Quantity to add for ${negative.sku} cannot be negative` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // In 'add' mode the same SKU on two lines must add both amounts, not keep the last.
+    const normalizedUpdates = isAddMode ? sumAddUpdates(mappedUpdates) : mappedUpdates;
+    if (isAddMode && normalizedUpdates.length === 0) {
+      return NextResponse.json({ error: 'Nothing to add: every quantity is 0' }, { status: 400 });
+    }
 
     const requestedTeslaSkus = Array.from(
       new Set(
@@ -262,13 +317,24 @@ export async function POST(request: NextRequest) {
         quantity: update.quantity,
       }));
 
-      const input = {
-        name: 'on_hand',
-        reason: 'correction',
-        referenceDocumentUri: `app://inventory-dashboard/physical-count/${new Date().toISOString().split('T')[0]}`,
-        ignoreCompareQuantity: true,
-        quantities,
-      };
+      const input = isAddMode
+        ? {
+            // Same shape the transfer routes use: adjusting 'available' moves On Hand too.
+            name: 'available',
+            reason: 'received',
+            changes: quantities.map(q => ({
+              inventoryItemId: q.inventoryItemId,
+              locationId: q.locationId,
+              delta: q.quantity,
+            })),
+          }
+        : {
+            name: 'on_hand',
+            reason: 'correction',
+            referenceDocumentUri: `app://inventory-dashboard/physical-count/${new Date().toISOString().split('T')[0]}`,
+            ignoreCompareQuantity: true,
+            quantities,
+          };
 
       try {
         const response = await fetch(graphqlUrl, {
@@ -278,7 +344,7 @@ export async function POST(request: NextRequest) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            query: INVENTORY_SET_QUANTITIES_MUTATION,
+            query: isAddMode ? INVENTORY_ADJUST_QUANTITIES_MUTATION : INVENTORY_SET_QUANTITIES_MUTATION,
             variables: { input },
           }),
         });
@@ -310,7 +376,7 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const result = data.data?.inventorySetQuantities;
+        const result = isAddMode ? data.data?.inventoryAdjustQuantities : data.data?.inventorySetQuantities;
 
         if (result?.userErrors && result.userErrors.length > 0) {
           console.error('❌ User errors:', JSON.stringify(result.userErrors, null, 2));
@@ -330,11 +396,11 @@ export async function POST(request: NextRequest) {
         // Success - map changes back to SKUs
         const changes = result?.inventoryAdjustmentGroup?.changes || [];
         batch.forEach((update, idx) => {
-          const change = changes[idx];
+          const change = isAddMode ? undefined : changes[idx];
           results.push({
             success: true,
             sku: update.sku,
-            delta: change?.delta,
+            delta: isAddMode ? update.quantity : change?.delta,
             quantityAfterChange: change?.quantityAfterChange,
           });
         });

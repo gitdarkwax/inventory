@@ -16,6 +16,7 @@ import { validateMovedItems } from '@/lib/request-validation';
 import { InventoryCacheService, IncomingInventoryCache } from '@/lib/inventory-cache';
 import { TransfersService } from '@/lib/transfers';
 import { checkRestockRequest } from '@/lib/transfer-restock';
+import { describeShortfalls, fetchLiveOnHand, findShortfalls } from '@/lib/live-stock';
 import { isTeslaFixedVariantSku } from '@/lib/tesla-fixed-variants';
 import { fetchTeslaMirrorInventoryItemIds } from '@/lib/tesla-mirror-writes';
 
@@ -403,6 +404,32 @@ export async function POST(request: NextRequest) {
 
       if (errors.length > 0 && originAdjustments.length === 0) {
         return NextResponse.json({ error: errors.join('; ') }, { status: 400 });
+      }
+
+      // Re-check stock against Shopify right now; the page's counts can be stale.
+      const itemsLeavingOrigin = items.flatMap(item => {
+        const detail = originDetails.find(d => d.sku === item.sku);
+        return detail ? [{ sku: item.sku, quantity: item.quantity, inventoryItemId: String(detail.inventoryItemId) }] : [];
+      });
+      try {
+        const liveOnHand = await fetchLiveOnHand(
+          graphqlUrl,
+          accessToken,
+          String(originLocationId),
+          itemsLeavingOrigin.map(item => item.inventoryItemId)
+        );
+        const shortfalls = findShortfalls(itemsLeavingOrigin, liveOnHand);
+        if (shortfalls.length > 0) {
+          const message = describeShortfalls(shortfalls, origin);
+          console.warn(`⚠️ ${transferId} refused, not enough stock at ${origin}: ${message.replace(/\n/g, '; ')}`);
+          return NextResponse.json({ error: 'Insufficient stock', details: message }, { status: 409 });
+        }
+      } catch (error) {
+        console.error('❌ Live stock check failed:', error);
+        return NextResponse.json({
+          error: 'Could not check stock in Shopify. Nothing was changed; please try again.',
+          details: error instanceof Error ? error.message : 'Unknown error',
+        }, { status: 502 });
       }
 
       try {
